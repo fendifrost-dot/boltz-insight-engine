@@ -11,6 +11,8 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ContextRouteImport } from './routes/context'
+import { Route as DecisionsRouteImport } from './routes/decisions'
+import { Route as ExperimentsRouteImport } from './routes/experiments'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -22,31 +24,49 @@ const ContextRoute = ContextRouteImport.update({
   path: '/context',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DecisionsRoute = DecisionsRouteImport.update({
+  id: '/decisions',
+  path: '/decisions',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ExperimentsRoute = ExperimentsRouteImport.update({
+  id: '/experiments',
+  path: '/experiments',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/context': typeof ContextRoute
+  '/decisions': typeof DecisionsRoute
+  '/experiments': typeof ExperimentsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/context': typeof ContextRoute
+  '/decisions': typeof DecisionsRoute
+  '/experiments': typeof ExperimentsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/context': typeof ContextRoute
+  '/decisions': typeof DecisionsRoute
+  '/experiments': typeof ExperimentsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/context'
+  fullPaths: '/' | '/context' | '/decisions' | '/experiments'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/context'
-  id: '__root__' | '/' | '/context'
+  to: '/' | '/context' | '/decisions' | '/experiments'
+  id: '__root__' | '/' | '/context' | '/decisions' | '/experiments'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ContextRoute: typeof ContextRoute
+  DecisionsRoute: typeof DecisionsRoute
+  ExperimentsRoute: typeof ExperimentsRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -65,12 +85,28 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ContextRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/decisions': {
+      id: '/decisions'
+      path: '/decisions'
+      fullPath: '/decisions'
+      preLoaderRoute: typeof DecisionsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/experiments': {
+      id: '/experiments'
+      path: '/experiments'
+      fullPath: '/experiments'
+      preLoaderRoute: typeof ExperimentsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ContextRoute: ContextRoute,
+  DecisionsRoute: DecisionsRoute,
+  ExperimentsRoute: ExperimentsRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
