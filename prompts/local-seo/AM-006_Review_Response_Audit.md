@@ -29,7 +29,7 @@ Measure response coverage, latency, and quality — with quality defined as usef
 
 ## Guards
 
-- `SC-02` — keyword-bearing responses are unproven for ranking. Never recommend writing responses *for* keywords. The defensible reason to respond well is that prospects read them.
+- `SC-02` — keyword-bearing responses are unproven for ranking. Never recommend writing responses _for_ keywords. The defensible reason to respond well is that prospects read them.
 - Never propose a response that disputes facts publicly, discloses customer information, or reads as defensive. The reputational downside exceeds any search upside.
 - Do not recommend responding at volume with generated text; visible templating is worse than silence.
 - Latency matters most on negative reviews — do not average it away.

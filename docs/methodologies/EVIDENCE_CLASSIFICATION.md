@@ -2,13 +2,13 @@
 
 Every claim carries exactly one `ClaimClass`. Values are defined in `src/data/types.ts`.
 
-| Class | Means | Requires | Example |
-|---|---|---|---|
-| `OWNER-CONFIRMED` | Asserted by Boltz. Authoritative for business facts, **not** for market facts | Who said it, when | "Last regular appointment approximately 4 PM" |
-| `CONFIRMED` | Directly verified by inspecting the artifact, with a citable source | URL, export, screenshot, API response + date | "The site returns 200 at `/` — crawled 2026-08-22" |
-| `OBSERVED` | Seen, but not proven stable, causal, or complete | What was seen, when, sampling limits | "Competitor A appeared in 3 of 5 Perplexity answers on 2026-08-22" |
-| `HYPOTHESIS` | Plausible, unproven, **and has a named test** | The test + what result falsifies it | "Adding engine-cost content lifts non-branded impressions — test: E-xx" |
-| `UNKNOWN` | Not yet checked, or checked and indeterminate | What would resolve it | "Live GBP primary category — not yet retrieved" |
+| Class             | Means                                                                         | Requires                                     | Example                                                                 |
+| ----------------- | ----------------------------------------------------------------------------- | -------------------------------------------- | ----------------------------------------------------------------------- |
+| `OWNER-CONFIRMED` | Asserted by Boltz. Authoritative for business facts, **not** for market facts | Who said it, when                            | "Last regular appointment approximately 4 PM"                           |
+| `CONFIRMED`       | Directly verified by inspecting the artifact, with a citable source           | URL, export, screenshot, API response + date | "The site returns 200 at `/` — crawled 2026-08-22"                      |
+| `OBSERVED`        | Seen, but not proven stable, causal, or complete                              | What was seen, when, sampling limits         | "Competitor A appeared in 3 of 5 Perplexity answers on 2026-08-22"      |
+| `HYPOTHESIS`      | Plausible, unproven, **and has a named test**                                 | The test + what result falsifies it          | "Adding engine-cost content lifts non-branded impressions — test: E-xx" |
+| `UNKNOWN`         | Not yet checked, or checked and indeterminate                                 | What would resolve it                        | "Live GBP primary category — not yet retrieved"                         |
 
 ## Rules
 

@@ -53,8 +53,8 @@ Coverage gaps are findings. Silent sampling reads as full coverage and corrupts 
 ## The null / 0 rule
 
 **A value never measured is `null` and renders as "Not entered". `0` means measured zero.** The
-distinction is load-bearing throughout this system: `null` says *we do not know*, `0` says *we looked and
-there were none*. Never write `0` to mean "unknown", and never let a `null` be summed, averaged, or
+distinction is load-bearing throughout this system: `null` says _we do not know_, `0` says _we looked and
+there were none_. Never write `0` to mean "unknown", and never let a `null` be summed, averaged, or
 charted as zero.
 
 ## Field discipline
