@@ -10,13 +10,20 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AiVisibilityRouteImport } from './routes/ai-visibility'
 import { Route as ContextRouteImport } from './routes/context'
 import { Route as DecisionsRouteImport } from './routes/decisions'
 import { Route as ExperimentsRouteImport } from './routes/experiments'
+import { Route as QueriesRouteImport } from './routes/queries'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AiVisibilityRoute = AiVisibilityRouteImport.update({
+  id: '/ai-visibility',
+  path: '/ai-visibility',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ContextRoute = ContextRouteImport.update({
@@ -34,39 +41,71 @@ const ExperimentsRoute = ExperimentsRouteImport.update({
   path: '/experiments',
   getParentRoute: () => rootRouteImport,
 } as any)
+const QueriesRoute = QueriesRouteImport.update({
+  id: '/queries',
+  path: '/queries',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/ai-visibility': typeof AiVisibilityRoute
   '/context': typeof ContextRoute
   '/decisions': typeof DecisionsRoute
   '/experiments': typeof ExperimentsRoute
+  '/queries': typeof QueriesRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/ai-visibility': typeof AiVisibilityRoute
   '/context': typeof ContextRoute
   '/decisions': typeof DecisionsRoute
   '/experiments': typeof ExperimentsRoute
+  '/queries': typeof QueriesRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/ai-visibility': typeof AiVisibilityRoute
   '/context': typeof ContextRoute
   '/decisions': typeof DecisionsRoute
   '/experiments': typeof ExperimentsRoute
+  '/queries': typeof QueriesRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/context' | '/decisions' | '/experiments'
+  fullPaths:
+    | '/'
+    | '/ai-visibility'
+    | '/context'
+    | '/decisions'
+    | '/experiments'
+    | '/queries'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/context' | '/decisions' | '/experiments'
-  id: '__root__' | '/' | '/context' | '/decisions' | '/experiments'
+  to:
+    | '/'
+    | '/ai-visibility'
+    | '/context'
+    | '/decisions'
+    | '/experiments'
+    | '/queries'
+  id:
+    | '__root__'
+    | '/'
+    | '/ai-visibility'
+    | '/context'
+    | '/decisions'
+    | '/experiments'
+    | '/queries'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AiVisibilityRoute: typeof AiVisibilityRoute
   ContextRoute: typeof ContextRoute
   DecisionsRoute: typeof DecisionsRoute
   ExperimentsRoute: typeof ExperimentsRoute
+  QueriesRoute: typeof QueriesRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -76,6 +115,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ai-visibility': {
+      id: '/ai-visibility'
+      path: '/ai-visibility'
+      fullPath: '/ai-visibility'
+      preLoaderRoute: typeof AiVisibilityRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/context': {
@@ -99,14 +145,23 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ExperimentsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/queries': {
+      id: '/queries'
+      path: '/queries'
+      fullPath: '/queries'
+      preLoaderRoute: typeof QueriesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AiVisibilityRoute: AiVisibilityRoute,
   ContextRoute: ContextRoute,
   DecisionsRoute: DecisionsRoute,
   ExperimentsRoute: ExperimentsRoute,
+  QueriesRoute: QueriesRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
