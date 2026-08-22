@@ -15,6 +15,9 @@ import { Route as CompetitorsRouteImport } from './routes/competitors'
 import { Route as ContextRouteImport } from './routes/context'
 import { Route as DecisionsRouteImport } from './routes/decisions'
 import { Route as ExperimentsRouteImport } from './routes/experiments'
+import { Route as LocalSeoRouteImport } from './routes/local-seo'
+import { Route as MeasurementRouteImport } from './routes/measurement'
+import { Route as ModulesRouteImport } from './routes/modules'
 import { Route as ProvenanceRouteImport } from './routes/provenance'
 import { Route as QueriesRouteImport } from './routes/queries'
 
@@ -48,6 +51,21 @@ const ExperimentsRoute = ExperimentsRouteImport.update({
   path: '/experiments',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LocalSeoRoute = LocalSeoRouteImport.update({
+  id: '/local-seo',
+  path: '/local-seo',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MeasurementRoute = MeasurementRouteImport.update({
+  id: '/measurement',
+  path: '/measurement',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ModulesRoute = ModulesRouteImport.update({
+  id: '/modules',
+  path: '/modules',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ProvenanceRoute = ProvenanceRouteImport.update({
   id: '/provenance',
   path: '/provenance',
@@ -66,6 +84,9 @@ export interface FileRoutesByFullPath {
   '/context': typeof ContextRoute
   '/decisions': typeof DecisionsRoute
   '/experiments': typeof ExperimentsRoute
+  '/local-seo': typeof LocalSeoRoute
+  '/measurement': typeof MeasurementRoute
+  '/modules': typeof ModulesRoute
   '/provenance': typeof ProvenanceRoute
   '/queries': typeof QueriesRoute
 }
@@ -76,6 +97,9 @@ export interface FileRoutesByTo {
   '/context': typeof ContextRoute
   '/decisions': typeof DecisionsRoute
   '/experiments': typeof ExperimentsRoute
+  '/local-seo': typeof LocalSeoRoute
+  '/measurement': typeof MeasurementRoute
+  '/modules': typeof ModulesRoute
   '/provenance': typeof ProvenanceRoute
   '/queries': typeof QueriesRoute
 }
@@ -87,6 +111,9 @@ export interface FileRoutesById {
   '/context': typeof ContextRoute
   '/decisions': typeof DecisionsRoute
   '/experiments': typeof ExperimentsRoute
+  '/local-seo': typeof LocalSeoRoute
+  '/measurement': typeof MeasurementRoute
+  '/modules': typeof ModulesRoute
   '/provenance': typeof ProvenanceRoute
   '/queries': typeof QueriesRoute
 }
@@ -99,6 +126,9 @@ export interface FileRouteTypes {
     | '/context'
     | '/decisions'
     | '/experiments'
+    | '/local-seo'
+    | '/measurement'
+    | '/modules'
     | '/provenance'
     | '/queries'
   fileRoutesByTo: FileRoutesByTo
@@ -109,6 +139,9 @@ export interface FileRouteTypes {
     | '/context'
     | '/decisions'
     | '/experiments'
+    | '/local-seo'
+    | '/measurement'
+    | '/modules'
     | '/provenance'
     | '/queries'
   id:
@@ -119,6 +152,9 @@ export interface FileRouteTypes {
     | '/context'
     | '/decisions'
     | '/experiments'
+    | '/local-seo'
+    | '/measurement'
+    | '/modules'
     | '/provenance'
     | '/queries'
   fileRoutesById: FileRoutesById
@@ -130,6 +166,9 @@ export interface RootRouteChildren {
   ContextRoute: typeof ContextRoute
   DecisionsRoute: typeof DecisionsRoute
   ExperimentsRoute: typeof ExperimentsRoute
+  LocalSeoRoute: typeof LocalSeoRoute
+  MeasurementRoute: typeof MeasurementRoute
+  ModulesRoute: typeof ModulesRoute
   ProvenanceRoute: typeof ProvenanceRoute
   QueriesRoute: typeof QueriesRoute
 }
@@ -178,6 +217,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ExperimentsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/local-seo': {
+      id: '/local-seo'
+      path: '/local-seo'
+      fullPath: '/local-seo'
+      preLoaderRoute: typeof LocalSeoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/measurement': {
+      id: '/measurement'
+      path: '/measurement'
+      fullPath: '/measurement'
+      preLoaderRoute: typeof MeasurementRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/modules': {
+      id: '/modules'
+      path: '/modules'
+      fullPath: '/modules'
+      preLoaderRoute: typeof ModulesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/provenance': {
       id: '/provenance'
       path: '/provenance'
@@ -202,6 +262,9 @@ const rootRouteChildren: RootRouteChildren = {
   ContextRoute: ContextRoute,
   DecisionsRoute: DecisionsRoute,
   ExperimentsRoute: ExperimentsRoute,
+  LocalSeoRoute: LocalSeoRoute,
+  MeasurementRoute: MeasurementRoute,
+  ModulesRoute: ModulesRoute,
   ProvenanceRoute: ProvenanceRoute,
   QueriesRoute: QueriesRoute,
 }
