@@ -11,9 +11,11 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AiVisibilityRouteImport } from './routes/ai-visibility'
+import { Route as CompetitorsRouteImport } from './routes/competitors'
 import { Route as ContextRouteImport } from './routes/context'
 import { Route as DecisionsRouteImport } from './routes/decisions'
 import { Route as ExperimentsRouteImport } from './routes/experiments'
+import { Route as ProvenanceRouteImport } from './routes/provenance'
 import { Route as QueriesRouteImport } from './routes/queries'
 
 const IndexRoute = IndexRouteImport.update({
@@ -24,6 +26,11 @@ const IndexRoute = IndexRouteImport.update({
 const AiVisibilityRoute = AiVisibilityRouteImport.update({
   id: '/ai-visibility',
   path: '/ai-visibility',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CompetitorsRoute = CompetitorsRouteImport.update({
+  id: '/competitors',
+  path: '/competitors',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ContextRoute = ContextRouteImport.update({
@@ -41,6 +48,11 @@ const ExperimentsRoute = ExperimentsRouteImport.update({
   path: '/experiments',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ProvenanceRoute = ProvenanceRouteImport.update({
+  id: '/provenance',
+  path: '/provenance',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const QueriesRoute = QueriesRouteImport.update({
   id: '/queries',
   path: '/queries',
@@ -50,26 +62,32 @@ const QueriesRoute = QueriesRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/ai-visibility': typeof AiVisibilityRoute
+  '/competitors': typeof CompetitorsRoute
   '/context': typeof ContextRoute
   '/decisions': typeof DecisionsRoute
   '/experiments': typeof ExperimentsRoute
+  '/provenance': typeof ProvenanceRoute
   '/queries': typeof QueriesRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/ai-visibility': typeof AiVisibilityRoute
+  '/competitors': typeof CompetitorsRoute
   '/context': typeof ContextRoute
   '/decisions': typeof DecisionsRoute
   '/experiments': typeof ExperimentsRoute
+  '/provenance': typeof ProvenanceRoute
   '/queries': typeof QueriesRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/ai-visibility': typeof AiVisibilityRoute
+  '/competitors': typeof CompetitorsRoute
   '/context': typeof ContextRoute
   '/decisions': typeof DecisionsRoute
   '/experiments': typeof ExperimentsRoute
+  '/provenance': typeof ProvenanceRoute
   '/queries': typeof QueriesRoute
 }
 export interface FileRouteTypes {
@@ -77,34 +95,42 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/ai-visibility'
+    | '/competitors'
     | '/context'
     | '/decisions'
     | '/experiments'
+    | '/provenance'
     | '/queries'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/ai-visibility'
+    | '/competitors'
     | '/context'
     | '/decisions'
     | '/experiments'
+    | '/provenance'
     | '/queries'
   id:
     | '__root__'
     | '/'
     | '/ai-visibility'
+    | '/competitors'
     | '/context'
     | '/decisions'
     | '/experiments'
+    | '/provenance'
     | '/queries'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AiVisibilityRoute: typeof AiVisibilityRoute
+  CompetitorsRoute: typeof CompetitorsRoute
   ContextRoute: typeof ContextRoute
   DecisionsRoute: typeof DecisionsRoute
   ExperimentsRoute: typeof ExperimentsRoute
+  ProvenanceRoute: typeof ProvenanceRoute
   QueriesRoute: typeof QueriesRoute
 }
 
@@ -122,6 +148,13 @@ declare module '@tanstack/react-router' {
       path: '/ai-visibility'
       fullPath: '/ai-visibility'
       preLoaderRoute: typeof AiVisibilityRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/competitors': {
+      id: '/competitors'
+      path: '/competitors'
+      fullPath: '/competitors'
+      preLoaderRoute: typeof CompetitorsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/context': {
@@ -145,6 +178,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ExperimentsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/provenance': {
+      id: '/provenance'
+      path: '/provenance'
+      fullPath: '/provenance'
+      preLoaderRoute: typeof ProvenanceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/queries': {
       id: '/queries'
       path: '/queries'
@@ -158,9 +198,11 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AiVisibilityRoute: AiVisibilityRoute,
+  CompetitorsRoute: CompetitorsRoute,
   ContextRoute: ContextRoute,
   DecisionsRoute: DecisionsRoute,
   ExperimentsRoute: ExperimentsRoute,
+  ProvenanceRoute: ProvenanceRoute,
   QueriesRoute: QueriesRoute,
 }
 export const routeTree = rootRouteImport
