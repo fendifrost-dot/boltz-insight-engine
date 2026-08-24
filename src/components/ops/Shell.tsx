@@ -62,9 +62,18 @@ export function Shell({ children }: { children: ReactNode }) {
             </div>
           ))}
         </nav>
-        <div className="hidden px-4 py-4 text-[11px] leading-relaxed text-muted-foreground lg:block">
+        <div className="px-4 py-3">
+          <button
+            onClick={signOut}
+            className="w-full rounded-md border border-sidebar-border px-2 py-1.5 text-xs text-sidebar-foreground/80 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+          >
+            Sign out
+          </button>
+        </div>
+        <div className="hidden px-4 pb-4 text-[11px] leading-relaxed text-muted-foreground lg:block">
           Public site stays on Durable. No production changes ship from here.
         </div>
+
       </aside>
       <main className="min-w-0 px-4 py-6 sm:px-6 lg:px-8">{children}</main>
     </div>
