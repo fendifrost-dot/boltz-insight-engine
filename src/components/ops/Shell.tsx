@@ -22,10 +22,21 @@ const NAV: { to: string; label: string; group: string }[] = [
 const GROUPS = ["Operate", "Research"];
 
 export function Shell({ children }: { children: ReactNode }) {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+
+  async function signOut() {
+    await queryClient.cancelQueries();
+    queryClient.clear();
+    await supabase.auth.signOut();
+    navigate({ to: "/auth", replace: true });
+  }
+
   return (
     <div className="min-h-screen bg-background lg:grid lg:grid-cols-[15rem_1fr]">
       <aside className="border-b border-sidebar-border bg-sidebar lg:sticky lg:top-0 lg:h-screen lg:overflow-y-auto lg:border-r lg:border-b-0">
         <div className="px-4 py-4">
+
           <div className="font-mono text-xs tracking-[0.18em] text-primary">BOLTZ</div>
           <div className="text-sm font-semibold text-sidebar-foreground">SEO / GEO Ops</div>
           <div className="label-caps mt-1">Internal tooling · V1</div>
