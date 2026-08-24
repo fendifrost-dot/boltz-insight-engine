@@ -14,7 +14,7 @@ import {
   type ContextFact,
 } from "@/data/context";
 
-export const Route = createFileRoute("/context")({
+export const Route = createFileRoute("/_authenticated/context")({
   head: () => ({
     meta: [
       { title: "Context Lock — Boltz SEO/GEO Ops" },

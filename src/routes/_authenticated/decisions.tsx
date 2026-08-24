@@ -25,7 +25,7 @@ import {
   type Impact,
 } from "@/data/types";
 
-export const Route = createFileRoute("/decisions")({
+export const Route = createFileRoute("/_authenticated/decisions")({
   head: () => ({
     meta: [
       { title: "Decision Queue — Boltz SEO/GEO Ops" },

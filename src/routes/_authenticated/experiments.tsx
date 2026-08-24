@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { useDataSet, nextId, exportJson } from "@/lib/store";
 import type { ExperimentRecord } from "@/data/types";
 
-export const Route = createFileRoute("/experiments")({
+export const Route = createFileRoute("/_authenticated/experiments")({
   head: () => ({
     meta: [
       { title: "Experiment Registry — Boltz SEO/GEO Ops" },

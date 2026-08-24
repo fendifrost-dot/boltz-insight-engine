@@ -5,7 +5,7 @@ import { useDataSet } from "@/lib/store";
 import { opportunityScore } from "@/data/types";
 import { BUSINESS, ACTIVE_EXPERIMENT_POSTURE } from "@/data/context";
 
-export const Route = createFileRoute("/")({
+export const Route = createFileRoute("/_authenticated/")({
   head: () => ({
     meta: [
       { title: "Dashboard — Boltz SEO/GEO Ops" },

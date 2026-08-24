@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { useDataSet, exportJson } from "@/lib/store";
 import type { MetricKind } from "@/data/types";
 
-export const Route = createFileRoute("/measurement")({
+export const Route = createFileRoute("/_authenticated/measurement")({
   head: () => ({
     meta: [
       { title: "Measurement — Boltz SEO/GEO Ops" },
