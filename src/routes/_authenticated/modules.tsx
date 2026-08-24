@@ -4,7 +4,7 @@ import { Tag, Value } from "@/components/ops/Bits";
 import { useDataSet } from "@/lib/store";
 import type { AuditModule } from "@/data/types";
 
-export const Route = createFileRoute("/modules")({
+export const Route = createFileRoute("/_authenticated/modules")({
   head: () => ({
     meta: [
       { title: "Audit Modules — Boltz SEO/GEO Ops" },

@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { useDataSet, nextId, exportJson } from "@/lib/store";
 import { PLATFORMS, type AiVisibilityRecord, type Platform } from "@/data/types";
 
-export const Route = createFileRoute("/ai-visibility")({
+export const Route = createFileRoute("/_authenticated/ai-visibility")({
   head: () => ({
     meta: [
       { title: "AI Visibility — Boltz SEO/GEO Ops" },

@@ -3,7 +3,7 @@ import { Shell, PageHeader, Panel } from "@/components/ops/Shell";
 import { Tag, Value } from "@/components/ops/Bits";
 import { BUSINESS } from "@/data/context";
 
-export const Route = createFileRoute("/local-seo")({
+export const Route = createFileRoute("/_authenticated/local-seo")({
   head: () => ({
     meta: [
       { title: "Google / Local SEO — Boltz SEO/GEO Ops" },

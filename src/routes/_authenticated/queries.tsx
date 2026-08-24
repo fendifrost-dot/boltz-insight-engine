@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { useDataSet, exportJson } from "@/lib/store";
 import { CLUSTER_WEIGHT, QUERY_CLUSTERS } from "@/data/types";
 
-export const Route = createFileRoute("/queries")({
+export const Route = createFileRoute("/_authenticated/queries")({
   head: () => ({
     meta: [
       { title: "Query Universe — Boltz SEO/GEO Ops" },

@@ -9,118 +9,138 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as IndexRouteImport } from './routes/index'
-import { Route as AiVisibilityRouteImport } from './routes/ai-visibility'
-import { Route as CompetitorsRouteImport } from './routes/competitors'
-import { Route as ContextRouteImport } from './routes/context'
-import { Route as DecisionsRouteImport } from './routes/decisions'
-import { Route as ExperimentsRouteImport } from './routes/experiments'
-import { Route as LocalSeoRouteImport } from './routes/local-seo'
-import { Route as MeasurementRouteImport } from './routes/measurement'
-import { Route as ModulesRouteImport } from './routes/modules'
-import { Route as ProvenanceRouteImport } from './routes/provenance'
-import { Route as QueriesRouteImport } from './routes/queries'
+import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
+import { Route as AuthRouteImport } from './routes/auth'
+import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
+import { Route as AuthenticatedAiVisibilityRouteImport } from './routes/_authenticated/ai-visibility'
+import { Route as AuthenticatedCompetitorsRouteImport } from './routes/_authenticated/competitors'
+import { Route as AuthenticatedContextRouteImport } from './routes/_authenticated/context'
+import { Route as AuthenticatedDecisionsRouteImport } from './routes/_authenticated/decisions'
+import { Route as AuthenticatedExperimentsRouteImport } from './routes/_authenticated/experiments'
+import { Route as AuthenticatedLocalSeoRouteImport } from './routes/_authenticated/local-seo'
+import { Route as AuthenticatedMeasurementRouteImport } from './routes/_authenticated/measurement'
+import { Route as AuthenticatedModulesRouteImport } from './routes/_authenticated/modules'
+import { Route as AuthenticatedProvenanceRouteImport } from './routes/_authenticated/provenance'
+import { Route as AuthenticatedQueriesRouteImport } from './routes/_authenticated/queries'
 
-const IndexRoute = IndexRouteImport.update({
+const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
+  id: '/_authenticated',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthRoute = AuthRouteImport.update({
+  id: '/auth',
+  path: '/auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedIndexRoute = AuthenticatedIndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
-const AiVisibilityRoute = AiVisibilityRouteImport.update({
-  id: '/ai-visibility',
-  path: '/ai-visibility',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const CompetitorsRoute = CompetitorsRouteImport.update({
-  id: '/competitors',
-  path: '/competitors',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ContextRoute = ContextRouteImport.update({
+const AuthenticatedAiVisibilityRoute =
+  AuthenticatedAiVisibilityRouteImport.update({
+    id: '/ai-visibility',
+    path: '/ai-visibility',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedCompetitorsRoute =
+  AuthenticatedCompetitorsRouteImport.update({
+    id: '/competitors',
+    path: '/competitors',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedContextRoute = AuthenticatedContextRouteImport.update({
   id: '/context',
   path: '/context',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
-const DecisionsRoute = DecisionsRouteImport.update({
+const AuthenticatedDecisionsRoute = AuthenticatedDecisionsRouteImport.update({
   id: '/decisions',
   path: '/decisions',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
-const ExperimentsRoute = ExperimentsRouteImport.update({
-  id: '/experiments',
-  path: '/experiments',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const LocalSeoRoute = LocalSeoRouteImport.update({
+const AuthenticatedExperimentsRoute =
+  AuthenticatedExperimentsRouteImport.update({
+    id: '/experiments',
+    path: '/experiments',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedLocalSeoRoute = AuthenticatedLocalSeoRouteImport.update({
   id: '/local-seo',
   path: '/local-seo',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
-const MeasurementRoute = MeasurementRouteImport.update({
-  id: '/measurement',
-  path: '/measurement',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ModulesRoute = ModulesRouteImport.update({
+const AuthenticatedMeasurementRoute =
+  AuthenticatedMeasurementRouteImport.update({
+    id: '/measurement',
+    path: '/measurement',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedModulesRoute = AuthenticatedModulesRouteImport.update({
   id: '/modules',
   path: '/modules',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
-const ProvenanceRoute = ProvenanceRouteImport.update({
+const AuthenticatedProvenanceRoute = AuthenticatedProvenanceRouteImport.update({
   id: '/provenance',
   path: '/provenance',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
-const QueriesRoute = QueriesRouteImport.update({
+const AuthenticatedQueriesRoute = AuthenticatedQueriesRouteImport.update({
   id: '/queries',
   path: '/queries',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
-  '/': typeof IndexRoute
-  '/ai-visibility': typeof AiVisibilityRoute
-  '/competitors': typeof CompetitorsRoute
-  '/context': typeof ContextRoute
-  '/decisions': typeof DecisionsRoute
-  '/experiments': typeof ExperimentsRoute
-  '/local-seo': typeof LocalSeoRoute
-  '/measurement': typeof MeasurementRoute
-  '/modules': typeof ModulesRoute
-  '/provenance': typeof ProvenanceRoute
-  '/queries': typeof QueriesRoute
+  '/': typeof AuthenticatedIndexRoute
+  '/auth': typeof AuthRoute
+  '/ai-visibility': typeof AuthenticatedAiVisibilityRoute
+  '/competitors': typeof AuthenticatedCompetitorsRoute
+  '/context': typeof AuthenticatedContextRoute
+  '/decisions': typeof AuthenticatedDecisionsRoute
+  '/experiments': typeof AuthenticatedExperimentsRoute
+  '/local-seo': typeof AuthenticatedLocalSeoRoute
+  '/measurement': typeof AuthenticatedMeasurementRoute
+  '/modules': typeof AuthenticatedModulesRoute
+  '/provenance': typeof AuthenticatedProvenanceRoute
+  '/queries': typeof AuthenticatedQueriesRoute
 }
 export interface FileRoutesByTo {
-  '/': typeof IndexRoute
-  '/ai-visibility': typeof AiVisibilityRoute
-  '/competitors': typeof CompetitorsRoute
-  '/context': typeof ContextRoute
-  '/decisions': typeof DecisionsRoute
-  '/experiments': typeof ExperimentsRoute
-  '/local-seo': typeof LocalSeoRoute
-  '/measurement': typeof MeasurementRoute
-  '/modules': typeof ModulesRoute
-  '/provenance': typeof ProvenanceRoute
-  '/queries': typeof QueriesRoute
+  '/auth': typeof AuthRoute
+  '/ai-visibility': typeof AuthenticatedAiVisibilityRoute
+  '/competitors': typeof AuthenticatedCompetitorsRoute
+  '/context': typeof AuthenticatedContextRoute
+  '/decisions': typeof AuthenticatedDecisionsRoute
+  '/experiments': typeof AuthenticatedExperimentsRoute
+  '/local-seo': typeof AuthenticatedLocalSeoRoute
+  '/measurement': typeof AuthenticatedMeasurementRoute
+  '/modules': typeof AuthenticatedModulesRoute
+  '/provenance': typeof AuthenticatedProvenanceRoute
+  '/queries': typeof AuthenticatedQueriesRoute
+  '/': typeof AuthenticatedIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
-  '/': typeof IndexRoute
-  '/ai-visibility': typeof AiVisibilityRoute
-  '/competitors': typeof CompetitorsRoute
-  '/context': typeof ContextRoute
-  '/decisions': typeof DecisionsRoute
-  '/experiments': typeof ExperimentsRoute
-  '/local-seo': typeof LocalSeoRoute
-  '/measurement': typeof MeasurementRoute
-  '/modules': typeof ModulesRoute
-  '/provenance': typeof ProvenanceRoute
-  '/queries': typeof QueriesRoute
+  '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
+  '/auth': typeof AuthRoute
+  '/_authenticated/ai-visibility': typeof AuthenticatedAiVisibilityRoute
+  '/_authenticated/competitors': typeof AuthenticatedCompetitorsRoute
+  '/_authenticated/context': typeof AuthenticatedContextRoute
+  '/_authenticated/decisions': typeof AuthenticatedDecisionsRoute
+  '/_authenticated/experiments': typeof AuthenticatedExperimentsRoute
+  '/_authenticated/local-seo': typeof AuthenticatedLocalSeoRoute
+  '/_authenticated/measurement': typeof AuthenticatedMeasurementRoute
+  '/_authenticated/modules': typeof AuthenticatedModulesRoute
+  '/_authenticated/provenance': typeof AuthenticatedProvenanceRoute
+  '/_authenticated/queries': typeof AuthenticatedQueriesRoute
+  '/_authenticated/': typeof AuthenticatedIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/auth'
     | '/ai-visibility'
     | '/competitors'
     | '/context'
@@ -133,7 +153,7 @@ export interface FileRouteTypes {
     | '/queries'
   fileRoutesByTo: FileRoutesByTo
   to:
-    | '/'
+    | '/auth'
     | '/ai-visibility'
     | '/competitors'
     | '/context'
@@ -144,129 +164,159 @@ export interface FileRouteTypes {
     | '/modules'
     | '/provenance'
     | '/queries'
+    | '/'
   id:
     | '__root__'
-    | '/'
-    | '/ai-visibility'
-    | '/competitors'
-    | '/context'
-    | '/decisions'
-    | '/experiments'
-    | '/local-seo'
-    | '/measurement'
-    | '/modules'
-    | '/provenance'
-    | '/queries'
+    | '/_authenticated'
+    | '/auth'
+    | '/_authenticated/ai-visibility'
+    | '/_authenticated/competitors'
+    | '/_authenticated/context'
+    | '/_authenticated/decisions'
+    | '/_authenticated/experiments'
+    | '/_authenticated/local-seo'
+    | '/_authenticated/measurement'
+    | '/_authenticated/modules'
+    | '/_authenticated/provenance'
+    | '/_authenticated/queries'
+    | '/_authenticated/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
-  IndexRoute: typeof IndexRoute
-  AiVisibilityRoute: typeof AiVisibilityRoute
-  CompetitorsRoute: typeof CompetitorsRoute
-  ContextRoute: typeof ContextRoute
-  DecisionsRoute: typeof DecisionsRoute
-  ExperimentsRoute: typeof ExperimentsRoute
-  LocalSeoRoute: typeof LocalSeoRoute
-  MeasurementRoute: typeof MeasurementRoute
-  ModulesRoute: typeof ModulesRoute
-  ProvenanceRoute: typeof ProvenanceRoute
-  QueriesRoute: typeof QueriesRoute
+  AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
+  AuthRoute: typeof AuthRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/': {
-      id: '/'
+    '/_authenticated': {
+      id: '/_authenticated'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AuthenticatedRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth': {
+      id: '/auth'
+      path: '/auth'
+      fullPath: '/auth'
+      preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/': {
+      id: '/_authenticated/'
       path: '/'
       fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
+      preLoaderRoute: typeof AuthenticatedIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/ai-visibility': {
-      id: '/ai-visibility'
+    '/_authenticated/ai-visibility': {
+      id: '/_authenticated/ai-visibility'
       path: '/ai-visibility'
       fullPath: '/ai-visibility'
-      preLoaderRoute: typeof AiVisibilityRouteImport
-      parentRoute: typeof rootRouteImport
+      preLoaderRoute: typeof AuthenticatedAiVisibilityRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/competitors': {
-      id: '/competitors'
+    '/_authenticated/competitors': {
+      id: '/_authenticated/competitors'
       path: '/competitors'
       fullPath: '/competitors'
-      preLoaderRoute: typeof CompetitorsRouteImport
-      parentRoute: typeof rootRouteImport
+      preLoaderRoute: typeof AuthenticatedCompetitorsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/context': {
-      id: '/context'
+    '/_authenticated/context': {
+      id: '/_authenticated/context'
       path: '/context'
       fullPath: '/context'
-      preLoaderRoute: typeof ContextRouteImport
-      parentRoute: typeof rootRouteImport
+      preLoaderRoute: typeof AuthenticatedContextRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/decisions': {
-      id: '/decisions'
+    '/_authenticated/decisions': {
+      id: '/_authenticated/decisions'
       path: '/decisions'
       fullPath: '/decisions'
-      preLoaderRoute: typeof DecisionsRouteImport
-      parentRoute: typeof rootRouteImport
+      preLoaderRoute: typeof AuthenticatedDecisionsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/experiments': {
-      id: '/experiments'
+    '/_authenticated/experiments': {
+      id: '/_authenticated/experiments'
       path: '/experiments'
       fullPath: '/experiments'
-      preLoaderRoute: typeof ExperimentsRouteImport
-      parentRoute: typeof rootRouteImport
+      preLoaderRoute: typeof AuthenticatedExperimentsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/local-seo': {
-      id: '/local-seo'
+    '/_authenticated/local-seo': {
+      id: '/_authenticated/local-seo'
       path: '/local-seo'
       fullPath: '/local-seo'
-      preLoaderRoute: typeof LocalSeoRouteImport
-      parentRoute: typeof rootRouteImport
+      preLoaderRoute: typeof AuthenticatedLocalSeoRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/measurement': {
-      id: '/measurement'
+    '/_authenticated/measurement': {
+      id: '/_authenticated/measurement'
       path: '/measurement'
       fullPath: '/measurement'
-      preLoaderRoute: typeof MeasurementRouteImport
-      parentRoute: typeof rootRouteImport
+      preLoaderRoute: typeof AuthenticatedMeasurementRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/modules': {
-      id: '/modules'
+    '/_authenticated/modules': {
+      id: '/_authenticated/modules'
       path: '/modules'
       fullPath: '/modules'
-      preLoaderRoute: typeof ModulesRouteImport
-      parentRoute: typeof rootRouteImport
+      preLoaderRoute: typeof AuthenticatedModulesRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/provenance': {
-      id: '/provenance'
+    '/_authenticated/provenance': {
+      id: '/_authenticated/provenance'
       path: '/provenance'
       fullPath: '/provenance'
-      preLoaderRoute: typeof ProvenanceRouteImport
-      parentRoute: typeof rootRouteImport
+      preLoaderRoute: typeof AuthenticatedProvenanceRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/queries': {
-      id: '/queries'
+    '/_authenticated/queries': {
+      id: '/_authenticated/queries'
       path: '/queries'
       fullPath: '/queries'
-      preLoaderRoute: typeof QueriesRouteImport
-      parentRoute: typeof rootRouteImport
+      preLoaderRoute: typeof AuthenticatedQueriesRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
   }
 }
 
+interface AuthenticatedRouteRouteChildren {
+  AuthenticatedAiVisibilityRoute: typeof AuthenticatedAiVisibilityRoute
+  AuthenticatedCompetitorsRoute: typeof AuthenticatedCompetitorsRoute
+  AuthenticatedContextRoute: typeof AuthenticatedContextRoute
+  AuthenticatedDecisionsRoute: typeof AuthenticatedDecisionsRoute
+  AuthenticatedExperimentsRoute: typeof AuthenticatedExperimentsRoute
+  AuthenticatedLocalSeoRoute: typeof AuthenticatedLocalSeoRoute
+  AuthenticatedMeasurementRoute: typeof AuthenticatedMeasurementRoute
+  AuthenticatedModulesRoute: typeof AuthenticatedModulesRoute
+  AuthenticatedProvenanceRoute: typeof AuthenticatedProvenanceRoute
+  AuthenticatedQueriesRoute: typeof AuthenticatedQueriesRoute
+  AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
+}
+
+const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedAiVisibilityRoute: AuthenticatedAiVisibilityRoute,
+  AuthenticatedCompetitorsRoute: AuthenticatedCompetitorsRoute,
+  AuthenticatedContextRoute: AuthenticatedContextRoute,
+  AuthenticatedDecisionsRoute: AuthenticatedDecisionsRoute,
+  AuthenticatedExperimentsRoute: AuthenticatedExperimentsRoute,
+  AuthenticatedLocalSeoRoute: AuthenticatedLocalSeoRoute,
+  AuthenticatedMeasurementRoute: AuthenticatedMeasurementRoute,
+  AuthenticatedModulesRoute: AuthenticatedModulesRoute,
+  AuthenticatedProvenanceRoute: AuthenticatedProvenanceRoute,
+  AuthenticatedQueriesRoute: AuthenticatedQueriesRoute,
+  AuthenticatedIndexRoute: AuthenticatedIndexRoute,
+}
+
+const AuthenticatedRouteRouteWithChildren =
+  AuthenticatedRouteRoute._addFileChildren(AuthenticatedRouteRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
-  IndexRoute: IndexRoute,
-  AiVisibilityRoute: AiVisibilityRoute,
-  CompetitorsRoute: CompetitorsRoute,
-  ContextRoute: ContextRoute,
-  DecisionsRoute: DecisionsRoute,
-  ExperimentsRoute: ExperimentsRoute,
-  LocalSeoRoute: LocalSeoRoute,
-  MeasurementRoute: MeasurementRoute,
-  ModulesRoute: ModulesRoute,
-  ProvenanceRoute: ProvenanceRoute,
-  QueriesRoute: QueriesRoute,
+  AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
+  AuthRoute: AuthRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

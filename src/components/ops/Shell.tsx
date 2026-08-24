@@ -1,6 +1,9 @@
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import type { ReactNode } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
+
 
 const NAV: { to: string; label: string; group: string }[] = [
   { to: "/", label: "Dashboard", group: "Operate" },
@@ -19,10 +22,21 @@ const NAV: { to: string; label: string; group: string }[] = [
 const GROUPS = ["Operate", "Research"];
 
 export function Shell({ children }: { children: ReactNode }) {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+
+  async function signOut() {
+    await queryClient.cancelQueries();
+    queryClient.clear();
+    await supabase.auth.signOut();
+    navigate({ to: "/auth", replace: true });
+  }
+
   return (
     <div className="min-h-screen bg-background lg:grid lg:grid-cols-[15rem_1fr]">
       <aside className="border-b border-sidebar-border bg-sidebar lg:sticky lg:top-0 lg:h-screen lg:overflow-y-auto lg:border-r lg:border-b-0">
         <div className="px-4 py-4">
+
           <div className="font-mono text-xs tracking-[0.18em] text-primary">BOLTZ</div>
           <div className="text-sm font-semibold text-sidebar-foreground">SEO / GEO Ops</div>
           <div className="label-caps mt-1">Internal tooling · V1</div>
@@ -48,9 +62,18 @@ export function Shell({ children }: { children: ReactNode }) {
             </div>
           ))}
         </nav>
-        <div className="hidden px-4 py-4 text-[11px] leading-relaxed text-muted-foreground lg:block">
+        <div className="px-4 py-3">
+          <button
+            onClick={signOut}
+            className="w-full rounded-md border border-sidebar-border px-2 py-1.5 text-xs text-sidebar-foreground/80 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+          >
+            Sign out
+          </button>
+        </div>
+        <div className="hidden px-4 pb-4 text-[11px] leading-relaxed text-muted-foreground lg:block">
           Public site stays on Durable. No production changes ship from here.
         </div>
+
       </aside>
       <main className="min-w-0 px-4 py-6 sm:px-6 lg:px-8">{children}</main>
     </div>

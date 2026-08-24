@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { useDataSet, nextId, exportJson } from "@/lib/store";
 import type { ProvenanceRecord, SourceType } from "@/data/types";
 
-export const Route = createFileRoute("/provenance")({
+export const Route = createFileRoute("/_authenticated/provenance")({
   head: () => ({
     meta: [
       { title: "Source Provenance Ledger — Boltz SEO/GEO Ops" },

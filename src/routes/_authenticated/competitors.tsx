@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { useDataSet, nextId, exportJson } from "@/lib/store";
 import type { Competitor } from "@/data/types";
 
-export const Route = createFileRoute("/competitors")({
+export const Route = createFileRoute("/_authenticated/competitors")({
   head: () => ({
     meta: [
       { title: "Competitor Dossiers — Boltz SEO/GEO Ops" },
