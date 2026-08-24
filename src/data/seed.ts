@@ -3,6 +3,7 @@ import type {
   DataSet,
   DecisionRecord,
   MeasurementRecord,
+  ProvenanceRecord,
   QueryCluster,
   QueryRecord,
 } from "./types";
@@ -305,7 +306,7 @@ export const SEED: DataSet = {
   queries,
   aiVisibility: [],
   competitors: [],
-  provenance: [],
+  provenance,
   decisions,
   experiments: [],
   measurements,
