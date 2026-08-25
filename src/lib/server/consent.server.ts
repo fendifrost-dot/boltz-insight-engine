@@ -7,14 +7,21 @@ import { OPT_IN_KEYWORDS, OPT_OUT_KEYWORDS } from "@/lib/lead-inbox/constants";
 
 export function normalizeSmsKeyword(body: string | null | undefined): string {
   if (!body) return "";
-  return body.trim().toUpperCase().replace(/[^\w\s]/g, "").replace(/\s+/g, " ");
+  return body
+    .trim()
+    .toUpperCase()
+    .replace(/[^\w\s]/g, "")
+    .replace(/\s+/g, " ");
 }
 
 export function isOptOutMessage(body: string | null | undefined): boolean {
   const normalized = normalizeSmsKeyword(body);
   if (!normalized) return false;
   const first = normalized.split(" ")[0] ?? normalized;
-  return (OPT_OUT_KEYWORDS as readonly string[]).includes(first) || (OPT_OUT_KEYWORDS as readonly string[]).includes(normalized);
+  return (
+    (OPT_OUT_KEYWORDS as readonly string[]).includes(first) ||
+    (OPT_OUT_KEYWORDS as readonly string[]).includes(normalized)
+  );
 }
 
 export function isOptInMessage(body: string | null | undefined): boolean {

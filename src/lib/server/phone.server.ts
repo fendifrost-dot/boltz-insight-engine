@@ -3,7 +3,10 @@
  * number is provided. Returns null when the input cannot be normalized.
  */
 
-export function normalizeToE164(raw: string | null | undefined, defaultCountry = "US"): string | null {
+export function normalizeToE164(
+  raw: string | null | undefined,
+  defaultCountry = "US",
+): string | null {
   if (raw == null) return null;
   const trimmed = raw.trim();
   if (!trimmed) return null;

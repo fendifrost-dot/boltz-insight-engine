@@ -19,7 +19,9 @@ export async function getIntegrationHealth() {
   const rcStatus = getRingCentralConfigStatus();
   const xaiStatus = getXaiConfigStatus();
 
-  let rcConnection: "ok" | "error" | "missing_config" = rcStatus.configured ? "ok" : "missing_config";
+  let rcConnection: "ok" | "error" | "missing_config" = rcStatus.configured
+    ? "ok"
+    : "missing_config";
   let rcError: string | null = null;
   let extensionId: string | null = null;
   let smsCapability: string | null = null;

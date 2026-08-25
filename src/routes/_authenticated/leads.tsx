@@ -12,7 +12,7 @@ import {
   setThreadControlModeFn,
   startConversationFn,
   updateLeadFn,
-} from "@/server/functions/lead-inbox";
+} from "@/lib/lead-inbox/api";
 
 export const Route = createFileRoute("/_authenticated/leads")({
   head: () => ({
@@ -206,7 +206,9 @@ function LeadInboxPage() {
             </button>
           </div>
           {startMutation.isError && (
-            <p className="mt-2 text-xs text-destructive">{(startMutation.error as Error).message}</p>
+            <p className="mt-2 text-xs text-destructive">
+              {(startMutation.error as Error).message}
+            </p>
           )}
         </Panel>
       )}
@@ -243,7 +245,11 @@ function LeadInboxPage() {
                 <option value="human">Human control</option>
               </select>
               <label className="flex items-center gap-1 text-xs text-muted-foreground">
-                <input type="checkbox" checked={unreadOnly} onChange={(e) => setUnreadOnly(e.target.checked)} />
+                <input
+                  type="checkbox"
+                  checked={unreadOnly}
+                  onChange={(e) => setUnreadOnly(e.target.checked)}
+                />
                 Unread
               </label>
               <label className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -260,7 +266,10 @@ function LeadInboxPage() {
           {listQuery.isLoading ? (
             <EmptyState label="Loading leads…" />
           ) : items.length === 0 ? (
-            <EmptyState label="No leads yet." hint="Inbound SMS will appear here after webhook setup." />
+            <EmptyState
+              label="No leads yet."
+              hint="Inbound SMS will appear here after webhook setup."
+            />
           ) : (
             <ul className="max-h-[70vh] space-y-1 overflow-y-auto">
               {items.map((lead) => {
@@ -329,7 +338,10 @@ function LeadInboxPage() {
 
         <div className="space-y-4">
           {!selectedLeadId ? (
-            <EmptyState label="Select a thread" hint="Choose a lead to read the full conversation." />
+            <EmptyState
+              label="Select a thread"
+              hint="Choose a lead to read the full conversation."
+            />
           ) : threadQuery.isLoading || !detail ? (
             <EmptyState label="Loading thread…" />
           ) : (
@@ -351,10 +363,13 @@ function LeadInboxPage() {
                     className="rounded-md border border-border px-2 py-1 text-xs"
                     disabled={!detail.thread || modeMutation.isPending}
                     onClick={() =>
-                      modeMutation.mutate(detail.thread?.control_mode === "human" ? "auto" : "human")
+                      modeMutation.mutate(
+                        detail.thread?.control_mode === "human" ? "auto" : "human",
+                      )
                     }
                   >
-                    Switch to {detail.thread?.control_mode === "human" ? "auto reply" : "human control"}
+                    Switch to{" "}
+                    {detail.thread?.control_mode === "human" ? "auto reply" : "human control"}
                   </button>
                   <select
                     className="rounded-md border border-border bg-background px-2 py-1 text-xs"
@@ -459,7 +474,9 @@ function LeadInboxPage() {
                       <p className="text-xs text-muted-foreground">
                         {display(detail.lead.symptoms)}
                       </p>
-                      <p className="mt-1 text-xs text-muted-foreground">{display(detail.lead.notes)}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {display(detail.lead.notes)}
+                      </p>
                     </div>
                     <div>
                       <div className="label-caps mb-1">Lifecycle history</div>
@@ -488,10 +505,16 @@ function LeadInboxPage() {
                     {detail.escalations
                       .filter((e) => e.status === "open")
                       .map((e) => (
-                        <li key={e.id} className="rounded-md border border-border px-3 py-2 text-sm">
+                        <li
+                          key={e.id}
+                          className="rounded-md border border-border px-3 py-2 text-sm"
+                        >
                           <Tag tone="danger">{e.category}</Tag>
                           <p className="mt-1 text-foreground">{e.reason}</p>
-                          <Link to="/escalations" className="mt-2 inline-block text-xs text-primary">
+                          <Link
+                            to="/escalations"
+                            className="mt-2 inline-block text-xs text-primary"
+                          >
                             Manage escalations
                           </Link>
                         </li>

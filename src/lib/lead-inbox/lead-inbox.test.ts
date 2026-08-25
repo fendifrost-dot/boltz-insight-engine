@@ -1,10 +1,6 @@
 import { describe, expect, test, beforeEach, mock } from "bun:test";
 import { normalizeToE164 } from "../server/phone.server";
-import {
-  detectHighRiskCategory,
-  isOptInMessage,
-  isOptOutMessage,
-} from "../server/consent.server";
+import { detectHighRiskCategory, isOptInMessage, isOptOutMessage } from "../server/consent.server";
 import { grokDecisionSchema } from "../../integrations/xai/schema";
 import {
   __resetRingCentralTokenCacheForTests,
@@ -130,19 +126,25 @@ describe("RingCentral token refresh / 401 retry", () => {
       }
       if (url.includes("/sms")) {
         smsCalls += 1;
-        const auth = (init?.headers as Record<string, string>)?.Authorization ?? "";
+        const auth =
+          init?.headers instanceof Headers
+            ? (init.headers.get("Authorization") ?? "")
+            : typeof init?.headers === "object" && init.headers && "Authorization" in init.headers
+              ? String((init.headers as Record<string, string>)["Authorization"] ?? "")
+              : "";
         if (smsCalls === 1) {
           return new Response("unauthorized", { status: 401 });
         }
         expect(auth.includes("token-2")).toBe(true);
-        return new Response(JSON.stringify({ id: "msg-1", messageStatus: "Sent" }), { status: 200 });
+        return new Response(JSON.stringify({ id: "msg-1", messageStatus: "Sent" }), {
+          status: 200,
+        });
       }
       return new Response("not found", { status: 404 });
     }) as unknown as typeof fetch;
 
-    const { sendSms, fetchAccessToken } = await import(
-      "../../integrations/ringcentral/client.server.ts"
-    );
+    const { sendSms, fetchAccessToken } =
+      await import("../../integrations/ringcentral/client.server.ts");
 
     // Parallel token requests share one flight
     const [a, b] = await Promise.all([fetchAccessToken(), fetchAccessToken()]);

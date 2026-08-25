@@ -135,7 +135,12 @@ async function apiRequest<T>(
     body = JSON.stringify(init.body);
   }
 
-  const response = await fetch(url.toString(), { method, headers, body });
+  const response = await fetch(
+    url.toString(),
+    body === undefined
+      ? { method, headers: new Headers(headers) }
+      : { method, headers: new Headers(headers), body },
+  );
 
   if (response.status === 401 && !init?.retried401) {
     tokenState.token = null;
@@ -287,7 +292,10 @@ export async function sendSms(input: SendSmsInput): Promise<SendSmsResult> {
     );
     const id = json["id"] != null ? String(json["id"]) : "";
     if (!id) {
-      throw new RingCentralSetupError("send_missing_id", "RingCentral SMS response missing message id");
+      throw new RingCentralSetupError(
+        "send_missing_id",
+        "RingCentral SMS response missing message id",
+      );
     }
     return {
       providerMessageId: id,

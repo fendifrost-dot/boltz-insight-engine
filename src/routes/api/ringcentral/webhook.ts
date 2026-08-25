@@ -66,7 +66,10 @@ async function handleWebhook(request: Request): Promise<Response> {
     const result = await ingestRingCentralWebhook(payload as never);
     return Response.json({ ok: true, ...result }, { status: 200 });
   } catch (err) {
-    console.error("[ringcentral.webhook] ingest failed", err instanceof Error ? err.message : "error");
+    console.error(
+      "[ringcentral.webhook] ingest failed",
+      err instanceof Error ? err.message : "error",
+    );
     // Still 200 when possible to avoid RC retry storms for poison payloads we persisted;
     // return 500 only for unexpected failures so RC retries.
     return Response.json({ ok: false }, { status: 500 });

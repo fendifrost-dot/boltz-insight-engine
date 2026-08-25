@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Shell, PageHeader, Panel, EmptyState } from "@/components/ops/Shell";
 import { Tag } from "@/components/ops/Bits";
-import { listEscalationsFn, resolveEscalationFn } from "@/server/functions/lead-inbox";
+import { listEscalationsFn, resolveEscalationFn } from "@/lib/lead-inbox/api";
 
 export const Route = createFileRoute("/_authenticated/escalations")({
   head: () => ({

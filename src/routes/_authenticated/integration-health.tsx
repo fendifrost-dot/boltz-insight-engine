@@ -6,7 +6,7 @@ import {
   createRingCentralSubscriptionFn,
   getIntegrationHealthFn,
   retryFailedJobFn,
-} from "@/server/functions/lead-inbox";
+} from "@/lib/lead-inbox/api";
 
 export const Route = createFileRoute("/_authenticated/integration-health")({
   head: () => ({
@@ -88,7 +88,9 @@ function IntegrationHealthPage() {
                 Create / refresh SMS webhook subscription
               </button>
               {createSub.isError && (
-                <p className="mt-2 text-xs text-destructive">{(createSub.error as Error).message}</p>
+                <p className="mt-2 text-xs text-destructive">
+                  {(createSub.error as Error).message}
+                </p>
               )}
               {createSub.isSuccess && (
                 <p className="mt-2 text-xs text-success">
@@ -115,7 +117,9 @@ function IntegrationHealthPage() {
                       Last inbound event: {s.lastNotificationAt ?? "Not entered"}
                     </div>
                     {s.lastRenewalError && (
-                      <div className="mt-1 text-destructive">Renewal error: {s.lastRenewalError}</div>
+                      <div className="mt-1 text-destructive">
+                        Renewal error: {s.lastRenewalError}
+                      </div>
                     )}
                   </div>
                 ))

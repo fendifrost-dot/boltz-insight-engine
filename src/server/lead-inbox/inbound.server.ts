@@ -350,7 +350,11 @@ export async function processInboundJob(job: {
     return;
   }
 
-  const { data: lead } = await supabaseAdmin.from("leads").select("*").eq("id", job.lead_id).single();
+  const { data: lead } = await supabaseAdmin
+    .from("leads")
+    .select("*")
+    .eq("id", job.lead_id)
+    .single();
   const { data: thread } = await supabaseAdmin
     .from("message_threads")
     .select("*")
@@ -449,10 +453,27 @@ export async function processInboundJob(job: {
 
   // Apply safe lead field updates (null means unknown / clear only when explicitly null in schema — we only set provided keys)
   if (decision.lead_field_updates) {
-    const updates: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(decision.lead_field_updates)) {
-      if (value !== undefined) updates[key] = value;
-    }
+    const updates: {
+      name?: string | null;
+      email?: string | null;
+      vehicle_year?: number | null;
+      vehicle_make?: string | null;
+      vehicle_model?: string | null;
+      vehicle_mileage?: number | null;
+      vin?: string | null;
+      symptoms?: string | null;
+      notes?: string | null;
+    } = {};
+    const src = decision.lead_field_updates;
+    if (src.name !== undefined) updates.name = src.name;
+    if (src.email !== undefined) updates.email = src.email;
+    if (src.vehicle_year !== undefined) updates.vehicle_year = src.vehicle_year;
+    if (src.vehicle_make !== undefined) updates.vehicle_make = src.vehicle_make;
+    if (src.vehicle_model !== undefined) updates.vehicle_model = src.vehicle_model;
+    if (src.vehicle_mileage !== undefined) updates.vehicle_mileage = src.vehicle_mileage;
+    if (src.vin !== undefined) updates.vin = src.vin;
+    if (src.symptoms !== undefined) updates.symptoms = src.symptoms;
+    if (src.notes !== undefined) updates.notes = src.notes;
     if (Object.keys(updates).length > 0) {
       await supabaseAdmin.from("leads").update(updates).eq("id", lead.id);
     }
@@ -561,9 +582,7 @@ export async function processInboundJob(job: {
   if (escalationId) {
     await supabaseAdmin
       .from("escalations")
-      .update({
-        /* agent_run linked after insert via inbound uniqueness path */
-      })
+      .update({/* agent_run linked after insert via inbound uniqueness path */})
       .eq("id", escalationId);
   }
 }
@@ -594,13 +613,13 @@ export async function reconcileMessageStore(hoursBack = 6): Promise<{
       body: {
         id: record.id,
         type: record.type ?? "SMS",
-        subject: record.subject,
+        ...(record.subject != null ? { subject: record.subject } : {}),
         direction: record.direction,
-        from: record.from ?? undefined,
-        to: record.to ?? undefined,
-        creationTime: record.creationTime,
-        lastModifiedTime: record.lastModifiedTime,
-        messageStatus: record.messageStatus,
+        ...(record.from ? { from: record.from } : {}),
+        ...(record.to ? { to: record.to } : {}),
+        ...(record.creationTime != null ? { creationTime: record.creationTime } : {}),
+        ...(record.lastModifiedTime != null ? { lastModifiedTime: record.lastModifiedTime } : {}),
+        ...(record.messageStatus != null ? { messageStatus: record.messageStatus } : {}),
       },
     });
     if (result.jobId && !result.duplicate && !result.ignored) enqueued += 1;

@@ -3,13 +3,14 @@
  */
 
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import type { Json } from "@/integrations/supabase/types";
 
 export async function enqueueInboundProcessJob(input: {
   providerMessageId: string;
   leadId?: string | null;
   threadId?: string | null;
   messageId?: string | null;
-  payload?: Record<string, unknown> | null;
+  payload?: Json | null;
 }): Promise<{ jobId: string; created: boolean }> {
   const { data, error } = await supabaseAdmin
     .from("message_jobs")
@@ -47,19 +48,19 @@ export async function enqueueInboundProcessJob(input: {
   return { jobId: data.id, created: true };
 }
 
-export async function claimPendingJobs(limit = 10): Promise<
-  Array<{
-    id: string;
-    job_type: string;
-    payload: Record<string, unknown> | null;
-    inbound_provider_message_id: string | null;
-    lead_id: string | null;
-    thread_id: string | null;
-    message_id: string | null;
-    attempts: number;
-    max_attempts: number;
-  }>
-> {
+type ClaimedJob = {
+  id: string;
+  job_type: string;
+  payload: Record<string, unknown> | null;
+  inbound_provider_message_id: string | null;
+  lead_id: string | null;
+  thread_id: string | null;
+  message_id: string | null;
+  attempts: number;
+  max_attempts: number;
+};
+
+export async function claimPendingJobs(limit = 10): Promise<ClaimedJob[]> {
   const now = new Date().toISOString();
   const { data: candidates, error } = await supabaseAdmin
     .from("message_jobs")
@@ -75,7 +76,7 @@ export async function claimPendingJobs(limit = 10): Promise<
     throw new Error(`Failed to list jobs: ${error.message}`);
   }
 
-  const claimed: NonNullable<typeof candidates> = [];
+  const claimed: ClaimedJob[] = [];
   for (const job of candidates ?? []) {
     if (job.attempts >= job.max_attempts) {
       await supabaseAdmin
@@ -100,20 +101,20 @@ export async function claimPendingJobs(limit = 10): Promise<
       .maybeSingle();
 
     if (claimError || !updated) continue;
-    claimed.push(updated);
+    claimed.push({
+      id: updated.id,
+      job_type: updated.job_type,
+      payload: (updated.payload as Record<string, unknown> | null) ?? null,
+      inbound_provider_message_id: updated.inbound_provider_message_id,
+      lead_id: updated.lead_id,
+      thread_id: updated.thread_id,
+      message_id: updated.message_id,
+      attempts: updated.attempts,
+      max_attempts: updated.max_attempts,
+    });
   }
 
-  return claimed.map((j) => ({
-    id: j.id,
-    job_type: j.job_type,
-    payload: (j.payload as Record<string, unknown> | null) ?? null,
-    inbound_provider_message_id: j.inbound_provider_message_id,
-    lead_id: j.lead_id,
-    thread_id: j.thread_id,
-    message_id: j.message_id,
-    attempts: j.attempts,
-    max_attempts: j.max_attempts,
-  }));
+  return claimed;
 }
 
 export async function completeJob(jobId: string): Promise<void> {
@@ -127,7 +128,11 @@ export async function completeJob(jobId: string): Promise<void> {
     .eq("id", jobId);
 }
 
-export async function failJob(jobId: string, errorMessage: string, retryDelaySeconds = 60): Promise<void> {
+export async function failJob(
+  jobId: string,
+  errorMessage: string,
+  retryDelaySeconds = 60,
+): Promise<void> {
   const runAfter = new Date(Date.now() + retryDelaySeconds * 1000).toISOString();
   await supabaseAdmin
     .from("message_jobs")

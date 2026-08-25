@@ -9,7 +9,11 @@ import {
   type EscalationCategory,
   type LeadLifecycle,
 } from "@/lib/lead-inbox/constants";
-import { detectHighRiskCategory, isOptInMessage, isOptOutMessage } from "@/lib/server/consent.server";
+import {
+  detectHighRiskCategory,
+  isOptInMessage,
+  isOptOutMessage,
+} from "@/lib/server/consent.server";
 import { createStructuredGrokDecision } from "./client.server";
 import type { GrokDecision } from "./schema";
 

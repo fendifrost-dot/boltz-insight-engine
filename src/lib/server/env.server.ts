@@ -38,10 +38,9 @@ export function getRingCentralConfig(): RingCentralConfig {
     clientId: readRequired("RINGCENTRAL_CLIENT_ID"),
     clientSecret: readRequired("RINGCENTRAL_CLIENT_SECRET"),
     jwt: readRequired("RINGCENTRAL_JWT"),
-    serverUrl: (readOptional("RINGCENTRAL_SERVER_URL") ?? "https://platform.ringcentral.com").replace(
-      /\/$/,
-      "",
-    ),
+    serverUrl: (
+      readOptional("RINGCENTRAL_SERVER_URL") ?? "https://platform.ringcentral.com"
+    ).replace(/\/$/, ""),
     fromNumber: readRequired("RINGCENTRAL_FROM_NUMBER"),
     webhookValidationToken: readRequired("RINGCENTRAL_WEBHOOK_VALIDATION_TOKEN"),
   };
@@ -86,7 +85,8 @@ export function getXaiConfigStatus(): {
   return {
     configured: missing.length === 0,
     missing,
-    model: readOptional("XAI_MODEL") ?? (missing.length === 0 ? "grok-4-1-fast-non-reasoning" : null),
+    model:
+      readOptional("XAI_MODEL") ?? (missing.length === 0 ? "grok-4-1-fast-non-reasoning" : null),
   };
 }
 

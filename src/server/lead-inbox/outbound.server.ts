@@ -5,6 +5,7 @@
 
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { sendSms } from "@/integrations/ringcentral/client.server";
+import type { Json } from "@/integrations/supabase/types";
 import type { LeadLifecycle } from "@/lib/lead-inbox/constants";
 import { getRingCentralConfig } from "@/lib/server/env.server";
 import { normalizeToE164 } from "@/lib/server/phone.server";
@@ -25,7 +26,7 @@ export async function recordLeadEvent(input: {
   toLifecycle?: LeadLifecycle | null;
   actor?: string | null;
   summary?: string | null;
-  metadata?: Record<string, unknown> | null;
+  metadata?: Json | null;
 }): Promise<void> {
   const { error } = await supabaseAdmin.from("lead_events").insert({
     lead_id: input.leadId,
@@ -161,7 +162,10 @@ export async function sendOutboundSms(input: {
         };
       }
     }
-    throw new OutboundSendError("persist_failed", insertError?.message ?? "Failed to persist outbound message");
+    throw new OutboundSendError(
+      "persist_failed",
+      insertError?.message ?? "Failed to persist outbound message",
+    );
   }
 
   try {
@@ -176,7 +180,7 @@ export async function sendOutboundSms(input: {
       .update({
         provider_message_id: result.providerMessageId,
         delivery_state: result.deliveryState,
-        provider_metadata_redacted: result.rawRedacted,
+        provider_metadata_redacted: result.rawRedacted as Json,
         provider_created_at: new Date().toISOString(),
       })
       .eq("id", pending.id);
@@ -235,8 +239,6 @@ export async function sendOutboundSms(input: {
       metadata: { message_id: pending.id, error: message },
     });
 
-    throw err instanceof OutboundSendError
-      ? err
-      : new OutboundSendError("provider_error", message);
+    throw err instanceof OutboundSendError ? err : new OutboundSendError("provider_error", message);
   }
 }

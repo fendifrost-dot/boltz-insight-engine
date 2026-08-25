@@ -12,7 +12,11 @@ import { getPublicAppUrl, getRingCentralConfig } from "@/lib/server/env.server";
 import { normalizeToE164 } from "@/lib/server/phone.server";
 import { getIntegrationHealth } from "@/server/lead-inbox/health.server";
 import { retryJobSafely } from "@/server/lead-inbox/jobs.server";
-import { recordLeadEvent, sendOutboundSms, transitionLeadLifecycle } from "@/server/lead-inbox/outbound.server";
+import {
+  recordLeadEvent,
+  sendOutboundSms,
+  transitionLeadLifecycle,
+} from "@/server/lead-inbox/outbound.server";
 
 const authMiddleware = [requireSupabaseAuth] as const;
 
@@ -67,16 +71,20 @@ export const listLeadsFn = createServerFn({ method: "GET" })
             .from("message_threads")
             .select("id, lead_id, control_mode, last_message_at")
             .in("lead_id", leadIds)
-        : { data: [] as Array<{ id: string; lead_id: string; control_mode: string; last_message_at: string | null }> };
+        : {
+            data: [] as Array<{
+              id: string;
+              lead_id: string;
+              control_mode: string;
+              last_message_at: string | null;
+            }>,
+          };
 
-    let escalatedLeadIds = new Set<string>();
-    if (data.escalatedOnly || true) {
-      const { data: esc } = await context.supabase
-        .from("escalations")
-        .select("lead_id")
-        .eq("status", "open");
-      escalatedLeadIds = new Set((esc ?? []).map((e) => e.lead_id));
-    }
+    const { data: esc } = await context.supabase
+      .from("escalations")
+      .select("lead_id")
+      .eq("status", "open");
+    const escalatedLeadIds = new Set((esc ?? []).map((e) => e.lead_id));
 
     let items = (leads ?? []).map((lead) => {
       const thread = (threads ?? []).find((t) => t.lead_id === lead.id) ?? null;
@@ -102,7 +110,11 @@ export const getLeadThreadFn = createServerFn({ method: "GET" })
   .middleware(authMiddleware)
   .validator(z.object({ leadId: z.string().uuid() }))
   .handler(async ({ data, context }) => {
-    const { data: lead, error } = await context.supabase.from("leads").select("*").eq("id", data.leadId).maybeSingle();
+    const { data: lead, error } = await context.supabase
+      .from("leads")
+      .select("*")
+      .eq("id", data.leadId)
+      .maybeSingle();
     if (error) throw new Error(error.message);
     if (!lead) throw new Error("Lead not found");
 
@@ -140,10 +152,19 @@ export const getLeadThreadFn = createServerFn({ method: "GET" })
     // Mark read
     await context.supabase.from("leads").update({ unread_count: 0 }).eq("id", data.leadId);
     if (thread) {
-      await context.supabase.from("message_threads").update({ unread_count: 0 }).eq("id", thread.id);
+      await context.supabase
+        .from("message_threads")
+        .update({ unread_count: 0 })
+        .eq("id", thread.id);
     }
 
-    return { lead, thread, messages: messages ?? [], events: events ?? [], escalations: escalations ?? [] };
+    return {
+      lead,
+      thread,
+      messages: messages ?? [],
+      events: events ?? [],
+      escalations: escalations ?? [],
+    };
   });
 
 export const sendManualMessageFn = createServerFn({ method: "POST" })
@@ -287,10 +308,30 @@ export const updateLeadFn = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const { leadId, lifecycle, ...fields } = data;
-    const updates: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(fields)) {
-      if (v !== undefined) updates[k] = v;
-    }
+    const updates: {
+      name?: string | null;
+      email?: string | null;
+      vehicle_year?: number | null;
+      vehicle_make?: string | null;
+      vehicle_model?: string | null;
+      vehicle_mileage?: number | null;
+      vin?: string | null;
+      symptoms?: string | null;
+      notes?: string | null;
+      assigned_owner?: string | null;
+      follow_up_at?: string | null;
+    } = {};
+    if (fields.name !== undefined) updates.name = fields.name;
+    if (fields.email !== undefined) updates.email = fields.email;
+    if (fields.vehicle_year !== undefined) updates.vehicle_year = fields.vehicle_year;
+    if (fields.vehicle_make !== undefined) updates.vehicle_make = fields.vehicle_make;
+    if (fields.vehicle_model !== undefined) updates.vehicle_model = fields.vehicle_model;
+    if (fields.vehicle_mileage !== undefined) updates.vehicle_mileage = fields.vehicle_mileage;
+    if (fields.vin !== undefined) updates.vin = fields.vin;
+    if (fields.symptoms !== undefined) updates.symptoms = fields.symptoms;
+    if (fields.notes !== undefined) updates.notes = fields.notes;
+    if (fields.assigned_owner !== undefined) updates.assigned_owner = fields.assigned_owner;
+    if (fields.follow_up_at !== undefined) updates.follow_up_at = fields.follow_up_at;
 
     if (Object.keys(updates).length > 0) {
       const { error } = await context.supabase.from("leads").update(updates).eq("id", leadId);
@@ -429,7 +470,9 @@ export const createRingCentralSubscriptionFn = createServerFn({ method: "POST" }
     const config = getRingCentralConfig();
     const base = getPublicAppUrl();
     if (!base) {
-      throw new Error("PUBLIC_APP_URL must be set to a stable deployed URL before creating the webhook");
+      throw new Error(
+        "PUBLIC_APP_URL must be set to a stable deployed URL before creating the webhook",
+      );
     }
     const deliveryAddress = `${base.replace(/\/$/, "")}/api/ringcentral/webhook`;
     const ext = await getAuthenticatedExtension();
