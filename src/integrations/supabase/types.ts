@@ -7,14 +7,476 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "14.15"
   }
   public: {
     Tables: {
-      [_ in never]: never
+      agent_runs: {
+        Row: {
+          action: Database["public"]["Enums"]["agent_action"]
+          audit_summary: string | null
+          created_at: string
+          escalation_category: Database["public"]["Enums"]["escalation_category"] | null
+          id: string
+          inbound_message_id: string | null
+          lead_field_updates: Json | null
+          lead_id: string | null
+          model: string
+          outbound_message_id: string | null
+          policy_tags: string[] | null
+          prompt_version: string
+          proposed_lifecycle: Database["public"]["Enums"]["lead_lifecycle"] | null
+          raw_decision: Json | null
+          thread_id: string | null
+        }
+        Insert: {
+          action: Database["public"]["Enums"]["agent_action"]
+          audit_summary?: string | null
+          created_at?: string
+          escalation_category?: Database["public"]["Enums"]["escalation_category"] | null
+          id?: string
+          inbound_message_id?: string | null
+          lead_field_updates?: Json | null
+          lead_id?: string | null
+          model: string
+          outbound_message_id?: string | null
+          policy_tags?: string[] | null
+          prompt_version: string
+          proposed_lifecycle?: Database["public"]["Enums"]["lead_lifecycle"] | null
+          raw_decision?: Json | null
+          thread_id?: string | null
+        }
+        Update: {
+          action?: Database["public"]["Enums"]["agent_action"]
+          audit_summary?: string | null
+          created_at?: string
+          escalation_category?: Database["public"]["Enums"]["escalation_category"] | null
+          id?: string
+          inbound_message_id?: string | null
+          lead_field_updates?: Json | null
+          lead_id?: string | null
+          model?: string
+          outbound_message_id?: string | null
+          policy_tags?: string[] | null
+          prompt_version?: string
+          proposed_lifecycle?: Database["public"]["Enums"]["lead_lifecycle"] | null
+          raw_decision?: Json | null
+          thread_id?: string | null
+        }
+        Relationships: []
+      }
+      escalations: {
+        Row: {
+          agent_run_id: string | null
+          category: Database["public"]["Enums"]["escalation_category"]
+          created_at: string
+          id: string
+          lead_id: string
+          reason: string
+          resolution_notes: string | null
+          resolved_at: string | null
+          status: Database["public"]["Enums"]["escalation_status"]
+          thread_id: string
+          updated_at: string
+        }
+        Insert: {
+          agent_run_id?: string | null
+          category: Database["public"]["Enums"]["escalation_category"]
+          created_at?: string
+          id?: string
+          lead_id: string
+          reason: string
+          resolution_notes?: string | null
+          resolved_at?: string | null
+          status?: Database["public"]["Enums"]["escalation_status"]
+          thread_id: string
+          updated_at?: string
+        }
+        Update: {
+          agent_run_id?: string | null
+          category?: Database["public"]["Enums"]["escalation_category"]
+          created_at?: string
+          id?: string
+          lead_id?: string
+          reason?: string
+          resolution_notes?: string | null
+          resolved_at?: string | null
+          status?: Database["public"]["Enums"]["escalation_status"]
+          thread_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      integration_health_snapshots: {
+        Row: {
+          check_name: string
+          created_at: string
+          detail: string | null
+          id: string
+          metadata_redacted: Json | null
+          ok: boolean
+          provider: string
+        }
+        Insert: {
+          check_name: string
+          created_at?: string
+          detail?: string | null
+          id?: string
+          metadata_redacted?: Json | null
+          ok: boolean
+          provider: string
+        }
+        Update: {
+          check_name?: string
+          created_at?: string
+          detail?: string | null
+          id?: string
+          metadata_redacted?: Json | null
+          ok?: boolean
+          provider?: string
+        }
+        Relationships: []
+      }
+      lead_events: {
+        Row: {
+          actor: string | null
+          created_at: string
+          event_type: string
+          from_lifecycle: Database["public"]["Enums"]["lead_lifecycle"] | null
+          id: string
+          lead_id: string
+          metadata: Json | null
+          summary: string | null
+          to_lifecycle: Database["public"]["Enums"]["lead_lifecycle"] | null
+        }
+        Insert: {
+          actor?: string | null
+          created_at?: string
+          event_type: string
+          from_lifecycle?: Database["public"]["Enums"]["lead_lifecycle"] | null
+          id?: string
+          lead_id: string
+          metadata?: Json | null
+          summary?: string | null
+          to_lifecycle?: Database["public"]["Enums"]["lead_lifecycle"] | null
+        }
+        Update: {
+          actor?: string | null
+          created_at?: string
+          event_type?: string
+          from_lifecycle?: Database["public"]["Enums"]["lead_lifecycle"] | null
+          id?: string
+          lead_id?: string
+          metadata?: Json | null
+          summary?: string | null
+          to_lifecycle?: Database["public"]["Enums"]["lead_lifecycle"] | null
+        }
+        Relationships: []
+      }
+      leads: {
+        Row: {
+          assigned_owner: string | null
+          attachment_urls: Json | null
+          consent_evidence: Json | null
+          consent_status: Database["public"]["Enums"]["consent_status"]
+          consent_updated_at: string | null
+          created_at: string
+          email: string | null
+          follow_up_at: string | null
+          id: string
+          last_inbound_at: string | null
+          last_message_at: string | null
+          last_outbound_at: string | null
+          lead_source: string | null
+          lifecycle: Database["public"]["Enums"]["lead_lifecycle"]
+          name: string | null
+          notes: string | null
+          phone_e164: string | null
+          photo_urls: Json | null
+          symptoms: string | null
+          unread_count: number
+          updated_at: string
+          vehicle_make: string | null
+          vehicle_mileage: number | null
+          vehicle_model: string | null
+          vehicle_year: number | null
+          vin: string | null
+        }
+        Insert: {
+          assigned_owner?: string | null
+          attachment_urls?: Json | null
+          consent_evidence?: Json | null
+          consent_status?: Database["public"]["Enums"]["consent_status"]
+          consent_updated_at?: string | null
+          created_at?: string
+          email?: string | null
+          follow_up_at?: string | null
+          id?: string
+          last_inbound_at?: string | null
+          last_message_at?: string | null
+          last_outbound_at?: string | null
+          lead_source?: string | null
+          lifecycle?: Database["public"]["Enums"]["lead_lifecycle"]
+          name?: string | null
+          notes?: string | null
+          phone_e164?: string | null
+          photo_urls?: Json | null
+          symptoms?: string | null
+          unread_count?: number
+          updated_at?: string
+          vehicle_make?: string | null
+          vehicle_mileage?: number | null
+          vehicle_model?: string | null
+          vehicle_year?: number | null
+          vin?: string | null
+        }
+        Update: {
+          assigned_owner?: string | null
+          attachment_urls?: Json | null
+          consent_evidence?: Json | null
+          consent_status?: Database["public"]["Enums"]["consent_status"]
+          consent_updated_at?: string | null
+          created_at?: string
+          email?: string | null
+          follow_up_at?: string | null
+          id?: string
+          last_inbound_at?: string | null
+          last_message_at?: string | null
+          last_outbound_at?: string | null
+          lead_source?: string | null
+          lifecycle?: Database["public"]["Enums"]["lead_lifecycle"]
+          name?: string | null
+          notes?: string | null
+          phone_e164?: string | null
+          photo_urls?: Json | null
+          symptoms?: string | null
+          unread_count?: number
+          updated_at?: string
+          vehicle_make?: string | null
+          vehicle_mileage?: number | null
+          vehicle_model?: string | null
+          vehicle_year?: number | null
+          vin?: string | null
+        }
+        Relationships: []
+      }
+      message_jobs: {
+        Row: {
+          attempts: number
+          completed_at: string | null
+          created_at: string
+          id: string
+          inbound_provider_message_id: string | null
+          job_type: Database["public"]["Enums"]["message_job_type"]
+          last_error: string | null
+          lead_id: string | null
+          locked_at: string | null
+          max_attempts: number
+          message_id: string | null
+          payload: Json | null
+          run_after: string
+          status: Database["public"]["Enums"]["message_job_status"]
+          thread_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          inbound_provider_message_id?: string | null
+          job_type: Database["public"]["Enums"]["message_job_type"]
+          last_error?: string | null
+          lead_id?: string | null
+          locked_at?: string | null
+          max_attempts?: number
+          message_id?: string | null
+          payload?: Json | null
+          run_after?: string
+          status?: Database["public"]["Enums"]["message_job_status"]
+          thread_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          inbound_provider_message_id?: string | null
+          job_type?: Database["public"]["Enums"]["message_job_type"]
+          last_error?: string | null
+          lead_id?: string | null
+          locked_at?: string | null
+          max_attempts?: number
+          message_id?: string | null
+          payload?: Json | null
+          run_after?: string
+          status?: Database["public"]["Enums"]["message_job_status"]
+          thread_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      message_threads: {
+        Row: {
+          control_mode: Database["public"]["Enums"]["thread_control_mode"]
+          created_at: string
+          id: string
+          last_message_at: string | null
+          lead_id: string
+          phone_e164: string
+          subject: string | null
+          unread_count: number
+          updated_at: string
+        }
+        Insert: {
+          control_mode?: Database["public"]["Enums"]["thread_control_mode"]
+          created_at?: string
+          id?: string
+          last_message_at?: string | null
+          lead_id: string
+          phone_e164: string
+          subject?: string | null
+          unread_count?: number
+          updated_at?: string
+        }
+        Update: {
+          control_mode?: Database["public"]["Enums"]["thread_control_mode"]
+          created_at?: string
+          id?: string
+          last_message_at?: string | null
+          lead_id?: string
+          phone_e164?: string
+          subject?: string | null
+          unread_count?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      messages: {
+        Row: {
+          attachment_urls: Json | null
+          body: string | null
+          channel: Database["public"]["Enums"]["message_channel"]
+          created_at: string
+          delivery_state: Database["public"]["Enums"]["message_delivery_state"]
+          direction: Database["public"]["Enums"]["message_direction"]
+          error_code: string | null
+          error_message: string | null
+          id: string
+          idempotency_key: string | null
+          lead_id: string
+          provider: string
+          provider_created_at: string | null
+          provider_message_id: string | null
+          provider_metadata_redacted: Json | null
+          provider_updated_at: string | null
+          recipients_e164: string[] | null
+          sender_e164: string | null
+          thread_id: string
+          updated_at: string
+        }
+        Insert: {
+          attachment_urls?: Json | null
+          body?: string | null
+          channel?: Database["public"]["Enums"]["message_channel"]
+          created_at?: string
+          delivery_state?: Database["public"]["Enums"]["message_delivery_state"]
+          direction: Database["public"]["Enums"]["message_direction"]
+          error_code?: string | null
+          error_message?: string | null
+          id?: string
+          idempotency_key?: string | null
+          lead_id: string
+          provider?: string
+          provider_created_at?: string | null
+          provider_message_id?: string | null
+          provider_metadata_redacted?: Json | null
+          provider_updated_at?: string | null
+          recipients_e164?: string[] | null
+          sender_e164?: string | null
+          thread_id: string
+          updated_at?: string
+        }
+        Update: {
+          attachment_urls?: Json | null
+          body?: string | null
+          channel?: Database["public"]["Enums"]["message_channel"]
+          created_at?: string
+          delivery_state?: Database["public"]["Enums"]["message_delivery_state"]
+          direction?: Database["public"]["Enums"]["message_direction"]
+          error_code?: string | null
+          error_message?: string | null
+          id?: string
+          idempotency_key?: string | null
+          lead_id?: string
+          provider?: string
+          provider_created_at?: string | null
+          provider_message_id?: string | null
+          provider_metadata_redacted?: Json | null
+          provider_updated_at?: string | null
+          recipients_e164?: string[] | null
+          sender_e164?: string | null
+          thread_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      ringcentral_subscriptions: {
+        Row: {
+          created_at: string
+          delivery_address: string
+          event_filters: string[]
+          expires_at: string | null
+          extension_id: string | null
+          from_number_e164: string | null
+          id: string
+          last_notification_at: string | null
+          last_renewal_error: string | null
+          last_renewed_at: string | null
+          metadata_redacted: Json | null
+          provider_subscription_id: string
+          sms_capability: Database["public"]["Enums"]["sms_capability"]
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          delivery_address: string
+          event_filters: string[]
+          expires_at?: string | null
+          extension_id?: string | null
+          from_number_e164?: string | null
+          id?: string
+          last_notification_at?: string | null
+          last_renewal_error?: string | null
+          last_renewed_at?: string | null
+          metadata_redacted?: Json | null
+          provider_subscription_id: string
+          sms_capability?: Database["public"]["Enums"]["sms_capability"]
+          status: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          delivery_address?: string
+          event_filters?: string[]
+          expires_at?: string | null
+          extension_id?: string | null
+          from_number_e164?: string | null
+          id?: string
+          last_notification_at?: string | null
+          last_renewal_error?: string | null
+          last_renewed_at?: string | null
+          metadata_redacted?: Json | null
+          provider_subscription_id?: string
+          sms_capability?: Database["public"]["Enums"]["sms_capability"]
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -23,7 +485,53 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      agent_action: "send" | "escalate" | "no_reply"
+      consent_status: "unknown" | "opted_in" | "opted_out"
+      escalation_category:
+        | "threat"
+        | "injury"
+        | "legal_claim"
+        | "insurance_liability"
+        | "payment_dispute"
+        | "harassment"
+        | "unsupported_discount"
+        | "human_requested"
+        | "other_high_risk"
+      escalation_status: "open" | "acknowledged" | "resolved"
+      lead_lifecycle:
+        | "New"
+        | "Contacted"
+        | "Qualified"
+        | "Appointment Scheduled"
+        | "Inspected"
+        | "Estimate Sent"
+        | "Approved"
+        | "In Progress"
+        | "Completed"
+        | "Paid"
+        | "Lost"
+        | "No response"
+        | "No-show"
+        | "Duplicate"
+        | "Spam"
+        | "Outside service capability"
+      message_channel: "SMS" | "MMS"
+      message_delivery_state:
+        | "queued"
+        | "sending"
+        | "sent"
+        | "delivered"
+        | "failed"
+        | "received"
+      message_direction: "inbound" | "outbound"
+      message_job_status: "pending" | "processing" | "succeeded" | "failed" | "dead"
+      message_job_type:
+        | "process_inbound"
+        | "send_outbound"
+        | "reconcile"
+        | "renew_subscription"
+      sms_capability: "SmsSender" | "A2PSmsSender" | "none" | "unknown"
+      thread_control_mode: "auto" | "human"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +658,58 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      agent_action: ["send", "escalate", "no_reply"] as const,
+      consent_status: ["unknown", "opted_in", "opted_out"] as const,
+      escalation_category: [
+        "threat",
+        "injury",
+        "legal_claim",
+        "insurance_liability",
+        "payment_dispute",
+        "harassment",
+        "unsupported_discount",
+        "human_requested",
+        "other_high_risk",
+      ] as const,
+      escalation_status: ["open", "acknowledged", "resolved"] as const,
+      lead_lifecycle: [
+        "New",
+        "Contacted",
+        "Qualified",
+        "Appointment Scheduled",
+        "Inspected",
+        "Estimate Sent",
+        "Approved",
+        "In Progress",
+        "Completed",
+        "Paid",
+        "Lost",
+        "No response",
+        "No-show",
+        "Duplicate",
+        "Spam",
+        "Outside service capability",
+      ] as const,
+      message_channel: ["SMS", "MMS"] as const,
+      message_delivery_state: [
+        "queued",
+        "sending",
+        "sent",
+        "delivered",
+        "failed",
+        "received",
+      ] as const,
+      message_direction: ["inbound", "outbound"] as const,
+      message_job_status: ["pending", "processing", "succeeded", "failed", "dead"] as const,
+      message_job_type: [
+        "process_inbound",
+        "send_outbound",
+        "reconcile",
+        "renew_subscription",
+      ] as const,
+      sms_capability: ["SmsSender", "A2PSmsSender", "none", "unknown"] as const,
+      thread_control_mode: ["auto", "human"] as const,
+    },
   },
 } as const
