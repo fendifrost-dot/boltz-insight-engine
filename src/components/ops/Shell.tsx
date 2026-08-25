@@ -11,6 +11,9 @@ const NAV: { to: string; label: string; group: string }[] = [
   { to: "/decisions", label: "Decision Queue", group: "Operate" },
   { to: "/experiments", label: "Experiment Registry", group: "Operate" },
   { to: "/measurement", label: "Measurement", group: "Operate" },
+  { to: "/leads", label: "Lead Inbox", group: "Leads" },
+  { to: "/escalations", label: "Escalations", group: "Leads" },
+  { to: "/integration-health", label: "Integration Health", group: "Leads" },
   { to: "/queries", label: "Query Universe", group: "Research" },
   { to: "/ai-visibility", label: "AI Visibility", group: "Research" },
   { to: "/local-seo", label: "Google / Local SEO", group: "Research" },
@@ -19,7 +22,7 @@ const NAV: { to: string; label: string; group: string }[] = [
   { to: "/modules", label: "Audit Modules", group: "Research" },
 ];
 
-const GROUPS = ["Operate", "Research"];
+const GROUPS = ["Operate", "Leads", "Research"];
 
 export function Shell({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
