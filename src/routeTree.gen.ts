@@ -16,12 +16,19 @@ import { Route as AuthenticatedAiVisibilityRouteImport } from './routes/_authent
 import { Route as AuthenticatedCompetitorsRouteImport } from './routes/_authenticated/competitors'
 import { Route as AuthenticatedContextRouteImport } from './routes/_authenticated/context'
 import { Route as AuthenticatedDecisionsRouteImport } from './routes/_authenticated/decisions'
+import { Route as AuthenticatedEscalationsRouteImport } from './routes/_authenticated/escalations'
 import { Route as AuthenticatedExperimentsRouteImport } from './routes/_authenticated/experiments'
+import { Route as AuthenticatedIntegrationHealthRouteImport } from './routes/_authenticated/integration-health'
+import { Route as AuthenticatedLeadsRouteImport } from './routes/_authenticated/leads'
 import { Route as AuthenticatedLocalSeoRouteImport } from './routes/_authenticated/local-seo'
 import { Route as AuthenticatedMeasurementRouteImport } from './routes/_authenticated/measurement'
 import { Route as AuthenticatedModulesRouteImport } from './routes/_authenticated/modules'
 import { Route as AuthenticatedProvenanceRouteImport } from './routes/_authenticated/provenance'
 import { Route as AuthenticatedQueriesRouteImport } from './routes/_authenticated/queries'
+import { Route as ApiPublicCronProcessJobsRouteImport } from './routes/api/public/cron/process-jobs'
+import { Route as ApiPublicCronReconcileMessagesRouteImport } from './routes/api/public/cron/reconcile-messages'
+import { Route as ApiPublicCronRenewSubscriptionsRouteImport } from './routes/api/public/cron/renew-subscriptions'
+import { Route as ApiPublicRingcentralWebhookRouteImport } from './routes/api/public/ringcentral/webhook'
 
 const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
   id: '/_authenticated',
@@ -59,12 +66,29 @@ const AuthenticatedDecisionsRoute = AuthenticatedDecisionsRouteImport.update({
   path: '/decisions',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedEscalationsRoute =
+  AuthenticatedEscalationsRouteImport.update({
+    id: '/escalations',
+    path: '/escalations',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedExperimentsRoute =
   AuthenticatedExperimentsRouteImport.update({
     id: '/experiments',
     path: '/experiments',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedIntegrationHealthRoute =
+  AuthenticatedIntegrationHealthRouteImport.update({
+    id: '/integration-health',
+    path: '/integration-health',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedLeadsRoute = AuthenticatedLeadsRouteImport.update({
+  id: '/leads',
+  path: '/leads',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedLocalSeoRoute = AuthenticatedLocalSeoRouteImport.update({
   id: '/local-seo',
   path: '/local-seo',
@@ -91,6 +115,30 @@ const AuthenticatedQueriesRoute = AuthenticatedQueriesRouteImport.update({
   path: '/queries',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const ApiPublicCronProcessJobsRoute =
+  ApiPublicCronProcessJobsRouteImport.update({
+    id: '/api/public/cron/process-jobs',
+    path: '/api/public/cron/process-jobs',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicCronReconcileMessagesRoute =
+  ApiPublicCronReconcileMessagesRouteImport.update({
+    id: '/api/public/cron/reconcile-messages',
+    path: '/api/public/cron/reconcile-messages',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicCronRenewSubscriptionsRoute =
+  ApiPublicCronRenewSubscriptionsRouteImport.update({
+    id: '/api/public/cron/renew-subscriptions',
+    path: '/api/public/cron/renew-subscriptions',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicRingcentralWebhookRoute =
+  ApiPublicRingcentralWebhookRouteImport.update({
+    id: '/api/public/ringcentral/webhook',
+    path: '/api/public/ringcentral/webhook',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedIndexRoute
@@ -99,12 +147,19 @@ export interface FileRoutesByFullPath {
   '/competitors': typeof AuthenticatedCompetitorsRoute
   '/context': typeof AuthenticatedContextRoute
   '/decisions': typeof AuthenticatedDecisionsRoute
+  '/escalations': typeof AuthenticatedEscalationsRoute
   '/experiments': typeof AuthenticatedExperimentsRoute
+  '/integration-health': typeof AuthenticatedIntegrationHealthRoute
+  '/leads': typeof AuthenticatedLeadsRoute
   '/local-seo': typeof AuthenticatedLocalSeoRoute
   '/measurement': typeof AuthenticatedMeasurementRoute
   '/modules': typeof AuthenticatedModulesRoute
   '/provenance': typeof AuthenticatedProvenanceRoute
   '/queries': typeof AuthenticatedQueriesRoute
+  '/api/public/cron/process-jobs': typeof ApiPublicCronProcessJobsRoute
+  '/api/public/cron/reconcile-messages': typeof ApiPublicCronReconcileMessagesRoute
+  '/api/public/cron/renew-subscriptions': typeof ApiPublicCronRenewSubscriptionsRoute
+  '/api/public/ringcentral/webhook': typeof ApiPublicRingcentralWebhookRoute
 }
 export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
@@ -112,13 +167,20 @@ export interface FileRoutesByTo {
   '/competitors': typeof AuthenticatedCompetitorsRoute
   '/context': typeof AuthenticatedContextRoute
   '/decisions': typeof AuthenticatedDecisionsRoute
+  '/escalations': typeof AuthenticatedEscalationsRoute
   '/experiments': typeof AuthenticatedExperimentsRoute
+  '/integration-health': typeof AuthenticatedIntegrationHealthRoute
+  '/leads': typeof AuthenticatedLeadsRoute
   '/local-seo': typeof AuthenticatedLocalSeoRoute
   '/measurement': typeof AuthenticatedMeasurementRoute
   '/modules': typeof AuthenticatedModulesRoute
   '/provenance': typeof AuthenticatedProvenanceRoute
   '/queries': typeof AuthenticatedQueriesRoute
   '/': typeof AuthenticatedIndexRoute
+  '/api/public/cron/process-jobs': typeof ApiPublicCronProcessJobsRoute
+  '/api/public/cron/reconcile-messages': typeof ApiPublicCronReconcileMessagesRoute
+  '/api/public/cron/renew-subscriptions': typeof ApiPublicCronRenewSubscriptionsRoute
+  '/api/public/ringcentral/webhook': typeof ApiPublicRingcentralWebhookRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -128,13 +190,20 @@ export interface FileRoutesById {
   '/_authenticated/competitors': typeof AuthenticatedCompetitorsRoute
   '/_authenticated/context': typeof AuthenticatedContextRoute
   '/_authenticated/decisions': typeof AuthenticatedDecisionsRoute
+  '/_authenticated/escalations': typeof AuthenticatedEscalationsRoute
   '/_authenticated/experiments': typeof AuthenticatedExperimentsRoute
+  '/_authenticated/integration-health': typeof AuthenticatedIntegrationHealthRoute
+  '/_authenticated/leads': typeof AuthenticatedLeadsRoute
   '/_authenticated/local-seo': typeof AuthenticatedLocalSeoRoute
   '/_authenticated/measurement': typeof AuthenticatedMeasurementRoute
   '/_authenticated/modules': typeof AuthenticatedModulesRoute
   '/_authenticated/provenance': typeof AuthenticatedProvenanceRoute
   '/_authenticated/queries': typeof AuthenticatedQueriesRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
+  '/api/public/cron/process-jobs': typeof ApiPublicCronProcessJobsRoute
+  '/api/public/cron/reconcile-messages': typeof ApiPublicCronReconcileMessagesRoute
+  '/api/public/cron/renew-subscriptions': typeof ApiPublicCronRenewSubscriptionsRoute
+  '/api/public/ringcentral/webhook': typeof ApiPublicRingcentralWebhookRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -145,12 +214,19 @@ export interface FileRouteTypes {
     | '/competitors'
     | '/context'
     | '/decisions'
+    | '/escalations'
     | '/experiments'
+    | '/integration-health'
+    | '/leads'
     | '/local-seo'
     | '/measurement'
     | '/modules'
     | '/provenance'
     | '/queries'
+    | '/api/public/cron/process-jobs'
+    | '/api/public/cron/reconcile-messages'
+    | '/api/public/cron/renew-subscriptions'
+    | '/api/public/ringcentral/webhook'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/auth'
@@ -158,13 +234,20 @@ export interface FileRouteTypes {
     | '/competitors'
     | '/context'
     | '/decisions'
+    | '/escalations'
     | '/experiments'
+    | '/integration-health'
+    | '/leads'
     | '/local-seo'
     | '/measurement'
     | '/modules'
     | '/provenance'
     | '/queries'
     | '/'
+    | '/api/public/cron/process-jobs'
+    | '/api/public/cron/reconcile-messages'
+    | '/api/public/cron/renew-subscriptions'
+    | '/api/public/ringcentral/webhook'
   id:
     | '__root__'
     | '/_authenticated'
@@ -173,18 +256,29 @@ export interface FileRouteTypes {
     | '/_authenticated/competitors'
     | '/_authenticated/context'
     | '/_authenticated/decisions'
+    | '/_authenticated/escalations'
     | '/_authenticated/experiments'
+    | '/_authenticated/integration-health'
+    | '/_authenticated/leads'
     | '/_authenticated/local-seo'
     | '/_authenticated/measurement'
     | '/_authenticated/modules'
     | '/_authenticated/provenance'
     | '/_authenticated/queries'
     | '/_authenticated/'
+    | '/api/public/cron/process-jobs'
+    | '/api/public/cron/reconcile-messages'
+    | '/api/public/cron/renew-subscriptions'
+    | '/api/public/ringcentral/webhook'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
+  ApiPublicCronProcessJobsRoute: typeof ApiPublicCronProcessJobsRoute
+  ApiPublicCronReconcileMessagesRoute: typeof ApiPublicCronReconcileMessagesRoute
+  ApiPublicCronRenewSubscriptionsRoute: typeof ApiPublicCronRenewSubscriptionsRoute
+  ApiPublicRingcentralWebhookRoute: typeof ApiPublicRingcentralWebhookRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -238,11 +332,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedDecisionsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/escalations': {
+      id: '/_authenticated/escalations'
+      path: '/escalations'
+      fullPath: '/escalations'
+      preLoaderRoute: typeof AuthenticatedEscalationsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/experiments': {
       id: '/_authenticated/experiments'
       path: '/experiments'
       fullPath: '/experiments'
       preLoaderRoute: typeof AuthenticatedExperimentsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/integration-health': {
+      id: '/_authenticated/integration-health'
+      path: '/integration-health'
+      fullPath: '/integration-health'
+      preLoaderRoute: typeof AuthenticatedIntegrationHealthRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/leads': {
+      id: '/_authenticated/leads'
+      path: '/leads'
+      fullPath: '/leads'
+      preLoaderRoute: typeof AuthenticatedLeadsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/local-seo': {
@@ -280,6 +395,34 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedQueriesRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/api/public/cron/process-jobs': {
+      id: '/api/public/cron/process-jobs'
+      path: '/api/public/cron/process-jobs'
+      fullPath: '/api/public/cron/process-jobs'
+      preLoaderRoute: typeof ApiPublicCronProcessJobsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/cron/reconcile-messages': {
+      id: '/api/public/cron/reconcile-messages'
+      path: '/api/public/cron/reconcile-messages'
+      fullPath: '/api/public/cron/reconcile-messages'
+      preLoaderRoute: typeof ApiPublicCronReconcileMessagesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/cron/renew-subscriptions': {
+      id: '/api/public/cron/renew-subscriptions'
+      path: '/api/public/cron/renew-subscriptions'
+      fullPath: '/api/public/cron/renew-subscriptions'
+      preLoaderRoute: typeof ApiPublicCronRenewSubscriptionsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/ringcentral/webhook': {
+      id: '/api/public/ringcentral/webhook'
+      path: '/api/public/ringcentral/webhook'
+      fullPath: '/api/public/ringcentral/webhook'
+      preLoaderRoute: typeof ApiPublicRingcentralWebhookRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -288,7 +431,10 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedCompetitorsRoute: typeof AuthenticatedCompetitorsRoute
   AuthenticatedContextRoute: typeof AuthenticatedContextRoute
   AuthenticatedDecisionsRoute: typeof AuthenticatedDecisionsRoute
+  AuthenticatedEscalationsRoute: typeof AuthenticatedEscalationsRoute
   AuthenticatedExperimentsRoute: typeof AuthenticatedExperimentsRoute
+  AuthenticatedIntegrationHealthRoute: typeof AuthenticatedIntegrationHealthRoute
+  AuthenticatedLeadsRoute: typeof AuthenticatedLeadsRoute
   AuthenticatedLocalSeoRoute: typeof AuthenticatedLocalSeoRoute
   AuthenticatedMeasurementRoute: typeof AuthenticatedMeasurementRoute
   AuthenticatedModulesRoute: typeof AuthenticatedModulesRoute
@@ -302,7 +448,10 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedCompetitorsRoute: AuthenticatedCompetitorsRoute,
   AuthenticatedContextRoute: AuthenticatedContextRoute,
   AuthenticatedDecisionsRoute: AuthenticatedDecisionsRoute,
+  AuthenticatedEscalationsRoute: AuthenticatedEscalationsRoute,
   AuthenticatedExperimentsRoute: AuthenticatedExperimentsRoute,
+  AuthenticatedIntegrationHealthRoute: AuthenticatedIntegrationHealthRoute,
+  AuthenticatedLeadsRoute: AuthenticatedLeadsRoute,
   AuthenticatedLocalSeoRoute: AuthenticatedLocalSeoRoute,
   AuthenticatedMeasurementRoute: AuthenticatedMeasurementRoute,
   AuthenticatedModulesRoute: AuthenticatedModulesRoute,
@@ -317,6 +466,10 @@ const AuthenticatedRouteRouteWithChildren =
 const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
+  ApiPublicCronProcessJobsRoute: ApiPublicCronProcessJobsRoute,
+  ApiPublicCronReconcileMessagesRoute: ApiPublicCronReconcileMessagesRoute,
+  ApiPublicCronRenewSubscriptionsRoute: ApiPublicCronRenewSubscriptionsRoute,
+  ApiPublicRingcentralWebhookRoute: ApiPublicRingcentralWebhookRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
