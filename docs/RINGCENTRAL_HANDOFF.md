@@ -11,7 +11,7 @@ SEO/GEO experiment-approval workflow.
 | `/leads` | UI | owner sign-in required |
 | `/escalations` | UI | owner sign-in required |
 | `/integration-health` | UI | owner sign-in required |
-| `/api/public/ringcentral/webhook` | server route | RingCentral `Validation-Token` header |
+| `/api/public/ringcentral/webhook` | server route | Echoes handshake `Validation-Token`; verifies notification `Verification-Token` |
 | `/api/public/cron/process-jobs` | server route | `Authorization: Bearer CRON_SECRET` |
 | `/api/public/cron/reconcile-messages` | server route | `Authorization: Bearer CRON_SECRET` |
 | `/api/public/cron/renew-subscriptions` | server route | `Authorization: Bearer CRON_SECRET` |
@@ -38,7 +38,7 @@ themselves in-handler.
 
 ## Inbound pipeline
 
-1. Webhook verifies the validation token, then enqueues one `process_inbound` job keyed by the
+1. Webhook echoes RingCentral’s one-time handshake `Validation-Token`, verifies the configured\n   `Verification-Token` on normal notifications, then enqueues one `process_inbound` job keyed by the
    provider message id (database-deduplicated; replays are no-ops) and drains at most 3 jobs inline.
 2. Job creates/reuses the lead + thread, stores the inbound message (idempotent on
    `provider_message_id`).
