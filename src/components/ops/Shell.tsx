@@ -7,6 +7,9 @@ import { cn } from "@/lib/utils";
 
 const NAV: { to: string; label: string; group: string }[] = [
   { to: "/", label: "Dashboard", group: "Operate" },
+  { to: "/leads", label: "Lead Inbox", group: "Operate" },
+  { to: "/escalations", label: "Escalations", group: "Operate" },
+  { to: "/integration-health", label: "Integration Health", group: "Operate" },
   { to: "/context", label: "Context Lock", group: "Operate" },
   { to: "/decisions", label: "Decision Queue", group: "Operate" },
   { to: "/experiments", label: "Experiment Registry", group: "Operate" },

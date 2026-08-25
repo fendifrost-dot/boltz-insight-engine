@@ -16,6 +16,12 @@ dist-ssr
 .nitro
 *.local
 
+# Environment / secrets — never commit real values.
+# Allow only the blank template (.env.example).
+.env
+.env.*
+!.env.example
+
 # Wrangler / Cloudflare
 .wrangler/
 .dev.vars
