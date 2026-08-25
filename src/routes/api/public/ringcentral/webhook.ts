@@ -19,18 +19,28 @@ type RcNotification = {
 async function handle(request: Request): Promise<Response> {
   const { readSecret, safeEqual } = await import("@/server/lead-inbox/env.server");
 
-  // RingCentral webhook handshake: echo the validation token back.
+  // Subscription handshake: RingCentral generates this one-time token.
+  // Echo it exactly; it is distinct from our configured verification token.
   const validationToken = request.headers.get("validation-token");
+  if (validationToken) {
+    return new Response(null, {
+      status: 200,
+      headers: { "Validation-Token": validationToken },
+    });
+  }
+
+  // Normal notifications carry the verification token supplied when the
+  // subscription was created.
   const expected = readSecret("RINGCENTRAL_WEBHOOK_VALIDATION_TOKEN");
   if (!expected) return new Response("Webhook not configured", { status: 503 });
-  if (!validationToken || !safeEqual(validationToken, expected)) {
-    return new Response("Invalid validation token", { status: 401 });
+
+  const verificationToken = request.headers.get("verification-token");
+  if (!verificationToken || !safeEqual(verificationToken, expected)) {
+    return new Response("Invalid verification token", { status: 401 });
   }
 
   const rawBody = await request.text();
-  if (!rawBody) {
-    return new Response(null, { status: 200, headers: { "Validation-Token": validationToken } });
-  }
+  if (!rawBody) return new Response(null, { status: 200 });
 
   const { enqueueJob, recordHealth } = await import("@/server/lead-inbox/store.server");
   const { processJobs } = await import("@/server/lead-inbox/jobs.server");
