@@ -389,7 +389,7 @@ function LeadsPage() {
               </div>
 
               <div>
-                <div className="label-caps mb-1">Agent decisions</div>
+                <div className="label-caps mb-1">Agent runs</div>
                 {(thread.data?.agentRuns ?? []).length === 0 ? (
                   <p className="text-xs text-muted-foreground">No agent runs yet.</p>
                 ) : (
