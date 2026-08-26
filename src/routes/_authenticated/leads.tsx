@@ -418,7 +418,10 @@ function LeadsPage() {
                 </ul>
               </div>
             </div>
+              )}
+            </div>
           )}
+
         </Panel>
       </div>
     </Shell>
