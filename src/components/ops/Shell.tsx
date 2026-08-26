@@ -46,9 +46,10 @@ export function Shell({ children }: { children: ReactNode }) {
         </div>
         <nav className="flex gap-1 overflow-x-auto px-2 pb-3 whitespace-nowrap lg:block lg:space-y-4 lg:overflow-x-visible lg:whitespace-normal">
           {GROUPS.map((group) => (
-            <div key={group} className="lg:space-y-0.5">
+            <div key={group} className="flex gap-1 lg:block lg:space-y-0.5">
               <div className="label-caps hidden px-2 pt-2 pb-1 lg:block">{group}</div>
               {NAV.filter((n) => n.group === group).map((item) => (
+
                 <Link
                   key={item.to}
                   to={item.to}
