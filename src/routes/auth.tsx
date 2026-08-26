@@ -1,6 +1,10 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { getSupabaseConfigError, supabase } from "@/integrations/supabase/client";
+import {
+  ensureSupabaseBrowserConfig,
+  getSupabaseConfigError,
+  supabase,
+} from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/auth")({
   ssr: false,
@@ -24,24 +28,39 @@ export const Route = createFileRoute("/auth")({
 
 function AuthPage() {
   const navigate = useNavigate();
-  const configError = getSupabaseConfigError();
+  const [configError, setConfigError] = useState<string | null>(null);
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (configError) return;
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session) navigate({ to: "/", replace: true });
-    });
-    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
-      if (session && (event === "SIGNED_IN" || event === "INITIAL_SESSION")) {
-        navigate({ to: "/", replace: true });
-      }
-    });
-    return () => sub.subscription.unsubscribe();
-  }, [configError, navigate]);
+    let unsubscribe: (() => void) | undefined;
+    let cancelled = false;
+
+    (async () => {
+      await ensureSupabaseBrowserConfig();
+      const err = getSupabaseConfigError();
+      if (cancelled) return;
+      setConfigError(err);
+      if (err) return;
+
+      supabase.auth.getSession().then(({ data }) => {
+        if (data.session) navigate({ to: "/", replace: true });
+      });
+      const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+        if (session && (event === "SIGNED_IN" || event === "INITIAL_SESSION")) {
+          navigate({ to: "/", replace: true });
+        }
+      });
+      unsubscribe = () => sub.subscription.unsubscribe();
+    })();
+
+    return () => {
+      cancelled = true;
+      unsubscribe?.();
+    };
+  }, [navigate]);
 
   async function sendLink(e: React.FormEvent) {
     e.preventDefault();

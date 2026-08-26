@@ -11,6 +11,7 @@ import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
+import { serverSupabaseBrowserConfig } from "../integrations/supabase/public-config";
 
 function NotFoundComponent() {
   return (
@@ -103,10 +104,19 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 });
 
 function RootShell({ children }: { children: ReactNode }) {
+  const { url, anonKey } = serverSupabaseBrowserConfig();
+  const publicConfigScript =
+    url && anonKey
+      ? `window.__BOLTZ_SUPABASE__=${JSON.stringify({ url, anonKey }).replace(/</g, "\\u003c")};`
+      : null;
+
   return (
     <html lang="en" className="dark">
       <head>
         <HeadContent />
+        {publicConfigScript && (
+          <script dangerouslySetInnerHTML={{ __html: publicConfigScript }} />
+        )}
       </head>
       <body>
         {children}
