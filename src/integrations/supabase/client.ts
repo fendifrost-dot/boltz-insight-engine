@@ -27,24 +27,13 @@ function createSupabaseFetch(supabaseKey: string): typeof fetch {
   };
 }
 
-const SUPABASE_URL =
-  import.meta.env.VITE_SUPABASE_URL ||
-  (typeof process !== "undefined" ? process.env["SUPABASE_URL"] : undefined) ||
-  "";
-const SUPABASE_PUBLISHABLE_KEY =
-  import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
-  (typeof process !== "undefined" ? process.env["SUPABASE_PUBLISHABLE_KEY"] : undefined) ||
-  "";
+import {
+  ensureSupabaseBrowserConfig,
+  getSupabaseConfigError,
+  readSupabaseBrowserConfig,
+} from './public-config';
 
-export function getSupabaseConfigError(): string | null {
-  const missing = [
-    ...(!SUPABASE_URL ? ["VITE_SUPABASE_URL"] : []),
-    ...(!SUPABASE_PUBLISHABLE_KEY ? ["VITE_SUPABASE_PUBLISHABLE_KEY"] : []),
-  ];
-  return missing.length > 0
-    ? `Missing Supabase environment variable(s): ${missing.join(", ")}. Connect Supabase in Lovable Cloud.`
-    : null;
-}
+export { ensureSupabaseBrowserConfig, getSupabaseConfigError };
 
 function createSupabaseClient() {
   const configError = getSupabaseConfigError();
@@ -53,9 +42,11 @@ function createSupabaseClient() {
     throw new Error(configError);
   }
 
-  return createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+  const { url, anonKey } = readSupabaseBrowserConfig();
+
+  return createClient<Database>(url, anonKey, {
     global: {
-      fetch: createSupabaseFetch(SUPABASE_PUBLISHABLE_KEY),
+      fetch: createSupabaseFetch(anonKey),
     },
     auth: {
       storage: brokeredPreviewStorage(),
