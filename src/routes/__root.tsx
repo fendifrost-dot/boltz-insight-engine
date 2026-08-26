@@ -11,6 +11,7 @@ import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
+import { serverSupabaseBrowserConfig } from "../integrations/supabase/public-config";
 
 function NotFoundComponent() {
   return (
@@ -103,10 +104,24 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 });
 
 function RootShell({ children }: { children: ReactNode }) {
+  // Bake publishable Supabase config into the HTML shell. Lovable client builds
+  // often strip VITE_SUPABASE_* from the JS bundle; the server still has the values.
+  const boot = serverSupabaseBrowserConfig();
+  const bootScript =
+    boot.url && boot.key
+      ? `(function(c){if(c&&c.url&&c.key){window.__BOLTZ_SUPABASE__=c;}})(${JSON.stringify(boot)});`
+      : "";
+
   return (
     <html lang="en" className="dark">
       <head>
         <HeadContent />
+        {bootScript ? (
+          <script
+            // Publishable URL + anon key only — never the service role.
+            dangerouslySetInnerHTML={{ __html: bootScript }}
+          />
+        ) : null}
       </head>
       <body>
         {children}

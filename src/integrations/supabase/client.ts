@@ -2,6 +2,13 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
 import { brokeredPreviewStorage } from './previewAuthStorage';
+import {
+  ensureSupabaseBrowserConfig,
+  getSupabaseConfigError,
+  readSupabaseBrowserConfig,
+} from './public-config';
+
+export { ensureSupabaseBrowserConfig, getSupabaseConfigError, readSupabaseBrowserConfig };
 
 function isNewSupabaseApiKey(value: string): boolean {
   return value.startsWith('sb_publishable_') || value.startsWith('sb_secret_');
@@ -25,35 +32,6 @@ function createSupabaseFetch(supabaseKey: string): typeof fetch {
     headers.set('apikey', supabaseKey);
     return fetch(input, { ...init, headers });
   };
-}
-
-
-/**
- * Vite only statically replaces / inlines `import.meta.env.VITE_*` when accessed
- * with **dot notation**. Bracket access (`import.meta.env['VITE_…']`) can leave
- * the keys out of the production env object entirely — the published bundle then
- * throws on first supabase use and the root error boundary eats the whole app.
- */
-function readSupabaseBrowserConfig(): { url: string; key: string } {
-  const url =
-    import.meta.env.VITE_SUPABASE_URL ||
-    (typeof process !== "undefined" ? process.env["SUPABASE_URL"] : undefined) ||
-    "";
-  const key =
-    import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
-    (typeof process !== "undefined" ? process.env["SUPABASE_PUBLISHABLE_KEY"] : undefined) ||
-    "";
-  return { url, key };
-}
-
-export function getSupabaseConfigError(): string | null {
-  const { url, key } = readSupabaseBrowserConfig();
-  if (url && key) return null;
-  const missing = [
-    ...(!url ? ["VITE_SUPABASE_URL"] : []),
-    ...(!key ? ["VITE_SUPABASE_PUBLISHABLE_KEY"] : []),
-  ];
-  return `Missing Supabase environment variable(s): ${missing.join(", ")}. Connect Supabase in Lovable Cloud and republish.`;
 }
 
 function createSupabaseClient() {
@@ -87,4 +65,3 @@ export const supabase = new Proxy({} as ReturnType<typeof createSupabaseClient>,
     return Reflect.get(_supabase, prop, receiver);
   },
 });
-

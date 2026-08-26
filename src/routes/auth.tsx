@@ -1,6 +1,10 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { getSupabaseConfigError, supabase } from "@/integrations/supabase/client";
+import {
+  ensureSupabaseBrowserConfig,
+  getSupabaseConfigError,
+  supabase,
+} from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/auth")({
   ssr: false,
@@ -27,36 +31,59 @@ function AuthPage() {
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(() => getSupabaseConfigError());
-  const configBlocked = Boolean(getSupabaseConfigError());
+  const [ready, setReady] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [configBlocked, setConfigBlocked] = useState(false);
 
   useEffect(() => {
-    if (configBlocked) return;
     let cancelled = false;
     void (async () => {
+      await ensureSupabaseBrowserConfig();
+      if (cancelled) return;
+      const configError = getSupabaseConfigError();
+      if (configError) {
+        setError(configError);
+        setConfigBlocked(true);
+        setReady(true);
+        return;
+      }
       try {
         const { data } = await supabase.auth.getSession();
-        if (!cancelled && data.session) navigate({ to: "/", replace: true });
+        if (!cancelled && data.session) {
+          navigate({ to: "/", replace: true });
+          return;
+        }
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : "Could not restore session.");
         }
       }
+      if (!cancelled) setReady(true);
     })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [navigate]);
+
+  useEffect(() => {
+    if (!ready || configBlocked) return;
     const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
       if (session && (event === "SIGNED_IN" || event === "INITIAL_SESSION")) {
         navigate({ to: "/", replace: true });
       }
     });
-    return () => {
-      cancelled = true;
-      sub.subscription.unsubscribe();
-    };
-  }, [navigate, configBlocked]);
+    return () => sub.subscription.unsubscribe();
+  }, [navigate, ready, configBlocked]);
 
   async function sendLink(e: React.FormEvent) {
     e.preventDefault();
-    if (configBlocked) return;
+    const configError = getSupabaseConfigError();
+    if (configError) {
+      setError(configError);
+      setConfigBlocked(true);
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -82,10 +109,10 @@ function AuthPage() {
           Internal tooling. Owner access only — sign in with a magic link.
         </p>
 
-        {configBlocked ? (
-          <p className="mt-6 text-sm text-destructive">
-            {error ?? "Supabase is not configured in this build. Republish from Lovable Cloud."}
-          </p>
+        {!ready ? (
+          <p className="mt-6 text-sm text-muted-foreground">Loading…</p>
+        ) : configBlocked ? (
+          <p className="mt-6 text-sm text-destructive">{error}</p>
         ) : sent ? (
           <p className="mt-6 text-sm text-foreground">
             Check <span className="font-mono">{email}</span> for a sign-in link. You can close this

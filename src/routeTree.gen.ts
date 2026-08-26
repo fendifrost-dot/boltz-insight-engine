@@ -25,6 +25,7 @@ import { Route as AuthenticatedMeasurementRouteImport } from './routes/_authenti
 import { Route as AuthenticatedModulesRouteImport } from './routes/_authenticated/modules'
 import { Route as AuthenticatedProvenanceRouteImport } from './routes/_authenticated/provenance'
 import { Route as AuthenticatedQueriesRouteImport } from './routes/_authenticated/queries'
+import { Route as ApiPublicSupabaseConfigRouteImport } from './routes/api/public/supabase-config'
 import { Route as ApiPublicCronProcessJobsRouteImport } from './routes/api/public/cron/process-jobs'
 import { Route as ApiPublicCronReconcileMessagesRouteImport } from './routes/api/public/cron/reconcile-messages'
 import { Route as ApiPublicCronRenewSubscriptionsRouteImport } from './routes/api/public/cron/renew-subscriptions'
@@ -115,6 +116,11 @@ const AuthenticatedQueriesRoute = AuthenticatedQueriesRouteImport.update({
   path: '/queries',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const ApiPublicSupabaseConfigRoute = ApiPublicSupabaseConfigRouteImport.update({
+  id: '/api/public/supabase-config',
+  path: '/api/public/supabase-config',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicCronProcessJobsRoute =
   ApiPublicCronProcessJobsRouteImport.update({
     id: '/api/public/cron/process-jobs',
@@ -156,6 +162,7 @@ export interface FileRoutesByFullPath {
   '/modules': typeof AuthenticatedModulesRoute
   '/provenance': typeof AuthenticatedProvenanceRoute
   '/queries': typeof AuthenticatedQueriesRoute
+  '/api/public/supabase-config': typeof ApiPublicSupabaseConfigRoute
   '/api/public/cron/process-jobs': typeof ApiPublicCronProcessJobsRoute
   '/api/public/cron/reconcile-messages': typeof ApiPublicCronReconcileMessagesRoute
   '/api/public/cron/renew-subscriptions': typeof ApiPublicCronRenewSubscriptionsRoute
@@ -177,6 +184,7 @@ export interface FileRoutesByTo {
   '/provenance': typeof AuthenticatedProvenanceRoute
   '/queries': typeof AuthenticatedQueriesRoute
   '/': typeof AuthenticatedIndexRoute
+  '/api/public/supabase-config': typeof ApiPublicSupabaseConfigRoute
   '/api/public/cron/process-jobs': typeof ApiPublicCronProcessJobsRoute
   '/api/public/cron/reconcile-messages': typeof ApiPublicCronReconcileMessagesRoute
   '/api/public/cron/renew-subscriptions': typeof ApiPublicCronRenewSubscriptionsRoute
@@ -200,6 +208,7 @@ export interface FileRoutesById {
   '/_authenticated/provenance': typeof AuthenticatedProvenanceRoute
   '/_authenticated/queries': typeof AuthenticatedQueriesRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
+  '/api/public/supabase-config': typeof ApiPublicSupabaseConfigRoute
   '/api/public/cron/process-jobs': typeof ApiPublicCronProcessJobsRoute
   '/api/public/cron/reconcile-messages': typeof ApiPublicCronReconcileMessagesRoute
   '/api/public/cron/renew-subscriptions': typeof ApiPublicCronRenewSubscriptionsRoute
@@ -223,6 +232,7 @@ export interface FileRouteTypes {
     | '/modules'
     | '/provenance'
     | '/queries'
+    | '/api/public/supabase-config'
     | '/api/public/cron/process-jobs'
     | '/api/public/cron/reconcile-messages'
     | '/api/public/cron/renew-subscriptions'
@@ -244,6 +254,7 @@ export interface FileRouteTypes {
     | '/provenance'
     | '/queries'
     | '/'
+    | '/api/public/supabase-config'
     | '/api/public/cron/process-jobs'
     | '/api/public/cron/reconcile-messages'
     | '/api/public/cron/renew-subscriptions'
@@ -266,6 +277,7 @@ export interface FileRouteTypes {
     | '/_authenticated/provenance'
     | '/_authenticated/queries'
     | '/_authenticated/'
+    | '/api/public/supabase-config'
     | '/api/public/cron/process-jobs'
     | '/api/public/cron/reconcile-messages'
     | '/api/public/cron/renew-subscriptions'
@@ -275,6 +287,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
+  ApiPublicSupabaseConfigRoute: typeof ApiPublicSupabaseConfigRoute
   ApiPublicCronProcessJobsRoute: typeof ApiPublicCronProcessJobsRoute
   ApiPublicCronReconcileMessagesRoute: typeof ApiPublicCronReconcileMessagesRoute
   ApiPublicCronRenewSubscriptionsRoute: typeof ApiPublicCronRenewSubscriptionsRoute
@@ -395,6 +408,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedQueriesRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/api/public/supabase-config': {
+      id: '/api/public/supabase-config'
+      path: '/api/public/supabase-config'
+      fullPath: '/api/public/supabase-config'
+      preLoaderRoute: typeof ApiPublicSupabaseConfigRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/cron/process-jobs': {
       id: '/api/public/cron/process-jobs'
       path: '/api/public/cron/process-jobs'
@@ -466,6 +486,7 @@ const AuthenticatedRouteRouteWithChildren =
 const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
+  ApiPublicSupabaseConfigRoute: ApiPublicSupabaseConfigRoute,
   ApiPublicCronProcessJobsRoute: ApiPublicCronProcessJobsRoute,
   ApiPublicCronReconcileMessagesRoute: ApiPublicCronReconcileMessagesRoute,
   ApiPublicCronRenewSubscriptionsRoute: ApiPublicCronRenewSubscriptionsRoute,
