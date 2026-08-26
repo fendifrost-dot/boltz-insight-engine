@@ -37,7 +37,13 @@ export async function sendOutbound(args: {
   }
 
   const capability = await cachedCapability();
-  if (capability.capability === "none" || !capability.fromNumberConfigured) {
+  // "unknown" means the from-number was not found on the extension — treat as
+  // unverified and block until capability resolves cleanly.
+  if (
+    capability.capability === "none" ||
+    capability.capability === "unknown" ||
+    !capability.fromNumberConfigured
+  ) {
     await recordHealth({
       provider: "ringcentral",
       checkName: "sms_capability",
