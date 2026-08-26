@@ -6,6 +6,7 @@ import { EmptyState, PageHeader, Panel, Shell } from "@/components/ops/Shell";
 import { Tag, Td, Th, TableWrap } from "@/components/ops/Bits";
 import {
   assertSendDestination,
+  displayPhone,
   resolveThreadSync,
 } from "@/lib/lead-inbox-thread-sync";
 import {
@@ -36,18 +37,16 @@ function fmt(value: string | null | undefined): string {
   return new Date(value).toLocaleString();
 }
 
-function formatDestPhone(phone: string | null): string {
-  if (!phone) return "Not entered";
-  const d = phone.replace(/\D/g, "");
-  if (d.length === 11 && d.startsWith("1")) {
-    return `+1 (${d.slice(1, 4)}) ${d.slice(4, 7)}-${d.slice(7)}`;
-  }
-  return phone.startsWith("+") ? phone : `+${phone}`;
-}
+type SelectedLead = {
+  id: string;
+  name: string | null;
+  phone_e164: string | null;
+};
 
 function LeadsPage() {
   const queryClient = useQueryClient();
-  const [selected, setSelected] = useState<string | null>(null);
+  // Selection is the clicked row identity (id + phone) — never list index.
+  const [selected, setSelected] = useState<SelectedLead | null>(null);
   const [draft, setDraft] = useState("");
   const [composeOpen, setComposeOpen] = useState(false);
   const [newPhone, setNewPhone] = useState("");
@@ -60,52 +59,52 @@ function LeadsPage() {
   const controlFn = useServerFn(setThreadControl);
   const startFn = useServerFn(startOwnerSms);
 
+  const selectedId = selected?.id ?? null;
+
   const leads = useQuery({ queryKey: ["leads"], queryFn: () => leadsFn({}) });
   const thread = useQuery({
-    queryKey: ["lead-thread", selected],
+    queryKey: ["lead-thread", selectedId],
     queryFn: () => {
-      if (!selected) throw new Error("No lead selected");
-      return threadFn({ data: { leadId: selected } });
+      if (!selectedId) throw new Error("No lead selected");
+      return threadFn({ data: { leadId: selectedId } });
     },
-    enabled: Boolean(selected),
-    // Never keep conversation B visible while row A is highlighted.
+    enabled: Boolean(selectedId),
     placeholderData: undefined,
   });
 
-  const selectedLead = (leads.data ?? []).find((lead) => lead.id === selected) ?? null;
   const loadedLead = thread.data?.lead ?? null;
   const loadedThread = thread.data?.thread ?? null;
 
-  // Pending or mismatched payload → never enable compose for a stale conversation.
-  // Background refetch of the *same* lead stays usable.
+  // Do not treat background refetch of the *same* lead as desync.
   const threadQueryPending =
-    Boolean(selected) && (thread.isPending || !loadedLead || loadedLead.id !== selected);
+    Boolean(selectedId) && (thread.isPending || !loadedLead || loadedLead.id !== selectedId);
 
   const sync = resolveThreadSync({
-    selectedLeadId: selected,
+    selectedLeadId: selectedId,
+    selectedRowPhone: selected?.phone_e164 ?? null,
+    selectedRowName: selected?.name ?? null,
     loadedLead,
     loadedThread,
     threadQueryPending,
   });
 
+  const headerPhone = sync.destinationPhone;
+
   const send = useMutation({
     mutationFn: async (text: string) => {
-      if (!selected || !loadedLead || !loadedThread) {
+      if (!selected || !loadedLead || !loadedThread || !headerPhone) {
         throw new Error("No thread loaded");
       }
-      const headerPhone = loadedLead.phone_e164 ?? loadedThread.phone_e164 ?? "";
       const guard = assertSendDestination({
-        selectedLeadId: selected,
+        selectedLeadId: selected.id,
+        selectedRowPhone: selected.phone_e164 ?? "",
         loadedLeadId: loadedLead.id,
         loadedThreadId: loadedThread.id,
         loadedThreadLeadId: loadedThread.lead_id,
         destinationPhone: headerPhone,
         headerPhone,
       });
-      if (!guard.ok) {
-        throw new Error(guard.reason);
-      }
-      // Destination is always the visible header lead/thread — never a stale pair.
+      if (!guard.ok) throw new Error(guard.reason);
       return sendFn({
         data: {
           leadId: loadedLead.id,
@@ -117,30 +116,38 @@ function LeadsPage() {
     },
     onSuccess: (result) => {
       if (result.ok) setDraft("");
-      if (selected) {
-        void queryClient.invalidateQueries({ queryKey: ["lead-thread", selected] });
+      if (selectedId) {
+        void queryClient.invalidateQueries({ queryKey: ["lead-thread", selectedId] });
       }
       void queryClient.invalidateQueries({ queryKey: ["leads"] });
     },
   });
 
-  const selectLead = (leadId: string) => {
-    if (leadId === selected) return;
-    setSelected(leadId);
+  const selectLead = (lead: {
+    id: string;
+    name: string | null;
+    phone_e164: string | null;
+  }) => {
+    // Capture id + phone from THIS row at click time (not visual index).
+    setSelected({
+      id: lead.id,
+      name: lead.name,
+      phone_e164: lead.phone_e164,
+    });
     setDraft("");
     send.reset();
   };
 
   const control = useMutation({
     mutationFn: async (mode: "auto" | "human") => {
-      if (!sync.inSync || !loadedThread || loadedThread.lead_id !== selected) {
+      if (!sync.inSync || !loadedThread || loadedThread.lead_id !== selectedId) {
         throw new Error("Thread not in sync");
       }
       return controlFn({ data: { threadId: loadedThread.id, mode } });
     },
     onSuccess: () => {
-      if (selected) {
-        void queryClient.invalidateQueries({ queryKey: ["lead-thread", selected] });
+      if (selectedId) {
+        void queryClient.invalidateQueries({ queryKey: ["lead-thread", selectedId] });
       }
     },
   });
@@ -158,6 +165,8 @@ function LeadsPage() {
       }),
     onSuccess: async (result) => {
       if (!result.ok) return;
+      const startedName = newName.trim() || null;
+      const startedPhone = newPhone.trim() || null;
       setNewPhone("");
       setNewName("");
       setNewText("");
@@ -165,7 +174,11 @@ function LeadsPage() {
       await queryClient.invalidateQueries({ queryKey: ["leads"] });
       if (result.leadId) {
         setDraft("");
-        setSelected(result.leadId);
+        setSelected({
+          id: result.leadId,
+          name: startedName,
+          phone_e164: startedPhone,
+        });
         void queryClient.invalidateQueries({ queryKey: ["lead-thread", result.leadId] });
       }
     },
@@ -175,10 +188,17 @@ function LeadsPage() {
   const canStart =
     newPhone.trim().length >= 7 && newText.trim().length > 0 && !startNew.isPending;
   const canSend =
-    sync.canCompose &&
-    draft.trim().length > 0 &&
-    !send.isPending &&
-    Boolean(loadedThread);
+    sync.canCompose && draft.trim().length > 0 && !send.isPending && Boolean(loadedThread);
+
+  const threadPanelTitle = selected
+    ? sync.headerName ?? selected.name ?? "Unnamed"
+    : "Thread";
+  const threadPanelMeta = selected ? (
+    <span className="font-mono normal-case tracking-normal text-foreground">
+      {displayPhone(headerPhone ?? selected.phone_e164)}
+      {sync.inSync && loadedThread ? ` · ${loadedThread.control_mode}` : sync.showLoading ? " · loading" : ""}
+    </span>
+  ) : undefined;
 
   return (
     <Shell>
@@ -269,38 +289,70 @@ function LeadsPage() {
               hint="Use New SMS for Durable/web leads, or wait for an inbound text to +17085754555."
             />
           ) : (
+            // TableWrap already renders <table> — do NOT nest another <table>
+            // (nested tables remap click targets → wrong lead / wrong route).
             <TableWrap>
-              <table className="w-full text-sm">
-                <thead>
-                  <tr>
-                    <Th>Lead</Th>
-                    <Th>Vehicle</Th>
-                    <Th>Lifecycle</Th>
-                    <Th>Consent</Th>
-                    <Th>Last message</Th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((lead) => (
+              <thead>
+                <tr>
+                  <Th>Lead</Th>
+                  <Th>Vehicle</Th>
+                  <Th>Lifecycle</Th>
+                  <Th>Consent</Th>
+                  <Th>Last message</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((lead) => {
+                  const isSelected = selectedId === lead.id;
+                  return (
                     <tr
                       key={lead.id}
-                      onClick={() => selectLead(lead.id)}
+                      data-lead-id={lead.id}
+                      data-lead-phone={lead.phone_e164 ?? ""}
                       className={
-                        selected === lead.id
+                        isSelected
                           ? "cursor-pointer bg-secondary/60"
                           : "cursor-pointer hover:bg-secondary/30"
                       }
                     >
                       <Td>
-                        <div className="font-medium text-foreground">{lead.name ?? "Unnamed"}</div>
-                        <div className="font-mono text-xs text-muted-foreground">
-                          {lead.phone_e164 ?? "Not entered"}
-                        </div>
+                        <button
+                          type="button"
+                          className="w-full text-left"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            selectLead({
+                              id: lead.id,
+                              name: lead.name,
+                              phone_e164: lead.phone_e164,
+                            });
+                          }}
+                        >
+                          <div className="font-medium text-foreground">{lead.name ?? "Unnamed"}</div>
+                          <div className="font-mono text-xs text-muted-foreground">
+                            {lead.phone_e164 ?? "Not entered"}
+                          </div>
+                        </button>
                       </Td>
                       <Td>
-                        {[lead.vehicle_year, lead.vehicle_make, lead.vehicle_model]
-                          .filter(Boolean)
-                          .join(" ") || "Not entered"}
+                        <button
+                          type="button"
+                          className="w-full text-left"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            selectLead({
+                              id: lead.id,
+                              name: lead.name,
+                              phone_e164: lead.phone_e164,
+                            });
+                          }}
+                        >
+                          {[lead.vehicle_year, lead.vehicle_make, lead.vehicle_model]
+                            .filter(Boolean)
+                            .join(" ") || "Not entered"}
+                        </button>
                       </Td>
                       <Td>
                         <Tag tone="info">{lead.lifecycle}</Tag>
@@ -314,155 +366,149 @@ function LeadsPage() {
                         {fmt(lead.last_message_at)}
                       </Td>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  );
+                })}
+              </tbody>
             </TableWrap>
           )}
         </Panel>
 
-        <Panel
-          title="Thread"
-          meta={
-            sync.inSync && loadedThread
-              ? `control: ${loadedThread.control_mode}`
-              : selected
-                ? "loading"
-                : undefined
-          }
-        >
+        <Panel title={threadPanelTitle} meta={threadPanelMeta}>
           {!selected ? (
             <EmptyState
               label="Select a lead"
               hint="Or use New SMS to text a number that is not listed yet."
             />
-          ) : sync.showLoading || !sync.inSync ? (
-            <div className="space-y-2">
-              <p className="text-sm text-muted-foreground">
-                {sync.blockReason ?? "Loading thread…"}
-              </p>
-              {selectedLead && (
-                <p className="font-mono text-xs text-muted-foreground">
-                  Opening {selectedLead.name ?? "lead"} · {selectedLead.phone_e164 ?? "no phone"}
-                </p>
-              )}
-            </div>
           ) : (
             <div className="space-y-4">
-              <div className="rounded border border-border bg-secondary/30 px-3 py-2">
+              {/* Always-visible destination header — name + phone before compose. */}
+              <div className="rounded border border-primary/40 bg-primary/10 px-3 py-2">
                 <div className="label-caps mb-1">Sending to</div>
                 <div className="text-sm font-medium text-foreground">
-                  {sync.headerName ?? selectedLead?.name ?? "Unnamed"}
+                  {sync.headerName ?? selected.name ?? "Unnamed"}
                 </div>
-                <div className="font-mono text-xs text-muted-foreground">
-                  {formatDestPhone(sync.destinationPhone)}
+                <div className="font-mono text-sm text-foreground">
+                  {displayPhone(headerPhone ?? selected.phone_e164)}
                 </div>
+                {!sync.canCompose && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {sync.blockReason ?? "Loading conversation before send is enabled…"}
+                  </p>
+                )}
               </div>
 
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => control.mutate("human")}
-                  disabled={loadedThread?.control_mode === "human" || control.isPending}
-                  className="rounded border border-border px-2 py-1 text-xs disabled:opacity-40"
-                >
-                  Take over (human)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => control.mutate("auto")}
-                  disabled={loadedThread?.control_mode === "auto" || control.isPending}
-                  className="rounded border border-border px-2 py-1 text-xs disabled:opacity-40"
-                >
-                  Return to agent
-                </button>
-              </div>
-
-              <div className="max-h-80 space-y-2 overflow-y-auto rounded border border-border p-3">
-                {(thread.data?.messages ?? []).length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No messages in this thread.</p>
-                ) : (
-                  thread.data?.messages.map((m) => (
-                    <div
-                      key={m.id}
-                      className={
-                        m.direction === "inbound"
-                          ? "rounded bg-secondary/50 p-2"
-                          : "rounded border border-primary/30 bg-primary/10 p-2"
-                      }
+              {sync.showLoading || !sync.inSync ? (
+                <p className="text-sm text-muted-foreground">
+                  {sync.blockReason ?? "Loading the selected conversation…"}
+                </p>
+              ) : (
+                <>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => control.mutate("human")}
+                      disabled={loadedThread?.control_mode === "human" || control.isPending}
+                      className="rounded border border-border px-2 py-1 text-xs disabled:opacity-40"
                     >
-                      <div className="label-caps mb-1 flex gap-2">
-                        <span>{m.direction}</span>
-                        <span>{m.delivery_state}</span>
-                        <span>{fmt(m.created_at)}</span>
-                      </div>
-                      <p className="text-sm whitespace-pre-wrap text-foreground">{m.body}</p>
+                      Take over (human)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => control.mutate("auto")}
+                      disabled={loadedThread?.control_mode === "auto" || control.isPending}
+                      className="rounded border border-border px-2 py-1 text-xs disabled:opacity-40"
+                    >
+                      Return to agent
+                    </button>
+                  </div>
+
+                  <div className="max-h-80 space-y-2 overflow-y-auto rounded border border-border p-3">
+                    {(thread.data?.messages ?? []).length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No messages in this thread.</p>
+                    ) : (
+                      thread.data?.messages.map((m) => (
+                        <div
+                          key={m.id}
+                          className={
+                            m.direction === "inbound"
+                              ? "rounded bg-secondary/50 p-2"
+                              : "rounded border border-primary/30 bg-primary/10 p-2"
+                          }
+                        >
+                          <div className="label-caps mb-1 flex gap-2">
+                            <span>{m.direction}</span>
+                            <span>{m.delivery_state}</span>
+                            <span>{fmt(m.created_at)}</span>
+                          </div>
+                          <p className="text-sm whitespace-pre-wrap text-foreground">{m.body}</p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <textarea
+                      value={draft}
+                      onChange={(e) => setDraft(e.target.value)}
+                      rows={3}
+                      maxLength={480}
+                      disabled={!sync.canCompose}
+                      placeholder={`Message to ${displayPhone(headerPhone)}`}
+                      className="w-full rounded border border-border bg-input px-2 py-1.5 text-sm disabled:opacity-40"
+                    />
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => send.mutate(draft)}
+                        disabled={!canSend}
+                        className="rounded bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-40"
+                      >
+                        {send.isPending
+                          ? "Sending…"
+                          : `Send SMS to ${displayPhone(headerPhone)}`}
+                      </button>
+                      {send.data && !send.data.ok && (
+                        <span className="text-xs text-destructive">{send.data.reason}</span>
+                      )}
+                      {send.isError && (
+                        <span className="text-xs text-destructive">
+                          {send.error instanceof Error ? send.error.message : "Send failed."}
+                        </span>
+                      )}
                     </div>
-                  ))
-                )}
-              </div>
+                  </div>
 
-              <div className="space-y-2">
-                <textarea
-                  value={draft}
-                  onChange={(e) => setDraft(e.target.value)}
-                  rows={3}
-                  maxLength={480}
-                  disabled={!sync.canCompose}
-                  placeholder={`Message to ${formatDestPhone(sync.destinationPhone)}`}
-                  className="w-full rounded border border-border bg-input px-2 py-1.5 text-sm disabled:opacity-40"
-                />
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => send.mutate(draft)}
-                    disabled={!canSend}
-                    className="rounded bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-40"
-                  >
-                    {send.isPending
-                      ? "Sending…"
-                      : `Send SMS to ${formatDestPhone(sync.destinationPhone)}`}
-                  </button>
-                  {send.data && !send.data.ok && (
-                    <span className="text-xs text-destructive">{send.data.reason}</span>
-                  )}
-                  {send.isError && (
-                    <span className="text-xs text-destructive">
-                      {send.error instanceof Error ? send.error.message : "Send failed."}
-                    </span>
-                  )}
-                </div>
-              </div>
+                  <div>
+                    <div className="label-caps mb-1">Agent runs</div>
+                    {(thread.data?.agentRuns ?? []).length === 0 ? (
+                      <p className="text-xs text-muted-foreground">No agent runs yet.</p>
+                    ) : (
+                      <ul className="space-y-1 text-xs text-muted-foreground">
+                        {thread.data?.agentRuns.map((run) => (
+                          <li key={run.id} className="rounded border border-border px-2 py-1">
+                            <span className="font-mono text-foreground">{run.action}</span> ·{" "}
+                            {run.model} · {fmt(run.created_at)}
+                            {run.audit_summary ? ` — ${run.audit_summary}` : ""}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
 
-              <div>
-                <div className="label-caps mb-1">Agent decisions</div>
-                {(thread.data?.agentRuns ?? []).length === 0 ? (
-                  <p className="text-xs text-muted-foreground">No agent runs yet.</p>
-                ) : (
-                  <ul className="space-y-1 text-xs text-muted-foreground">
-                    {thread.data?.agentRuns.map((run) => (
-                      <li key={run.id} className="rounded border border-border px-2 py-1">
-                        <span className="font-mono text-foreground">{run.action}</span> · {run.model} ·{" "}
-                        {fmt(run.created_at)}
-                        {run.audit_summary ? ` — ${run.audit_summary}` : ""}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-
-              <div>
-                <div className="label-caps mb-1">Audit trail</div>
-                <ul className="space-y-1 text-xs text-muted-foreground">
-                  {(thread.data?.events ?? []).map((event) => (
-                    <li key={event.id}>
-                      <span className="font-mono">{event.event_type}</span> · {event.actor ?? "system"} ·{" "}
-                      {fmt(event.created_at)}
-                      {event.summary ? ` — ${event.summary}` : ""}
-                    </li>
-                  ))}
-                </ul>
-              </div>
+                  <div>
+                    <div className="label-caps mb-1">Audit trail</div>
+                    <ul className="space-y-1 text-xs text-muted-foreground">
+                      {(thread.data?.events ?? []).map((event) => (
+                        <li key={event.id}>
+                          <span className="font-mono">{event.event_type}</span> ·{" "}
+                          {event.actor ?? "system"} · {fmt(event.created_at)}
+                          {event.summary ? ` — ${event.summary}` : ""}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </>
+              )}
             </div>
           )}
         </Panel>
