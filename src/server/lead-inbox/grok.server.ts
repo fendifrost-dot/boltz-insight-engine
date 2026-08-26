@@ -6,7 +6,7 @@ import { BUSINESS } from "@/data/context";
 import type { Database } from "@/integrations/supabase/types";
 import type { LeadRow, MessageRow } from "./store.server";
 
-export const PROMPT_VERSION = "boltz-sms-agent-v1";
+export const PROMPT_VERSION = "boltz-sms-agent-v2";
 
 type Lifecycle = Database["public"]["Enums"]["lead_lifecycle"];
 type EscalationCategory = Database["public"]["Enums"]["escalation_category"];
@@ -64,6 +64,12 @@ function systemPrompt(): string {
     "- Never ask customers to mention keywords in reviews.",
     "- If the customer is threatening, injured, mentions lawyers/insurance liability/payment disputes, asks for a discount you cannot grant, or asks for a human: action must be 'escalate' with reply_text null.",
     "- Goal: collect year/make/model, mileage, symptoms, and whether the vehicle runs; then offer a drop-off inspection during business hours.",
+    "",
+    "Pacing rules for SMS replies:",
+    "- Reply only to the customer's latest inbound. Never send an unsolicited second text the same day.",
+    "- One short reply, one ask. Do not restack hours, address, phone, and the full vehicle-intake list if you already asked for those in this thread.",
+    "- If they already got a shop outbound today, keep the new reply even shorter and only answer what they just asked.",
+    "- Stay under 320 characters. Persistent, not pushy. No double texts.",
     "",
     "Respond with JSON only, matching:",
     '{"action":"send"|"escalate"|"no_reply","reply_text":string|null,"lead_field_updates":object|null,',
