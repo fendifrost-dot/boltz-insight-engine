@@ -288,25 +288,37 @@ function LeadsPage() {
         </Panel>
 
         <Panel
-          title="Thread"
-          meta={sync.inSync && loadedThread ? `control: ${loadedThread.control_mode}` : undefined}
+          title={selectedRow ? (sync.headerName || "Unnamed") : "Thread"}
+          meta={
+            selectedRow ? (
+              <span className="flex flex-wrap items-center gap-2">
+                <span className="font-mono text-xs text-foreground">{displayPhone(headerPhone)}</span>
+                {sync.inSync && loadedThread && (
+                  <span className="label-caps">control: {loadedThread.control_mode}</span>
+                )}
+              </span>
+            ) : undefined
+          }
         >
           {!selected ? (
-            <EmptyState label="Select a lead" hint="Thread, agent decisions and audit trail appear here." />
-          ) : !sync.inSync ? (
-            <div className="space-y-2">
-              <p className="text-sm text-muted-foreground">
-                {sync.showLoading ? "Loading the selected conversation…" : "Conversation unavailable."}
-              </p>
-              {sync.blockReason && <p className="text-xs text-destructive">{sync.blockReason}</p>}
-            </div>
+            <EmptyState label="Select a lead" hint="Thread, agent runs and audit trail appear here." />
           ) : (
             <div className="space-y-4">
               <div className="rounded border border-primary/40 bg-primary/10 p-2">
                 <div className="label-caps mb-1">Sending to</div>
-                <div className="text-sm font-medium text-foreground">{sync.headerName}</div>
+                <div className="text-sm font-medium text-foreground">{sync.headerName || "Unnamed"}</div>
                 <div className="font-mono text-xs text-muted-foreground">{displayPhone(headerPhone)}</div>
               </div>
+              {!sync.inSync ? (
+                <div className="space-y-2">
+                  <p className="text-sm text-muted-foreground">
+                    {sync.showLoading ? "Loading the selected conversation…" : "Conversation unavailable."}
+                  </p>
+                  {sync.blockReason && <p className="text-xs text-destructive">{sync.blockReason}</p>}
+                </div>
+              ) : (
+            <div className="space-y-4">
+
               <div className="flex flex-wrap gap-2">
                 <button
                   onClick={() => control.mutate("human")}
