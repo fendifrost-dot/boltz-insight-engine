@@ -11,6 +11,11 @@ import {
   setThreadControl,
   startOwnerSms,
 } from "@/lib/lead-inbox.functions";
+import {
+  assertSendDestination,
+  displayPhone,
+  resolveThreadSync,
+} from "@/lib/lead-inbox-thread-sync";
 
 export const Route = createFileRoute("/_authenticated/leads")({
   head: () => ({
@@ -52,7 +57,6 @@ function LeadsPage() {
     queryKey: ["lead-thread", selected],
     queryFn: () => threadFn({ data: { leadId: selected as string } }),
     enabled: Boolean(selected),
-    placeholderData: undefined,
   });
 
   const loadedLead = thread.data?.lead ?? null;
