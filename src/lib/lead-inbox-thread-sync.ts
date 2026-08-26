@@ -33,18 +33,31 @@ export function normalizePhone(raw: string | null | undefined): string | null {
 
 export function resolveThreadSync(input: {
   selectedLeadId: string | null;
+  selectedRowPhone?: string | null;
+  selectedRowName?: string | null;
   loadedLead: SyncLead;
   loadedThread: SyncThread;
   threadQueryPending: boolean;
 }): ThreadSync {
-  const { selectedLeadId, loadedLead, loadedThread, threadQueryPending } = input;
+  const {
+    selectedLeadId,
+    selectedRowPhone = null,
+    selectedRowName = null,
+    loadedLead,
+    loadedThread,
+    threadQueryPending,
+  } = input;
+
+  const rowPhone = normalizePhone(selectedRowPhone);
+  // Identity header ALWAYS comes from the clicked row, even while loading.
+  const rowName = selectedRowName ?? (loadedLead?.id === selectedLeadId ? loadedLead?.name : null) ?? "Unnamed";
 
   const blocked = (blockReason: string | null, showLoading: boolean): ThreadSync => ({
     inSync: false,
     showLoading,
     canCompose: false,
-    destinationPhone: null,
-    headerName: "",
+    destinationPhone: rowPhone,
+    headerName: selectedLeadId ? rowName : "",
     blockReason,
   });
 
@@ -57,31 +70,38 @@ export function resolveThreadSync(input: {
       true,
     );
   }
+
+  const leadPhone = normalizePhone(loadedLead.phone_e164);
+  const threadPhone = normalizePhone(loadedThread?.phone_e164);
+
   if (!loadedThread) {
     return {
       inSync: true,
       showLoading: false,
       canCompose: false,
-      destinationPhone: normalizePhone(loadedLead.phone_e164),
-      headerName: loadedLead.name ?? "Unnamed",
+      destinationPhone: rowPhone ?? leadPhone,
+      headerName: rowName,
       blockReason: "No SMS thread exists for this lead yet — use New SMS to start one.",
     };
   }
   if (loadedThread.lead_id !== loadedLead.id) {
     return blocked("Loaded thread belongs to a different lead — send blocked.", false);
   }
-
-  const leadPhone = normalizePhone(loadedLead.phone_e164);
-  const threadPhone = normalizePhone(loadedThread.phone_e164);
   if (!leadPhone) {
     return {
       inSync: true,
       showLoading: false,
       canCompose: false,
-      destinationPhone: null,
-      headerName: loadedLead.name ?? "Unnamed",
+      destinationPhone: rowPhone,
+      headerName: rowName,
       blockReason: "Lead has no phone number — send blocked.",
     };
+  }
+  if (rowPhone && rowPhone !== leadPhone) {
+    return blocked(
+      "Selected row phone does not match the loaded conversation — send blocked.",
+      false,
+    );
   }
   if (threadPhone && threadPhone !== leadPhone) {
     return blocked("Lead phone and thread phone disagree — send blocked.", false);
@@ -91,11 +111,12 @@ export function resolveThreadSync(input: {
     inSync: true,
     showLoading: false,
     canCompose: true,
-    destinationPhone: leadPhone,
-    headerName: loadedLead.name ?? "Unnamed",
+    destinationPhone: rowPhone ?? leadPhone,
+    headerName: rowName,
     blockReason: null,
   };
 }
+
 
 export type SendAssertion = { ok: true; leadId: string; threadId: string; phone: string } | {
   ok: false;
