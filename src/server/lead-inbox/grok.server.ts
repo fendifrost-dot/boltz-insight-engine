@@ -131,16 +131,14 @@ export async function decideReply(args: {
 
 /** Models this adapter is known to support. XAI_MODEL must be one of these. */
 export const SUPPORTED_MODELS = [
-  "grok-4-fast",
-  "grok-4",
-  "grok-4-latest",
-  "grok-3",
-  "grok-3-mini",
-  "grok-2-latest",
-  "grok-2-1212",
+  "grok-4.6",
+  "grok-4.5",
+  "grok-4.3",
+  "grok-4.20-0309-non-reasoning",
+  "grok-4.20-0309-reasoning",
 ] as const;
 
-export const DEFAULT_MODEL = "grok-4-fast";
+export const DEFAULT_MODEL = "grok-4.6";
 
 /** Strictly honor XAI_MODEL when it is a supported model; otherwise fall back. */
 export function resolveModel(): string {
