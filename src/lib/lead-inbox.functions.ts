@@ -5,15 +5,20 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 export const listLeads = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { data, error } = await context.supabase
-      .from("leads")
-      .select(
-        "id, name, phone_e164, lifecycle, consent_status, vehicle_year, vehicle_make, vehicle_model, vehicle_mileage, symptoms, lead_source, last_inbound_at, last_outbound_at, last_message_at, unread_count, created_at",
-      )
-      .order("last_message_at", { ascending: false, nullsFirst: false })
-      .limit(200);
-    if (error) throw new Error(error.message);
-    return data ?? [];
+    try {
+      const { data, error } = await context.supabase
+        .from("leads")
+        .select(
+          "id, name, phone_e164, lifecycle, consent_status, vehicle_year, vehicle_make, vehicle_model, vehicle_mileage, symptoms, lead_source, last_inbound_at, last_outbound_at, last_message_at, unread_count, created_at",
+        )
+        .order("last_message_at", { ascending: false, nullsFirst: false })
+        .limit(200);
+      if (error) throw new Error(error.message);
+      return data ?? [];
+    } catch (error) {
+      console.error("listLeads failed", error);
+      return [];
+    }
   });
 
 export const getThread = createServerFn({ method: "GET" })
@@ -156,8 +161,9 @@ export const updateEscalation = createServerFn({ method: "POST" })
 export const getIntegrationHealth = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { secretStatus } = await import("@/server/lead-inbox/env.server");
-    const { agentCircuitState } = await import("@/server/lead-inbox/jobs.server");
+    try {
+      const { secretStatus } = await import("@/server/lead-inbox/env.server");
+      const { agentCircuitState } = await import("@/server/lead-inbox/jobs.server");
 
     const [snapshotsRes, subsRes, jobsRes] = await Promise.all([
       context.supabase
@@ -189,14 +195,25 @@ export const getIntegrationHealth = createServerFn({ method: "GET" })
       };
     }
 
-    return {
-      secrets: secretStatus(),
-      circuit: await agentCircuitState(),
-      capability,
-      snapshots: snapshotsRes.data ?? [],
-      subscriptions: subsRes.data ?? [],
-      jobs: jobsRes.data ?? [],
-    };
+      return {
+        secrets: secretStatus(),
+        circuit: await agentCircuitState(),
+        capability,
+        snapshots: snapshotsRes.data ?? [],
+        subscriptions: subsRes.data ?? [],
+        jobs: jobsRes.data ?? [],
+      };
+    } catch (error) {
+      console.error("getIntegrationHealth failed", error);
+      return {
+        secrets: [],
+        circuit: { paused: true, detail: "Integration health unavailable" },
+        capability: { capability: "unknown", detail: "Integration health unavailable" },
+        snapshots: [],
+        subscriptions: [],
+        jobs: [],
+      };
+    }
   });
 
 /** Privileged actions bypass RLS, so verify the owner role through the user's own client. */
