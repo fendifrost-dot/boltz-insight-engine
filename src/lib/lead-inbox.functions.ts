@@ -12,7 +12,9 @@ export const listLeads = createServerFn({ method: "GET" })
           "id, name, phone_e164, lifecycle, consent_status, vehicle_year, vehicle_make, vehicle_model, vehicle_mileage, symptoms, lead_source, last_inbound_at, last_outbound_at, last_message_at, unread_count, created_at",
         )
         .order("last_message_at", { ascending: false, nullsFirst: false })
+        .order("id", { ascending: true })
         .limit(200);
+
       if (error) throw new Error(error.message);
       return data ?? [];
     } catch (error) {

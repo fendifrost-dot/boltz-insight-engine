@@ -44,11 +44,12 @@ export function Shell({ children }: { children: ReactNode }) {
           <div className="text-sm font-semibold text-sidebar-foreground">SEO / GEO Ops</div>
           <div className="label-caps mt-1">Internal tooling · V1</div>
         </div>
-        <nav className="flex flex-wrap gap-1 px-2 pb-3 lg:block lg:space-y-4">
+        <nav className="flex gap-1 overflow-x-auto px-2 pb-3 whitespace-nowrap lg:block lg:space-y-4 lg:overflow-x-visible lg:whitespace-normal">
           {GROUPS.map((group) => (
-            <div key={group} className="lg:space-y-0.5">
+            <div key={group} className="flex gap-1 lg:block lg:space-y-0.5">
               <div className="label-caps hidden px-2 pt-2 pb-1 lg:block">{group}</div>
               {NAV.filter((n) => n.group === group).map((item) => (
+
                 <Link
                   key={item.to}
                   to={item.to}
@@ -124,7 +125,7 @@ export function Panel({
       {title && (
         <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-2.5">
           <h2 className="text-sm font-semibold text-foreground">{title}</h2>
-          {meta && <div className="label-caps">{meta}</div>}
+          {meta && <div className="text-xs text-muted-foreground">{meta}</div>}
         </div>
       )}
       <div className="p-4">{children}</div>

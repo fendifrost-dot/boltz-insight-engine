@@ -37,14 +37,18 @@ function fmt(value: string | null | undefined): string {
   return new Date(value).toLocaleString();
 }
 
+type SelectedRow = { id: string; name: string | null; phone_e164: string | null };
+
 function LeadsPage() {
   const queryClient = useQueryClient();
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selectedRow, setSelectedRow] = useState<SelectedRow | null>(null);
   const [draft, setDraft] = useState("");
   const [showCompose, setShowCompose] = useState(false);
   const [newPhone, setNewPhone] = useState("");
   const [newName, setNewName] = useState("");
   const [newText, setNewText] = useState("");
+
+  const selected = selectedRow?.id ?? null;
 
   const leadsFn = useServerFn(listLeads);
   const threadFn = useServerFn(getThread);
@@ -66,11 +70,14 @@ function LeadsPage() {
   );
   const sync = resolveThreadSync({
     selectedLeadId: selected,
+    selectedRowPhone: selectedRow?.phone_e164 ?? null,
+    selectedRowName: selectedRow?.name ?? null,
     loadedLead,
     loadedThread,
     threadQueryPending,
   });
-  const headerPhone = loadedLead?.phone_e164 ?? null;
+  const headerPhone = selectedRow?.phone_e164 ?? null;
+
 
   const send = useMutation({
     mutationFn: async (text: string) => {
@@ -121,7 +128,12 @@ function LeadsPage() {
         setNewText("");
         setShowCompose(false);
         void queryClient.invalidateQueries({ queryKey: ["leads"] });
-        setSelected(result.leadId);
+        setSelectedRow({
+          id: result.leadId,
+          name: newName || null,
+          phone_e164: newPhone || null,
+        });
+
       }
     },
   });
@@ -207,41 +219,53 @@ function LeadsPage() {
 
           ) : (
             <TableWrap>
-              <table className="w-full text-sm">
-                <thead>
-                  <tr>
-                    <Th>Lead</Th>
-                    <Th>Vehicle</Th>
-                    <Th>Lifecycle</Th>
-                    <Th>Consent</Th>
-                    <Th>Last message</Th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((lead) => (
+              <thead>
+                <tr>
+                  <Th>Lead</Th>
+                  <Th>Vehicle</Th>
+                  <Th>Lifecycle</Th>
+                  <Th>Consent</Th>
+                  <Th>Last message</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((lead) => {
+                  const selectRow = (event: { preventDefault: () => void; stopPropagation: () => void }) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    setSelectedRow({
+                      id: lead.id,
+                      name: lead.name ?? null,
+                      phone_e164: lead.phone_e164 ?? null,
+                    });
+                    setDraft("");
+                    send.reset();
+                  };
+                  return (
                     <tr
                       key={lead.id}
-                      onClick={() => {
-                        setSelected(lead.id);
-                        setDraft("");
-                        send.reset();
-                      }}
                       className={
-                        selected === lead.id
-                          ? "cursor-pointer bg-secondary/60"
-                          : "cursor-pointer hover:bg-secondary/30"
+                        selected === lead.id ? "bg-secondary/60" : "hover:bg-secondary/30"
                       }
                     >
                       <Td>
-                        <div className="font-medium text-foreground">{lead.name ?? "Unnamed"}</div>
-                        <div className="font-mono text-xs text-muted-foreground">
-                          {lead.phone_e164 ?? "Not entered"}
-                        </div>
+                        <button
+                          type="button"
+                          onClick={selectRow}
+                          className="block w-full text-left"
+                        >
+                          <div className="font-medium text-foreground">{lead.name ?? "Unnamed"}</div>
+                          <div className="font-mono text-xs text-muted-foreground">
+                            {lead.phone_e164 ?? "Not entered"}
+                          </div>
+                        </button>
                       </Td>
                       <Td>
-                        {[lead.vehicle_year, lead.vehicle_make, lead.vehicle_model]
-                          .filter(Boolean)
-                          .join(" ") || "Not entered"}
+                        <button type="button" onClick={selectRow} className="block w-full text-left">
+                          {[lead.vehicle_year, lead.vehicle_make, lead.vehicle_model]
+                            .filter(Boolean)
+                            .join(" ") || "Not entered"}
+                        </button>
                       </Td>
                       <Td>
                         <Tag tone="info">{lead.lifecycle}</Tag>
@@ -255,33 +279,46 @@ function LeadsPage() {
                         {fmt(lead.last_message_at)}
                       </Td>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  );
+                })}
+              </tbody>
             </TableWrap>
+
           )}
         </Panel>
 
         <Panel
-          title="Thread"
-          meta={sync.inSync && loadedThread ? `control: ${loadedThread.control_mode}` : undefined}
+          title={selectedRow ? (sync.headerName || "Unnamed") : "Thread"}
+          meta={
+            selectedRow ? (
+              <span className="flex flex-wrap items-center gap-2">
+                <span className="font-mono text-xs text-foreground">{displayPhone(headerPhone)}</span>
+                {sync.inSync && loadedThread && (
+                  <span className="label-caps">control: {loadedThread.control_mode}</span>
+                )}
+              </span>
+            ) : undefined
+          }
         >
           {!selected ? (
-            <EmptyState label="Select a lead" hint="Thread, agent decisions and audit trail appear here." />
-          ) : !sync.inSync ? (
-            <div className="space-y-2">
-              <p className="text-sm text-muted-foreground">
-                {sync.showLoading ? "Loading the selected conversation…" : "Conversation unavailable."}
-              </p>
-              {sync.blockReason && <p className="text-xs text-destructive">{sync.blockReason}</p>}
-            </div>
+            <EmptyState label="Select a lead" hint="Thread, agent runs and audit trail appear here." />
           ) : (
             <div className="space-y-4">
               <div className="rounded border border-primary/40 bg-primary/10 p-2">
                 <div className="label-caps mb-1">Sending to</div>
-                <div className="text-sm font-medium text-foreground">{sync.headerName}</div>
+                <div className="text-sm font-medium text-foreground">{sync.headerName || "Unnamed"}</div>
                 <div className="font-mono text-xs text-muted-foreground">{displayPhone(headerPhone)}</div>
               </div>
+              {!sync.inSync ? (
+                <div className="space-y-2">
+                  <p className="text-sm text-muted-foreground">
+                    {sync.showLoading ? "Loading the selected conversation…" : "Conversation unavailable."}
+                  </p>
+                  {sync.blockReason && <p className="text-xs text-destructive">{sync.blockReason}</p>}
+                </div>
+              ) : (
+            <div className="space-y-4">
+
               <div className="flex flex-wrap gap-2">
                 <button
                   onClick={() => control.mutate("human")}
@@ -352,7 +389,7 @@ function LeadsPage() {
               </div>
 
               <div>
-                <div className="label-caps mb-1">Agent decisions</div>
+                <div className="label-caps mb-1">Agent runs</div>
                 {(thread.data?.agentRuns ?? []).length === 0 ? (
                   <p className="text-xs text-muted-foreground">No agent runs yet.</p>
                 ) : (
@@ -381,7 +418,10 @@ function LeadsPage() {
                 </ul>
               </div>
             </div>
+              )}
+            </div>
           )}
+
         </Panel>
       </div>
     </Shell>
