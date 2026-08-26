@@ -9,6 +9,7 @@ import {
   listLeads,
   sendOwnerMessage,
   setThreadControl,
+  startOwnerSms,
 } from "@/lib/lead-inbox.functions";
 
 export const Route = createFileRoute("/_authenticated/leads")({
@@ -35,11 +36,16 @@ function LeadsPage() {
   const queryClient = useQueryClient();
   const [selected, setSelected] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
+  const [showCompose, setShowCompose] = useState(false);
+  const [newPhone, setNewPhone] = useState("");
+  const [newName, setNewName] = useState("");
+  const [newText, setNewText] = useState("");
 
   const leadsFn = useServerFn(listLeads);
   const threadFn = useServerFn(getThread);
   const sendFn = useServerFn(sendOwnerMessage);
   const controlFn = useServerFn(setThreadControl);
+  const startFn = useServerFn(startOwnerSms);
 
   const leads = useQuery({ queryKey: ["leads"], queryFn: () => leadsFn({}) });
   const thread = useQuery({
@@ -69,6 +75,27 @@ function LeadsPage() {
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["lead-thread", selected] }),
   });
 
+  const startSms = useMutation({
+    mutationFn: async () =>
+      startFn({
+        data: {
+          phone: newPhone,
+          text: newText,
+          name: newName || undefined,
+        },
+      }),
+    onSuccess: (result) => {
+      if (result.ok && result.leadId) {
+        setNewPhone("");
+        setNewName("");
+        setNewText("");
+        setShowCompose(false);
+        void queryClient.invalidateQueries({ queryKey: ["leads"] });
+        setSelected(result.leadId);
+      }
+    },
+  });
+
   const rows = leads.data ?? [];
 
   return (
@@ -77,7 +104,64 @@ function LeadsPage() {
         kicker="Lead operations"
         title="Lead Inbox"
         description="RingCentral SMS threads with autonomous Grok replies. Human control is for takeovers and escalations only."
+        actions={
+          <button
+            onClick={() => setShowCompose((s) => !s)}
+            className="rounded border border-border px-3 py-1.5 text-xs font-medium transition-colors hover:bg-secondary"
+          >
+            {showCompose ? "Cancel" : "New SMS"}
+          </button>
+        }
       />
+
+      {showCompose && (
+        <Panel title="Start new SMS" className="mb-4">
+          <div className="grid gap-3 sm:grid-cols-[1fr_1fr]">
+            <div>
+              <label className="label-caps mb-1 block">Phone</label>
+              <input
+                value={newPhone}
+                onChange={(e) => setNewPhone(e.target.value)}
+                placeholder="+1 (312) 555-0100"
+                className="w-full rounded border border-border bg-input px-2 py-1.5 text-sm"
+              />
+            </div>
+            <div>
+              <label className="label-caps mb-1 block">Name (optional)</label>
+              <input
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                placeholder="Lead name"
+                className="w-full rounded border border-border bg-input px-2 py-1.5 text-sm"
+              />
+            </div>
+          </div>
+          <div className="mt-3">
+            <label className="label-caps mb-1 block">Message</label>
+            <textarea
+              value={newText}
+              onChange={(e) => setNewText(e.target.value)}
+              rows={3}
+              maxLength={480}
+              placeholder="Owner message (sent immediately via RingCentral)"
+              className="w-full rounded border border-border bg-input px-2 py-1.5 text-sm"
+            />
+          </div>
+          <div className="mt-3 flex items-center gap-2">
+            <button
+              onClick={() => startSms.mutate()}
+              disabled={newPhone.trim().length === 0 || newText.trim().length === 0 || startSms.isPending}
+              className="rounded bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-40"
+            >
+              {startSms.isPending ? "Sending…" : "Send new SMS"}
+            </button>
+            {startSms.data && !startSms.data.ok && (
+              <span className="text-xs text-destructive">{startSms.data.reason}</span>
+            )}
+            {startSms.isError && <span className="text-xs text-destructive">Start SMS failed.</span>}
+          </div>
+        </Panel>
+      )}
 
       <div className="grid gap-4 xl:grid-cols-[1.1fr_1fr]">
         <Panel title="Leads" meta={`${rows.length} records`}>
@@ -88,8 +172,9 @@ function LeadsPage() {
           ) : rows.length === 0 ? (
             <EmptyState
               label="No leads yet"
-              hint="Leads appear when RingCentral delivers an inbound SMS to the connected number."
+              hint="Leads appear when RingCentral delivers an inbound SMS, or use New SMS to start outreach to a Durable lead."
             />
+
           ) : (
             <TableWrap>
               <table className="w-full text-sm">
