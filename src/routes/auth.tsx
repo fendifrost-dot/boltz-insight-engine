@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { getSupabaseConfigError, supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/auth")({
   ssr: false,
@@ -24,12 +24,14 @@ export const Route = createFileRoute("/auth")({
 
 function AuthPage() {
   const navigate = useNavigate();
+  const configError = getSupabaseConfigError();
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (configError) return;
     supabase.auth.getSession().then(({ data }) => {
       if (data.session) navigate({ to: "/", replace: true });
     });
@@ -39,10 +41,14 @@ function AuthPage() {
       }
     });
     return () => sub.subscription.unsubscribe();
-  }, [navigate]);
+  }, [configError, navigate]);
 
   async function sendLink(e: React.FormEvent) {
     e.preventDefault();
+    if (configError) {
+      setError(configError);
+      return;
+    }
     setBusy(true);
     setError(null);
     const { error: err } = await supabase.auth.signInWithOtp({
@@ -63,12 +69,14 @@ function AuthPage() {
           Internal tooling. Owner access only — sign in with a magic link.
         </p>
 
-        {sent ? (
+        {configError && <p className="mt-6 text-sm text-destructive">{configError}</p>}
+
+        {!configError && sent ? (
           <p className="mt-6 text-sm text-foreground">
             Check <span className="font-mono">{email}</span> for a sign-in link. You can close this
             tab after opening it.
           </p>
-        ) : (
+        ) : !configError ? (
           <form onSubmit={sendLink} className="mt-6 space-y-3">
             <label className="label-caps block" htmlFor="email">
               Email
@@ -92,7 +100,7 @@ function AuthPage() {
             </button>
             {error && <p className="text-xs text-destructive">{error}</p>}
           </form>
-        )}
+        ) : null}
       </div>
     </main>
   );
