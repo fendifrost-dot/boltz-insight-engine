@@ -89,7 +89,7 @@ export async function decideReply(args: {
   inboundBody: string;
 }): Promise<{ decision: AgentDecision; model: string; raw: unknown }> {
   const apiKey = requireSecret("XAI_API_KEY");
-  const model = readSecret("XAI_MODEL") ?? "grok-4-fast";
+  const model = resolveModel();
 
   const messages = [
     { role: "system", content: systemPrompt() },
