@@ -122,6 +122,8 @@ function LeadsPage() {
         },
       }),
     onSuccess: (result) => {
+      const startedName = newName;
+      const startedPhone = newPhone;
       if (result.ok && result.leadId) {
         setNewPhone("");
         setNewName("");
@@ -130,8 +132,8 @@ function LeadsPage() {
         void queryClient.invalidateQueries({ queryKey: ["leads"] });
         setSelectedRow({
           id: result.leadId,
-          name: newName || null,
-          phone_e164: newPhone || null,
+          name: startedName || null,
+          phone_e164: startedPhone || null,
         });
 
       }
