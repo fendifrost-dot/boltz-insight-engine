@@ -52,13 +52,39 @@ function LeadsPage() {
     queryKey: ["lead-thread", selected],
     queryFn: () => threadFn({ data: { leadId: selected as string } }),
     enabled: Boolean(selected),
+    placeholderData: undefined,
   });
+
+  const loadedLead = thread.data?.lead ?? null;
+  const loadedThread = thread.data?.thread ?? null;
+  const threadQueryPending = Boolean(
+    selected && (thread.isPending || thread.isFetching || !loadedLead || loadedLead.id !== selected),
+  );
+  const sync = resolveThreadSync({
+    selectedLeadId: selected,
+    loadedLead,
+    loadedThread,
+    threadQueryPending,
+  });
+  const headerPhone = loadedLead?.phone_e164 ?? null;
 
   const send = useMutation({
     mutationFn: async (text: string) => {
-      const t = thread.data?.thread;
-      if (!selected || !t) throw new Error("No thread selected");
-      return sendFn({ data: { leadId: selected, threadId: t.id, text } });
+      const check = assertSendDestination({
+        selectedLeadId: selected,
+        loadedLead,
+        loadedThread,
+        headerPhone,
+      });
+      if (!check.ok) throw new Error(check.reason);
+      return sendFn({
+        data: {
+          leadId: check.leadId,
+          threadId: check.threadId,
+          text,
+          expectedPhone: headerPhone ?? undefined,
+        },
+      });
     },
     onSuccess: (result) => {
       if (result.ok) setDraft("");
@@ -68,12 +94,12 @@ function LeadsPage() {
 
   const control = useMutation({
     mutationFn: async (mode: "auto" | "human") => {
-      const t = thread.data?.thread;
-      if (!t) throw new Error("No thread selected");
-      return controlFn({ data: { threadId: t.id, mode } });
+      if (!loadedThread || !sync.inSync) throw new Error("No thread selected");
+      return controlFn({ data: { threadId: loadedThread.id, mode } });
     },
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["lead-thread", selected] }),
   });
+
 
   const startSms = useMutation({
     mutationFn: async () =>
