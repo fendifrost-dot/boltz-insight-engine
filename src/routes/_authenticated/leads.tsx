@@ -128,7 +128,12 @@ function LeadsPage() {
         setNewText("");
         setShowCompose(false);
         void queryClient.invalidateQueries({ queryKey: ["leads"] });
-        setSelected(result.leadId);
+        setSelectedRow({
+          id: result.leadId,
+          name: newName || null,
+          phone_e164: newPhone || null,
+        });
+
       }
     },
   });
