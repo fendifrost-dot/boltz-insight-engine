@@ -5,6 +5,10 @@ import { useState } from "react";
 import { EmptyState, PageHeader, Panel, Shell } from "@/components/ops/Shell";
 import { Tag, Td, Th, TableWrap } from "@/components/ops/Bits";
 import {
+  assertSendDestination,
+  resolveThreadSync,
+} from "@/lib/lead-inbox-thread-sync";
+import {
   getThread,
   listLeads,
   sendOwnerMessage,
@@ -32,6 +36,15 @@ function fmt(value: string | null | undefined): string {
   return new Date(value).toLocaleString();
 }
 
+function formatDestPhone(phone: string | null): string {
+  if (!phone) return "Not entered";
+  const d = phone.replace(/\D/g, "");
+  if (d.length === 11 && d.startsWith("1")) {
+    return `+1 (${d.slice(1, 4)}) ${d.slice(4, 7)}-${d.slice(7)}`;
+  }
+  return phone.startsWith("+") ? phone : `+${phone}`;
+}
+
 function LeadsPage() {
   const queryClient = useQueryClient();
   const [selected, setSelected] = useState<string | null>(null);
@@ -50,30 +63,86 @@ function LeadsPage() {
   const leads = useQuery({ queryKey: ["leads"], queryFn: () => leadsFn({}) });
   const thread = useQuery({
     queryKey: ["lead-thread", selected],
-    queryFn: () => threadFn({ data: { leadId: selected as string } }),
+    queryFn: () => {
+      if (!selected) throw new Error("No lead selected");
+      return threadFn({ data: { leadId: selected } });
+    },
     enabled: Boolean(selected),
+    // Never keep conversation B visible while row A is highlighted.
+    placeholderData: undefined,
+  });
+
+  const selectedLead = (leads.data ?? []).find((lead) => lead.id === selected) ?? null;
+  const loadedLead = thread.data?.lead ?? null;
+  const loadedThread = thread.data?.thread ?? null;
+
+  // Pending or mismatched payload → never enable compose for a stale conversation.
+  // Background refetch of the *same* lead stays usable.
+  const threadQueryPending =
+    Boolean(selected) && (thread.isPending || !loadedLead || loadedLead.id !== selected);
+
+  const sync = resolveThreadSync({
+    selectedLeadId: selected,
+    loadedLead,
+    loadedThread,
+    threadQueryPending,
   });
 
   const send = useMutation({
     mutationFn: async (text: string) => {
-      const t = thread.data?.thread;
-      if (!selected || !t) throw new Error("No thread selected");
-      return sendFn({ data: { leadId: selected, threadId: t.id, text } });
+      if (!selected || !loadedLead || !loadedThread) {
+        throw new Error("No thread loaded");
+      }
+      const headerPhone = loadedLead.phone_e164 ?? loadedThread.phone_e164 ?? "";
+      const guard = assertSendDestination({
+        selectedLeadId: selected,
+        loadedLeadId: loadedLead.id,
+        loadedThreadId: loadedThread.id,
+        loadedThreadLeadId: loadedThread.lead_id,
+        destinationPhone: headerPhone,
+        headerPhone,
+      });
+      if (!guard.ok) {
+        throw new Error(guard.reason);
+      }
+      // Destination is always the visible header lead/thread — never a stale pair.
+      return sendFn({
+        data: {
+          leadId: loadedLead.id,
+          threadId: loadedThread.id,
+          text,
+          expectedPhone: headerPhone,
+        },
+      });
     },
     onSuccess: (result) => {
       if (result.ok) setDraft("");
-      void queryClient.invalidateQueries({ queryKey: ["lead-thread", selected] });
+      if (selected) {
+        void queryClient.invalidateQueries({ queryKey: ["lead-thread", selected] });
+      }
       void queryClient.invalidateQueries({ queryKey: ["leads"] });
     },
   });
 
+  const selectLead = (leadId: string) => {
+    if (leadId === selected) return;
+    setSelected(leadId);
+    setDraft("");
+    send.reset();
+  };
+
   const control = useMutation({
     mutationFn: async (mode: "auto" | "human") => {
-      const t = thread.data?.thread;
-      if (!t) throw new Error("No thread selected");
-      return controlFn({ data: { threadId: t.id, mode } });
+      if (!sync.inSync || !loadedThread || loadedThread.lead_id !== selected) {
+        throw new Error("Thread not in sync");
+      }
+      return controlFn({ data: { threadId: loadedThread.id, mode } });
     },
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["lead-thread", selected] }),
+    onSuccess: () => {
+      if (selected) {
+        void queryClient.invalidateQueries({ queryKey: ["lead-thread", selected] });
+      }
+    },
   });
 
   const startNew = useMutation({
@@ -95,6 +164,7 @@ function LeadsPage() {
       setComposeOpen(false);
       await queryClient.invalidateQueries({ queryKey: ["leads"] });
       if (result.leadId) {
+        setDraft("");
         setSelected(result.leadId);
         void queryClient.invalidateQueries({ queryKey: ["lead-thread", result.leadId] });
       }
@@ -104,6 +174,11 @@ function LeadsPage() {
   const rows = leads.data ?? [];
   const canStart =
     newPhone.trim().length >= 7 && newText.trim().length > 0 && !startNew.isPending;
+  const canSend =
+    sync.canCompose &&
+    draft.trim().length > 0 &&
+    !send.isPending &&
+    Boolean(loadedThread);
 
   return (
     <Shell>
@@ -209,7 +284,7 @@ function LeadsPage() {
                   {rows.map((lead) => (
                     <tr
                       key={lead.id}
-                      onClick={() => setSelected(lead.id)}
+                      onClick={() => selectLead(lead.id)}
                       className={
                         selected === lead.id
                           ? "cursor-pointer bg-secondary/60"
@@ -248,28 +323,55 @@ function LeadsPage() {
 
         <Panel
           title="Thread"
-          meta={thread.data?.thread ? `control: ${thread.data.thread.control_mode}` : undefined}
+          meta={
+            sync.inSync && loadedThread
+              ? `control: ${loadedThread.control_mode}`
+              : selected
+                ? "loading"
+                : undefined
+          }
         >
           {!selected ? (
             <EmptyState
               label="Select a lead"
               hint="Or use New SMS to text a number that is not listed yet."
             />
-          ) : thread.isLoading ? (
-            <p className="text-sm text-muted-foreground">Loading thread…</p>
+          ) : sync.showLoading || !sync.inSync ? (
+            <div className="space-y-2">
+              <p className="text-sm text-muted-foreground">
+                {sync.blockReason ?? "Loading thread…"}
+              </p>
+              {selectedLead && (
+                <p className="font-mono text-xs text-muted-foreground">
+                  Opening {selectedLead.name ?? "lead"} · {selectedLead.phone_e164 ?? "no phone"}
+                </p>
+              )}
+            </div>
           ) : (
             <div className="space-y-4">
+              <div className="rounded border border-border bg-secondary/30 px-3 py-2">
+                <div className="label-caps mb-1">Sending to</div>
+                <div className="text-sm font-medium text-foreground">
+                  {sync.headerName ?? selectedLead?.name ?? "Unnamed"}
+                </div>
+                <div className="font-mono text-xs text-muted-foreground">
+                  {formatDestPhone(sync.destinationPhone)}
+                </div>
+              </div>
+
               <div className="flex flex-wrap gap-2">
                 <button
+                  type="button"
                   onClick={() => control.mutate("human")}
-                  disabled={thread.data?.thread?.control_mode === "human"}
+                  disabled={loadedThread?.control_mode === "human" || control.isPending}
                   className="rounded border border-border px-2 py-1 text-xs disabled:opacity-40"
                 >
                   Take over (human)
                 </button>
                 <button
+                  type="button"
                   onClick={() => control.mutate("auto")}
-                  disabled={thread.data?.thread?.control_mode === "auto"}
+                  disabled={loadedThread?.control_mode === "auto" || control.isPending}
                   className="rounded border border-border px-2 py-1 text-xs disabled:opacity-40"
                 >
                   Return to agent
@@ -306,21 +408,29 @@ function LeadsPage() {
                   onChange={(e) => setDraft(e.target.value)}
                   rows={3}
                   maxLength={480}
-                  placeholder="Owner message (sent immediately via RingCentral)"
-                  className="w-full rounded border border-border bg-input px-2 py-1.5 text-sm"
+                  disabled={!sync.canCompose}
+                  placeholder={`Message to ${formatDestPhone(sync.destinationPhone)}`}
+                  className="w-full rounded border border-border bg-input px-2 py-1.5 text-sm disabled:opacity-40"
                 />
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <button
+                    type="button"
                     onClick={() => send.mutate(draft)}
-                    disabled={draft.trim().length === 0 || send.isPending || !thread.data?.thread}
+                    disabled={!canSend}
                     className="rounded bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-40"
                   >
-                    {send.isPending ? "Sending…" : "Send SMS"}
+                    {send.isPending
+                      ? "Sending…"
+                      : `Send SMS to ${formatDestPhone(sync.destinationPhone)}`}
                   </button>
                   {send.data && !send.data.ok && (
                     <span className="text-xs text-destructive">{send.data.reason}</span>
                   )}
-                  {send.isError && <span className="text-xs text-destructive">Send failed.</span>}
+                  {send.isError && (
+                    <span className="text-xs text-destructive">
+                      {send.error instanceof Error ? send.error.message : "Send failed."}
+                    </span>
+                  )}
                 </div>
               </div>
 

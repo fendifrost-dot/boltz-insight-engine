@@ -94,28 +94,69 @@ export const sendOwnerMessage = createServerFn({ method: "POST" })
         leadId: z.string().uuid(),
         threadId: z.string().uuid(),
         text: z.string().min(1).max(480),
+        /** Visible thread-header phone; must match lead + thread or send is refused. */
+        expectedPhone: z.string().min(7).max(32).optional(),
       })
       .parse(input),
   )
   .handler(async ({ data, context }) => {
-    const { data: lead, error } = await context.supabase
-      .from("leads")
-      .select("phone_e164, consent_status")
-      .eq("id", data.leadId)
-      .single();
-    if (error) throw new Error(error.message);
-    if (!lead.phone_e164) return { ok: false, reason: "Lead has no phone number" };
+    const { toE164 } = await import("@/server/lead-inbox/store.server");
+
+    const [leadRes, threadRes] = await Promise.all([
+      context.supabase
+        .from("leads")
+        .select("id, phone_e164, consent_status")
+        .eq("id", data.leadId)
+        .single(),
+      context.supabase
+        .from("message_threads")
+        .select("id, lead_id, phone_e164")
+        .eq("id", data.threadId)
+        .single(),
+    ]);
+    if (leadRes.error) throw new Error(leadRes.error.message);
+    if (threadRes.error) throw new Error(threadRes.error.message);
+
+    const lead = leadRes.data;
+    const thread = threadRes.data;
+
+    // P0 guard: never deliver to lead A while attaching / addressing thread B.
+    if (thread.lead_id !== lead.id) {
+      return {
+        ok: false as const,
+        reason: "Thread does not belong to the selected lead — send blocked",
+      };
+    }
+    if (!lead.phone_e164) return { ok: false as const, reason: "Lead has no phone number" };
     if (lead.consent_status === "opted_out") {
-      return { ok: false, reason: "Lead has opted out of texts" };
+      return { ok: false as const, reason: "Lead has opted out of texts" };
+    }
+
+    const leadPhone = toE164(lead.phone_e164);
+    const threadPhone = toE164(thread.phone_e164);
+    if (threadPhone && leadPhone !== threadPhone) {
+      return {
+        ok: false as const,
+        reason: "Lead and thread phone disagree — send blocked",
+      };
+    }
+    if (data.expectedPhone) {
+      const expected = toE164(data.expectedPhone);
+      if (expected !== leadPhone) {
+        return {
+          ok: false as const,
+          reason: "Destination does not match visible thread header — send blocked",
+        };
+      }
     }
 
     const { sendOutbound } = await import("@/server/lead-inbox/outbound.server");
     const outcome = await sendOutbound({
-      leadId: data.leadId,
-      threadId: data.threadId,
-      to: lead.phone_e164,
+      leadId: lead.id,
+      threadId: thread.id,
+      to: leadPhone,
       text: data.text,
-      idempotencyKey: `owner:${data.threadId}:${Date.now()}`,
+      idempotencyKey: `owner:${thread.id}:${Date.now()}`,
       actor: `owner:${context.userId}`,
     });
     return outcome.ok
