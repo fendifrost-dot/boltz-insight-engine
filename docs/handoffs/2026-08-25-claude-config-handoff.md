@@ -17,14 +17,18 @@ It is NOT the public website. boltzautogarage.com stays on Durable.
 - Workflow order is mandatory: finding → hypothesis → proposed intervention → approval → deployment → measurement.
 
 ## Current state — verified working
+- **Published:** Live at `https://boltz-insight-engine.lovable.app`. Server routes and functions are deployed.
 - Auth: Supabase magic-link. Every ops route lives under `src/routes/_authenticated/`; `/auth` is the only public UI route.
+
 - Roles: `public.user_roles` (`app_role` = owner | staff) + security-definer `has_role()` / `is_staff()`. The first account to sign in is auto-granted `owner` by trigger. Roles are never stored on profile/lead rows.
 - RLS: all lead-inbox tables require staff; `integration_health_snapshots` and `ringcentral_subscriptions` require owner. `anon` has zero grants. Privileged server fns (`resumeAgentFn`, `ensureSubscription`) re-check owner role because they bypass RLS.
 - `lead_events` is append-only by trigger (audit).
 - RingCentral: JWT auth returns 200. Extension 63400267007 (ext 101) active. `+17085754555` has `CallerId, SmsSender, MmsSender`.
 - Webhook `POST /api/public/ringcentral/webhook`: echoes one-time `Validation-Token` on handshake (200), rejects a wrong `Verification-Token` (401).
 - Cron routes `POST /api/public/cron/{renew-subscriptions,reconcile-messages,process-jobs}`: 401 without a valid `Authorization: Bearer <CRON_SECRET>`.
+- Grok: `XAI_MODEL` is set to `grok-4.6` (no fallback needed).
 - End-to-end test passed: a simulated inbound SMS created the lead, extracted vehicle + symptoms, and Grok autonomously returned a compliant reply (inspection required for any quote, correct address/hours, no price promise) queued to RingCentral with no approval gate. All test rows were deleted afterward — DB currently holds zero lead data.
+
 
 ## Safeguards in code
 - `src/server/lead-inbox/outbound.server.ts`: treats SMS capability `"unknown"` as blocked, same as `"none"`.
