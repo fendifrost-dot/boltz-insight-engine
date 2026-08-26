@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { getSupabaseConfigError, supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/auth")({
   ssr: false,
@@ -27,31 +27,50 @@ function AuthPage() {
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(() => getSupabaseConfigError());
+  const configBlocked = Boolean(getSupabaseConfigError());
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session) navigate({ to: "/", replace: true });
-    });
+    if (configBlocked) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const { data } = await supabase.auth.getSession();
+        if (!cancelled && data.session) navigate({ to: "/", replace: true });
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : "Could not restore session.");
+        }
+      }
+    })();
     const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
       if (session && (event === "SIGNED_IN" || event === "INITIAL_SESSION")) {
         navigate({ to: "/", replace: true });
       }
     });
-    return () => sub.subscription.unsubscribe();
-  }, [navigate]);
+    return () => {
+      cancelled = true;
+      sub.subscription.unsubscribe();
+    };
+  }, [navigate, configBlocked]);
 
   async function sendLink(e: React.FormEvent) {
     e.preventDefault();
+    if (configBlocked) return;
     setBusy(true);
     setError(null);
-    const { error: err } = await supabase.auth.signInWithOtp({
-      email: email.trim(),
-      options: { emailRedirectTo: window.location.origin },
-    });
-    setBusy(false);
-    if (err) setError(err.message);
-    else setSent(true);
+    try {
+      const { error: err } = await supabase.auth.signInWithOtp({
+        email: email.trim(),
+        options: { emailRedirectTo: window.location.origin },
+      });
+      if (err) setError(err.message);
+      else setSent(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Sign-in failed.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -63,7 +82,11 @@ function AuthPage() {
           Internal tooling. Owner access only — sign in with a magic link.
         </p>
 
-        {sent ? (
+        {configBlocked ? (
+          <p className="mt-6 text-sm text-destructive">
+            {error ?? "Supabase is not configured in this build. Republish from Lovable Cloud."}
+          </p>
+        ) : sent ? (
           <p className="mt-6 text-sm text-foreground">
             Check <span className="font-mono">{email}</span> for a sign-in link. You can close this
             tab after opening it.

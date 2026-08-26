@@ -3,11 +3,23 @@ import { createStart, createCsrfMiddleware, createMiddleware } from "@tanstack/r
 import { attachSupabaseAuth } from "./integrations/supabase/auth-attacher";
 import { renderErrorPage } from "./lib/error-page";
 
-const errorMiddleware = createMiddleware().server(async ({ next }) => {
+const errorMiddleware = createMiddleware().server(async ({ next, request }) => {
   try {
     return await next();
   } catch (error) {
     if (error != null && typeof error === "object" && "statusCode" in error) {
+      throw error;
+    }
+    // HTML error pages break TanStack server-fn RPC clients (they expect a
+    // structured payload). Re-throw for /_serverFn/* so the inbox can soft-fail.
+    const pathname = (() => {
+      try {
+        return new URL(request.url).pathname;
+      } catch {
+        return "";
+      }
+    })();
+    if (pathname.startsWith("/_serverFn")) {
       throw error;
     }
     console.error(error);

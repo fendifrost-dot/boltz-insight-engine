@@ -5,15 +5,23 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 export const listLeads = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { data, error } = await context.supabase
-      .from("leads")
-      .select(
-        "id, name, phone_e164, lifecycle, consent_status, vehicle_year, vehicle_make, vehicle_model, vehicle_mileage, symptoms, lead_source, last_inbound_at, last_outbound_at, last_message_at, unread_count, created_at",
-      )
-      .order("last_message_at", { ascending: false, nullsFirst: false })
-      .limit(200);
-    if (error) throw new Error(error.message);
-    return data ?? [];
+    try {
+      const { data, error } = await context.supabase
+        .from("leads")
+        .select(
+          "id, name, phone_e164, lifecycle, consent_status, vehicle_year, vehicle_make, vehicle_model, vehicle_mileage, symptoms, lead_source, last_inbound_at, last_outbound_at, last_message_at, unread_count, created_at",
+        )
+        .order("last_message_at", { ascending: false, nullsFirst: false })
+        .limit(200);
+      if (error) {
+        console.error("[listLeads]", error.message);
+        return [];
+      }
+      return data ?? [];
+    } catch (error) {
+      console.error("[listLeads]", error);
+      return [];
+    }
   });
 
 export const getThread = createServerFn({ method: "GET" })
@@ -156,47 +164,72 @@ export const updateEscalation = createServerFn({ method: "POST" })
 export const getIntegrationHealth = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { secretStatus } = await import("@/server/lead-inbox/env.server");
-    const { agentCircuitState } = await import("@/server/lead-inbox/jobs.server");
-
-    const [snapshotsRes, subsRes, jobsRes] = await Promise.all([
-      context.supabase
-        .from("integration_health_snapshots")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(40),
-      context.supabase
-        .from("ringcentral_subscriptions")
-        .select("id, provider_subscription_id, status, expires_at, delivery_address, last_renewed_at, last_renewal_error, sms_capability")
-        .order("created_at", { ascending: false })
-        .limit(5),
-      context.supabase
-        .from("message_jobs")
-        .select("id, job_type, status, attempts, last_error, run_after, created_at")
-        .order("created_at", { ascending: false })
-        .limit(30),
-    ]);
-
-    let capability: { capability: string; detail: string } | null = null;
     try {
-      const { cachedCapability } = await import("@/server/lead-inbox/outbound.server");
-      const result = await cachedCapability();
-      capability = { capability: result.capability, detail: result.detail };
+      const { secretStatus } = await import("@/server/lead-inbox/env.server");
+      const { agentCircuitState } = await import("@/server/lead-inbox/jobs.server");
+
+      const [snapshotsRes, subsRes, jobsRes] = await Promise.all([
+        context.supabase
+          .from("integration_health_snapshots")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .limit(40),
+        context.supabase
+          .from("ringcentral_subscriptions")
+          .select("id, provider_subscription_id, status, expires_at, delivery_address, last_renewed_at, last_renewal_error, sms_capability")
+          .order("created_at", { ascending: false })
+          .limit(5),
+        context.supabase
+          .from("message_jobs")
+          .select("id, job_type, status, attempts, last_error, run_after, created_at")
+          .order("created_at", { ascending: false })
+          .limit(30),
+      ]);
+
+      let capability: { capability: string; detail: string } | null = null;
+      try {
+        const { cachedCapability } = await import("@/server/lead-inbox/outbound.server");
+        const result = await cachedCapability();
+        capability = { capability: result.capability, detail: result.detail };
+      } catch (error) {
+        capability = {
+          capability: "unknown",
+          detail: error instanceof Error ? error.message.slice(0, 300) : "capability check failed",
+        };
+      }
+
+      let circuit = { paused: false, detail: null as string | null };
+      try {
+        circuit = await agentCircuitState();
+      } catch (error) {
+        circuit = {
+          paused: false,
+          detail: error instanceof Error ? error.message.slice(0, 300) : "circuit check failed",
+        };
+      }
+
+      return {
+        secrets: secretStatus(),
+        circuit,
+        capability,
+        snapshots: snapshotsRes.data ?? [],
+        subscriptions: subsRes.data ?? [],
+        jobs: jobsRes.data ?? [],
+      };
     } catch (error) {
-      capability = {
-        capability: "unknown",
-        detail: error instanceof Error ? error.message.slice(0, 300) : "capability check failed",
+      console.error("[getIntegrationHealth]", error);
+      return {
+        secrets: [],
+        circuit: {
+          paused: false,
+          detail: error instanceof Error ? error.message.slice(0, 300) : "health check failed",
+        },
+        capability: { capability: "unknown", detail: "health check failed" },
+        snapshots: [],
+        subscriptions: [],
+        jobs: [],
       };
     }
-
-    return {
-      secrets: secretStatus(),
-      circuit: await agentCircuitState(),
-      capability,
-      snapshots: snapshotsRes.data ?? [],
-      subscriptions: subsRes.data ?? [],
-      jobs: jobsRes.data ?? [],
-    };
   });
 
 /** Privileged actions bypass RLS, so verify the owner role through the user's own client. */
