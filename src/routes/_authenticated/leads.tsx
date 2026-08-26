@@ -37,14 +37,18 @@ function fmt(value: string | null | undefined): string {
   return new Date(value).toLocaleString();
 }
 
+type SelectedRow = { id: string; name: string | null; phone_e164: string | null };
+
 function LeadsPage() {
   const queryClient = useQueryClient();
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selectedRow, setSelectedRow] = useState<SelectedRow | null>(null);
   const [draft, setDraft] = useState("");
   const [showCompose, setShowCompose] = useState(false);
   const [newPhone, setNewPhone] = useState("");
   const [newName, setNewName] = useState("");
   const [newText, setNewText] = useState("");
+
+  const selected = selectedRow?.id ?? null;
 
   const leadsFn = useServerFn(listLeads);
   const threadFn = useServerFn(getThread);
@@ -66,11 +70,14 @@ function LeadsPage() {
   );
   const sync = resolveThreadSync({
     selectedLeadId: selected,
+    selectedRowPhone: selectedRow?.phone_e164 ?? null,
+    selectedRowName: selectedRow?.name ?? null,
     loadedLead,
     loadedThread,
     threadQueryPending,
   });
-  const headerPhone = loadedLead?.phone_e164 ?? null;
+  const headerPhone = selectedRow?.phone_e164 ?? null;
+
 
   const send = useMutation({
     mutationFn: async (text: string) => {
