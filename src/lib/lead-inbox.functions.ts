@@ -251,20 +251,21 @@ export const startOwnerSms = createServerFn({ method: "POST" })
     }
 
     const leadUpdate: Record<string, unknown> = {};
-    if (data.name?.trim()) leadUpdate.name = data.name.trim();
-    if (data.vehicleYear !== undefined) leadUpdate.vehicle_year = data.vehicleYear;
-    if (data.vehicleMake?.trim()) leadUpdate.vehicle_make = data.vehicleMake.trim();
-    if (data.vehicleModel?.trim()) leadUpdate.vehicle_model = data.vehicleModel.trim();
+    if (data.name?.trim()) leadUpdate["name"] = data.name.trim();
+    if (data.vehicleYear !== undefined) leadUpdate["vehicle_year"] = data.vehicleYear;
+    if (data.vehicleMake?.trim()) leadUpdate["vehicle_make"] = data.vehicleMake.trim();
+    if (data.vehicleModel?.trim()) leadUpdate["vehicle_model"] = data.vehicleModel.trim();
 
     if (data.markConsentOptIn && lead.consent_status !== "opted_in") {
-      leadUpdate.consent_status = "opted_in";
-      leadUpdate.consent_evidence = {
+      leadUpdate["consent_status"] = "opted_in";
+      leadUpdate["consent_evidence"] = {
         source: leadSource,
         asserted_by: context.userId,
         at: new Date().toISOString(),
         note: "Owner started SMS thread",
       };
     }
+
 
     if (Object.keys(leadUpdate).length > 0) {
       const { error: updateError } = await supabaseAdmin
