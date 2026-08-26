@@ -1,4 +1,6 @@
 // xAI (Grok) agent adapter. Server-only.
+import { z } from "zod";
+import { Constants } from "@/integrations/supabase/types";
 import { readSecret, requireSecret } from "./env.server";
 import { BUSINESS } from "@/data/context";
 import type { Database } from "@/integrations/supabase/types";
