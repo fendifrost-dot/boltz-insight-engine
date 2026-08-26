@@ -32,20 +32,20 @@ It is NOT the public website. boltzautogarage.com stays on Durable.
 - `src/server/lead-inbox/safety.server.ts`: STOP/opt-out handling, escalation triggers, idempotency by provider message id.
 
 ## Secrets currently stored
-RINGCENTRAL_CLIENT_ID, RINGCENTRAL_CLIENT_SECRET, RINGCENTRAL_JWT, RINGCENTRAL_SERVER_URL, RINGCENTRAL_FROM_NUMBER (+17085754555), RINGCENTRAL_WEBHOOK_VALIDATION_TOKEN, XAI_API_KEY, XAI_MODEL, CRON_SECRET, PUBLIC_APP_URL.
+RINGCENTRAL_CLIENT_ID, RINGCENTRAL_CLIENT_SECRET, RINGCENTRAL_JWT, RINGCENTRAL_SERVER_URL, RINGCENTRAL_FROM_NUMBER (+17085754555), RINGCENTRAL_WEBHOOK_VALIDATION_TOKEN, XAI_API_KEY, XAI_MODEL (`grok-4.6`), CRON_SECRET, PUBLIC_APP_URL (`https://boltz-insight-engine.lovable.app`).
+
 
 ## Open items for Claude
-1. **XAI_MODEL still holds `grok-2-latest`**, which xAI has retired. Code falls back to `grok-4.6`, so nothing breaks, but update the secret to `grok-4.6` to remove the silent fallback.
-2. **Re-publish required.** Server routes and server functions ship with the frontend build, so the owner-role check and the Grok/capability safeguards are only live after clicking Update in the publish dialog. Backend (DB/RLS) changes are already live.
-3. **Register the RingCentral webhook subscription.** Sign in as owner → `/integration-health` → the subscription action calls `renewSubscriptions()`, which creates the subscription against
+1. **Register the RingCentral webhook subscription.** Sign in as owner → `/integration-health` → the subscription action calls `renewSubscriptions()`, which creates the subscription against
    `https://boltz-insight-engine.lovable.app/api/public/ringcentral/webhook`.
    Confirm the row lands in `ringcentral_subscriptions` with status `Active` and an `expires_at` ~7 days out.
-4. **Schedule the cron jobs** via pg_cron + pg_net against the published URL, `Authorization: Bearer <CRON_SECRET>`:
+2. **Schedule the cron jobs** via pg_cron + pg_net against the published URL, `Authorization: Bearer <CRON_SECRET>`:
    - `renew-subscriptions` — every 6 hours (subscriptions expire in 7 days).
    - `reconcile-messages` — every 10 minutes (catches webhook gaps).
    - `process-jobs` — every 2 minutes (drains retries; the webhook also drains inline, max 3).
-5. **Live smoke test:** text `+17085754555` from a real handset, confirm a reply within seconds, confirm the thread renders on `/leads`, then text `STOP` and confirm opt-out is recorded and no further replies go out.
-6. **Escalation review:** send a message like "I want to talk to a person" and confirm it lands on `/escalations` with no auto-reply.
+3. **Live smoke test:** text `+17085754555` from a real handset, confirm a reply within seconds, confirm the thread renders on `/leads`, then text `STOP` and confirm opt-out is recorded and no further replies go out.
+4. **Escalation review:** send a message like "I want to talk to a person" and confirm it lands on `/escalations` with no auto-reply.
+
 
 ## Useful paths
 - `docs/RINGCENTRAL_HANDOFF.md` — read before any lead-inbox edit.
