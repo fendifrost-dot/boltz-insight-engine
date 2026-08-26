@@ -9,6 +9,7 @@ import {
   listLeads,
   sendOwnerMessage,
   setThreadControl,
+  startOwnerSms,
 } from "@/lib/lead-inbox.functions";
 
 export const Route = createFileRoute("/_authenticated/leads")({
@@ -35,11 +36,16 @@ function LeadsPage() {
   const queryClient = useQueryClient();
   const [selected, setSelected] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
+  const [composeOpen, setComposeOpen] = useState(false);
+  const [newPhone, setNewPhone] = useState("");
+  const [newName, setNewName] = useState("");
+  const [newText, setNewText] = useState("");
 
   const leadsFn = useServerFn(listLeads);
   const threadFn = useServerFn(getThread);
   const sendFn = useServerFn(sendOwnerMessage);
   const controlFn = useServerFn(setThreadControl);
+  const startFn = useServerFn(startOwnerSms);
 
   const leads = useQuery({ queryKey: ["leads"], queryFn: () => leadsFn({}) });
   const thread = useQuery({
@@ -57,6 +63,7 @@ function LeadsPage() {
     onSuccess: (result) => {
       if (result.ok) setDraft("");
       void queryClient.invalidateQueries({ queryKey: ["lead-thread", selected] });
+      void queryClient.invalidateQueries({ queryKey: ["leads"] });
     },
   });
 
@@ -69,15 +76,111 @@ function LeadsPage() {
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["lead-thread", selected] }),
   });
 
+  const startNew = useMutation({
+    mutationFn: async () =>
+      startFn({
+        data: {
+          phone: newPhone.trim(),
+          text: newText.trim(),
+          name: newName.trim() || undefined,
+          leadSource: "owner_outbound",
+          markConsentOptIn: true,
+        },
+      }),
+    onSuccess: async (result) => {
+      if (!result.ok) return;
+      setNewPhone("");
+      setNewName("");
+      setNewText("");
+      setComposeOpen(false);
+      await queryClient.invalidateQueries({ queryKey: ["leads"] });
+      if (result.leadId) {
+        setSelected(result.leadId);
+        void queryClient.invalidateQueries({ queryKey: ["lead-thread", result.leadId] });
+      }
+    },
+  });
+
   const rows = leads.data ?? [];
+  const canStart =
+    newPhone.trim().length >= 7 && newText.trim().length > 0 && !startNew.isPending;
 
   return (
     <Shell>
       <PageHeader
         kicker="Lead operations"
         title="Lead Inbox"
-        description="RingCentral SMS threads with autonomous Grok replies. Human control is for takeovers and escalations only."
+        description="RingCentral SMS on +17085754555. Start a new outbound for Durable/web leads that have not texted in yet, or reply inside an existing thread."
+        actions={
+          <button
+            type="button"
+            onClick={() => setComposeOpen((open) => !open)}
+            className="rounded bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground"
+          >
+            {composeOpen ? "Close compose" : "New SMS"}
+          </button>
+        }
       />
+
+      {composeOpen && (
+        <Panel title="New SMS" meta="Shop line +17085754555" className="mb-4">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="block space-y-1 text-xs">
+              <span className="label-caps">Destination phone</span>
+              <input
+                value={newPhone}
+                onChange={(e) => setNewPhone(e.target.value)}
+                placeholder="(312) 487-6842"
+                className="w-full rounded border border-border bg-input px-2 py-1.5 text-sm"
+                autoComplete="tel"
+              />
+            </label>
+            <label className="block space-y-1 text-xs">
+              <span className="label-caps">Name (optional)</span>
+              <input
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                placeholder="Network group"
+                className="w-full rounded border border-border bg-input px-2 py-1.5 text-sm"
+              />
+            </label>
+          </div>
+          <label className="mt-3 block space-y-1 text-xs">
+            <span className="label-caps">Message</span>
+            <textarea
+              value={newText}
+              onChange={(e) => setNewText(e.target.value)}
+              rows={3}
+              maxLength={480}
+              placeholder="First reply — sent immediately via RingCentral"
+              className="w-full rounded border border-border bg-input px-2 py-1.5 text-sm"
+            />
+          </label>
+          <p className="mt-2 text-xs text-muted-foreground">
+            Creates the lead/thread if missing. Opted-out numbers are blocked. Sending asserts SMS
+            consent for this outreach (e.g. Durable form opt-in).
+          </p>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => startNew.mutate()}
+              disabled={!canStart}
+              className="rounded bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-40"
+            >
+              {startNew.isPending ? "Sending…" : "Send new SMS"}
+            </button>
+            {startNew.data && !startNew.data.ok && (
+              <span className="text-xs text-destructive">{startNew.data.reason}</span>
+            )}
+            {startNew.isError && (
+              <span className="text-xs text-destructive">Could not start conversation.</span>
+            )}
+            {startNew.data?.ok && (
+              <span className="text-xs text-muted-foreground">Sent — thread selected below.</span>
+            )}
+          </div>
+        </Panel>
+      )}
 
       <div className="grid gap-4 xl:grid-cols-[1.1fr_1fr]">
         <Panel title="Leads" meta={`${rows.length} records`}>
@@ -88,7 +191,7 @@ function LeadsPage() {
           ) : rows.length === 0 ? (
             <EmptyState
               label="No leads yet"
-              hint="Leads appear when RingCentral delivers an inbound SMS to the connected number."
+              hint="Use New SMS for Durable/web leads, or wait for an inbound text to +17085754555."
             />
           ) : (
             <TableWrap>
@@ -148,7 +251,10 @@ function LeadsPage() {
           meta={thread.data?.thread ? `control: ${thread.data.thread.control_mode}` : undefined}
         >
           {!selected ? (
-            <EmptyState label="Select a lead" hint="Thread, agent decisions and audit trail appear here." />
+            <EmptyState
+              label="Select a lead"
+              hint="Or use New SMS to text a number that is not listed yet."
+            />
           ) : thread.isLoading ? (
             <p className="text-sm text-muted-foreground">Loading thread…</p>
           ) : (
