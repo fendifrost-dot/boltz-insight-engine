@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import type { Database } from "@/integrations/supabase/types";
 
 export const listLeads = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
@@ -120,6 +121,105 @@ export const sendOwnerMessage = createServerFn({ method: "POST" })
     return outcome.ok
       ? { ok: true as const, reason: null }
       : { ok: false as const, reason: outcome.reason };
+  });
+
+/**
+ * Start (or continue) an owner-initiated SMS on the shop line.
+ * Creates the lead + thread when the number is not yet in the inbox
+ * (e.g. Durable website leads with SMS consent that never texted in).
+ */
+export const startOwnerSms = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) =>
+    z
+      .object({
+        phone: z.string().min(7).max(32),
+        text: z.string().min(1).max(480),
+        name: z.string().max(120).optional(),
+        vehicleYear: z.number().int().min(1950).max(2100).optional(),
+        vehicleMake: z.string().max(80).optional(),
+        vehicleModel: z.string().max(80).optional(),
+        leadSource: z.string().max(80).optional(),
+        /** Owner asserts SMS consent (Durable opt-in). Defaults true for new outreach. */
+        markConsentOptIn: z.boolean().optional(),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const { getOrCreateLeadThread, toE164, addEvent } = await import(
+      "@/server/lead-inbox/store.server"
+    );
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { sendOutbound } = await import("@/server/lead-inbox/outbound.server");
+
+    const phone = toE164(data.phone);
+    const digits = phone.replace(/\D/g, "");
+    if (digits.length < 10 || digits.length > 15) {
+      return { ok: false as const, reason: "Enter a valid phone number", leadId: null };
+    }
+
+    const leadSource = data.leadSource?.trim() || "owner_outbound";
+    const { lead, thread } = await getOrCreateLeadThread(phone, leadSource);
+
+    if (lead.consent_status === "opted_out") {
+      return {
+        ok: false as const,
+        reason: "Lead has opted out of texts",
+        leadId: lead.id,
+      };
+    }
+
+    const patch: Database["public"]["Tables"]["leads"]["Update"] = {};
+    if (data.name?.trim()) patch["name"] = data.name.trim();
+    if (data.vehicleYear != null) patch["vehicle_year"] = data.vehicleYear;
+    if (data.vehicleMake?.trim()) patch["vehicle_make"] = data.vehicleMake.trim();
+    if (data.vehicleModel?.trim()) patch["vehicle_model"] = data.vehicleModel.trim();
+    if (data.markConsentOptIn !== false && lead.consent_status !== "opted_in") {
+      patch["consent_status"] = "opted_in";
+      patch["consent_updated_at"] = new Date().toISOString();
+      patch["consent_evidence"] = {
+        source: leadSource,
+        asserted_by: `owner:${context.userId}`,
+        asserted_at: new Date().toISOString(),
+        note: "Owner-initiated outbound; SMS consent asserted in ops inbox",
+      };
+    }
+    if (Object.keys(patch).length > 0) {
+      const { error: updateError } = await supabaseAdmin.from("leads").update(patch).eq("id", lead.id);
+      if (updateError) {
+        return { ok: false as const, reason: updateError.message, leadId: lead.id };
+      }
+    }
+
+    // Owner-started outreach: keep human control until they return the thread to the agent.
+    if (thread.control_mode !== "human") {
+      await supabaseAdmin
+        .from("message_threads")
+        .update({ control_mode: "human" })
+        .eq("id", thread.id);
+    }
+
+    await addEvent(
+      lead.id,
+      "owner_outbound_started",
+      `Owner started SMS to ${phone}`,
+      `owner:${context.userId}`,
+      { lead_source: leadSource },
+    );
+
+    const outcome = await sendOutbound({
+      leadId: lead.id,
+      threadId: thread.id,
+      to: phone,
+      text: data.text,
+      idempotencyKey: `owner-new:${thread.id}:${Date.now()}`,
+      actor: `owner:${context.userId}`,
+    });
+
+    if (!outcome.ok) {
+      return { ok: false as const, reason: outcome.reason, leadId: lead.id };
+    }
+    return { ok: true as const, reason: null, leadId: lead.id };
   });
 
 export const listEscalations = createServerFn({ method: "GET" })
