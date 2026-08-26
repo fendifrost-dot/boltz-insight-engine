@@ -200,7 +200,7 @@ export const getIntegrationHealth = createServerFn({ method: "GET" })
   });
 
 /** Privileged actions bypass RLS, so verify the owner role through the user's own client. */
-async function requireOwner(context: { supabase: SupabaseUserClient; userId: string }) {
+async function requireOwner(context: { supabase: { rpc: Function }; userId: string }) {
   const { data, error } = await context.supabase.rpc("has_role", {
     _user_id: context.userId,
     _role: "owner",
