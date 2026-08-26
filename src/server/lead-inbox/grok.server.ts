@@ -1,4 +1,6 @@
 // xAI (Grok) agent adapter. Server-only.
+import { z } from "zod";
+import { Constants } from "@/integrations/supabase/types";
 import { readSecret, requireSecret } from "./env.server";
 import { BUSINESS } from "@/data/context";
 import type { Database } from "@/integrations/supabase/types";
@@ -87,7 +89,7 @@ export async function decideReply(args: {
   inboundBody: string;
 }): Promise<{ decision: AgentDecision; model: string; raw: unknown }> {
   const apiKey = requireSecret("XAI_API_KEY");
-  const model = readSecret("XAI_MODEL") ?? "grok-4-fast";
+  const model = resolveModel();
 
   const messages = [
     { role: "system", content: systemPrompt() },
@@ -127,45 +129,95 @@ export async function decideReply(args: {
   return { decision, model, raw: { content } };
 }
 
+/** Models this adapter is known to support. XAI_MODEL must be one of these. */
+export const SUPPORTED_MODELS = [
+  "grok-4.6",
+  "grok-4.5",
+  "grok-4.3",
+  "grok-4.20-0309-non-reasoning",
+  "grok-4.20-0309-reasoning",
+] as const;
+
+export const DEFAULT_MODEL = "grok-4.6";
+
+/** Strictly honor XAI_MODEL when it is a supported model; otherwise fall back. */
+export function resolveModel(): string {
+  const configured = readSecret("XAI_MODEL");
+  if (!configured) return DEFAULT_MODEL;
+  const normalized = configured.trim();
+  if ((SUPPORTED_MODELS as readonly string[]).includes(normalized)) return normalized;
+  console.warn(
+    `[grok] XAI_MODEL "${normalized}" is not in the supported list; falling back to ${DEFAULT_MODEL}.`,
+  );
+  return DEFAULT_MODEL;
+}
+
+const leadFieldUpdatesSchema = z
+  .object({
+    name: z.string().max(200).nullable().optional(),
+    email: z.string().email().max(320).nullable().optional(),
+    vehicle_year: z.number().int().min(1900).max(2100).nullable().optional(),
+    vehicle_make: z.string().max(100).nullable().optional(),
+    vehicle_model: z.string().max(100).nullable().optional(),
+    vehicle_mileage: z.number().int().min(0).max(2_000_000).nullable().optional(),
+    vin: z.string().max(32).nullable().optional(),
+    symptoms: z.string().max(2000).nullable().optional(),
+    notes: z.string().max(2000).nullable().optional(),
+  })
+  .strip();
+
+const decisionSchema = z.object({
+  action: z.enum(Constants.public.Enums.agent_action),
+  reply_text: z.string().max(1600).nullable().catch(null),
+  lead_field_updates: leadFieldUpdatesSchema.nullable().catch(null),
+  proposed_lifecycle: z.enum(Constants.public.Enums.lead_lifecycle).nullable().catch(null),
+  escalation_category: z.enum(Constants.public.Enums.escalation_category).nullable().catch(null),
+  audit_summary: z.string().max(2000).catch(""),
+  policy_tags: z.array(z.string().max(80)).max(20).catch([]),
+});
+
+function escalateFallback(reason: string, tag: string): AgentDecision {
+  return {
+    action: "escalate",
+    reply_text: null,
+    lead_field_updates: null,
+    proposed_lifecycle: null,
+    escalation_category: "other_high_risk",
+    audit_summary: reason,
+    policy_tags: [tag],
+  };
+}
+
+/** Strict validation: anything that does not satisfy the schema escalates to a human. */
 export function parseDecision(content: string): AgentDecision {
-  let parsed: Record<string, unknown>;
+  let parsed: unknown;
   try {
-    parsed = JSON.parse(content) as Record<string, unknown>;
+    parsed = JSON.parse(content) as unknown;
   } catch {
-    return {
-      action: "escalate",
-      reply_text: null,
-      lead_field_updates: null,
-      proposed_lifecycle: null,
-      escalation_category: "other_high_risk",
-      audit_summary: "Model returned unparseable output; escalated for human review.",
-      policy_tags: ["unparseable_model_output"],
-    };
+    return escalateFallback(
+      "Model returned unparseable output; escalated for human review.",
+      "unparseable_model_output",
+    );
   }
 
-  const action = parsed["action"];
-  const safeAction: AgentDecision["action"] =
-    action === "send" || action === "escalate" || action === "no_reply" ? action : "escalate";
+  const result = decisionSchema.safeParse(parsed);
+  if (!result.success) {
+    return escalateFallback(
+      "Model output failed schema validation; escalated for human review.",
+      "invalid_model_decision",
+    );
+  }
 
-  return {
-    action: safeAction,
-    reply_text: typeof parsed["reply_text"] === "string" ? (parsed["reply_text"] as string) : null,
-    lead_field_updates:
-      parsed["lead_field_updates"] && typeof parsed["lead_field_updates"] === "object"
-        ? (parsed["lead_field_updates"] as AgentDecision["lead_field_updates"])
-        : null,
-    proposed_lifecycle:
-      typeof parsed["proposed_lifecycle"] === "string"
-        ? (parsed["proposed_lifecycle"] as Lifecycle)
-        : null,
-    escalation_category:
-      typeof parsed["escalation_category"] === "string"
-        ? (parsed["escalation_category"] as EscalationCategory)
-        : null,
-    audit_summary:
-      typeof parsed["audit_summary"] === "string" ? (parsed["audit_summary"] as string) : "",
-    policy_tags: Array.isArray(parsed["policy_tags"])
-      ? (parsed["policy_tags"] as unknown[]).filter((t): t is string => typeof t === "string")
-      : [],
-  };
+  const decision = result.data as AgentDecision;
+
+  // A "send" with no usable reply text is not actionable.
+  if (decision.action === "send" && !decision.reply_text?.trim()) {
+    return escalateFallback(
+      "Model chose to send but produced no reply text; escalated for human review.",
+      "empty_reply_text",
+    );
+  }
+  if (decision.action !== "send") decision.reply_text = null;
+
+  return decision;
 }

@@ -199,9 +199,19 @@ export const getIntegrationHealth = createServerFn({ method: "GET" })
     };
   });
 
+/** Privileged actions bypass RLS, so verify the owner role through the user's own client. */
+async function requireOwner(context: { supabase: { rpc: Function }; userId: string }) {
+  const { data, error } = await context.supabase.rpc("has_role", {
+    _user_id: context.userId,
+    _role: "owner",
+  });
+  if (error || data !== true) throw new Error("Owner role required");
+}
+
 export const resumeAgentFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
+    await requireOwner(context);
     const { resumeAgent } = await import("@/server/lead-inbox/jobs.server");
     await resumeAgent(`Resumed by owner ${context.userId}`);
     return { ok: true };
@@ -209,7 +219,8 @@ export const resumeAgentFn = createServerFn({ method: "POST" })
 
 export const ensureSubscription = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .handler(async () => {
+  .handler(async ({ context }) => {
+    await requireOwner(context);
     const { renewSubscriptions } = await import("@/server/lead-inbox/cron.server");
     try {
       return { ok: true as const, result: await renewSubscriptions(), error: null };
