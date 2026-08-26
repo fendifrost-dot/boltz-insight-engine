@@ -219,41 +219,53 @@ function LeadsPage() {
 
           ) : (
             <TableWrap>
-              <table className="w-full text-sm">
-                <thead>
-                  <tr>
-                    <Th>Lead</Th>
-                    <Th>Vehicle</Th>
-                    <Th>Lifecycle</Th>
-                    <Th>Consent</Th>
-                    <Th>Last message</Th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((lead) => (
+              <thead>
+                <tr>
+                  <Th>Lead</Th>
+                  <Th>Vehicle</Th>
+                  <Th>Lifecycle</Th>
+                  <Th>Consent</Th>
+                  <Th>Last message</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((lead) => {
+                  const selectRow = (event: { preventDefault: () => void; stopPropagation: () => void }) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    setSelectedRow({
+                      id: lead.id,
+                      name: lead.name ?? null,
+                      phone_e164: lead.phone_e164 ?? null,
+                    });
+                    setDraft("");
+                    send.reset();
+                  };
+                  return (
                     <tr
                       key={lead.id}
-                      onClick={() => {
-                        setSelected(lead.id);
-                        setDraft("");
-                        send.reset();
-                      }}
                       className={
-                        selected === lead.id
-                          ? "cursor-pointer bg-secondary/60"
-                          : "cursor-pointer hover:bg-secondary/30"
+                        selected === lead.id ? "bg-secondary/60" : "hover:bg-secondary/30"
                       }
                     >
                       <Td>
-                        <div className="font-medium text-foreground">{lead.name ?? "Unnamed"}</div>
-                        <div className="font-mono text-xs text-muted-foreground">
-                          {lead.phone_e164 ?? "Not entered"}
-                        </div>
+                        <button
+                          type="button"
+                          onClick={selectRow}
+                          className="block w-full text-left"
+                        >
+                          <div className="font-medium text-foreground">{lead.name ?? "Unnamed"}</div>
+                          <div className="font-mono text-xs text-muted-foreground">
+                            {lead.phone_e164 ?? "Not entered"}
+                          </div>
+                        </button>
                       </Td>
                       <Td>
-                        {[lead.vehicle_year, lead.vehicle_make, lead.vehicle_model]
-                          .filter(Boolean)
-                          .join(" ") || "Not entered"}
+                        <button type="button" onClick={selectRow} className="block w-full text-left">
+                          {[lead.vehicle_year, lead.vehicle_make, lead.vehicle_model]
+                            .filter(Boolean)
+                            .join(" ") || "Not entered"}
+                        </button>
                       </Td>
                       <Td>
                         <Tag tone="info">{lead.lifecycle}</Tag>
@@ -267,10 +279,11 @@ function LeadsPage() {
                         {fmt(lead.last_message_at)}
                       </Td>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  );
+                })}
+              </tbody>
             </TableWrap>
+
           )}
         </Panel>
 
