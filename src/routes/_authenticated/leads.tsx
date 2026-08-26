@@ -221,7 +221,11 @@ function LeadsPage() {
                   {rows.map((lead) => (
                     <tr
                       key={lead.id}
-                      onClick={() => setSelected(lead.id)}
+                      onClick={() => {
+                        setSelected(lead.id);
+                        setDraft("");
+                        send.reset();
+                      }}
                       className={
                         selected === lead.id
                           ? "cursor-pointer bg-secondary/60"
@@ -260,25 +264,35 @@ function LeadsPage() {
 
         <Panel
           title="Thread"
-          meta={thread.data?.thread ? `control: ${thread.data.thread.control_mode}` : undefined}
+          meta={sync.inSync && loadedThread ? `control: ${loadedThread.control_mode}` : undefined}
         >
           {!selected ? (
             <EmptyState label="Select a lead" hint="Thread, agent decisions and audit trail appear here." />
-          ) : thread.isLoading ? (
-            <p className="text-sm text-muted-foreground">Loading thread…</p>
+          ) : !sync.inSync ? (
+            <div className="space-y-2">
+              <p className="text-sm text-muted-foreground">
+                {sync.showLoading ? "Loading the selected conversation…" : "Conversation unavailable."}
+              </p>
+              {sync.blockReason && <p className="text-xs text-destructive">{sync.blockReason}</p>}
+            </div>
           ) : (
             <div className="space-y-4">
+              <div className="rounded border border-primary/40 bg-primary/10 p-2">
+                <div className="label-caps mb-1">Sending to</div>
+                <div className="text-sm font-medium text-foreground">{sync.headerName}</div>
+                <div className="font-mono text-xs text-muted-foreground">{displayPhone(headerPhone)}</div>
+              </div>
               <div className="flex flex-wrap gap-2">
                 <button
                   onClick={() => control.mutate("human")}
-                  disabled={thread.data?.thread?.control_mode === "human"}
+                  disabled={loadedThread?.control_mode === "human"}
                   className="rounded border border-border px-2 py-1 text-xs disabled:opacity-40"
                 >
                   Take over (human)
                 </button>
                 <button
                   onClick={() => control.mutate("auto")}
-                  disabled={thread.data?.thread?.control_mode === "auto"}
+                  disabled={loadedThread?.control_mode === "auto"}
                   className="rounded border border-border px-2 py-1 text-xs disabled:opacity-40"
                 >
                   Return to agent
@@ -310,21 +324,25 @@ function LeadsPage() {
               </div>
 
               <div className="space-y-2">
-                <textarea
-                  value={draft}
-                  onChange={(e) => setDraft(e.target.value)}
-                  rows={3}
-                  maxLength={480}
-                  placeholder="Owner message (sent immediately via RingCentral)"
-                  className="w-full rounded border border-border bg-input px-2 py-1.5 text-sm"
-                />
+                {!sync.canCompose ? (
+                  <p className="text-xs text-destructive">{sync.blockReason}</p>
+                ) : (
+                  <textarea
+                    value={draft}
+                    onChange={(e) => setDraft(e.target.value)}
+                    rows={3}
+                    maxLength={480}
+                    placeholder={`Message to ${sync.headerName} at ${displayPhone(headerPhone)} (sent immediately via RingCentral)`}
+                    className="w-full rounded border border-border bg-input px-2 py-1.5 text-sm"
+                  />
+                )}
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => send.mutate(draft)}
-                    disabled={draft.trim().length === 0 || send.isPending || !thread.data?.thread}
+                    disabled={draft.trim().length === 0 || send.isPending || !sync.canCompose}
                     className="rounded bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-40"
                   >
-                    {send.isPending ? "Sending…" : "Send SMS"}
+                    {send.isPending ? "Sending…" : `Send SMS to ${displayPhone(headerPhone)}`}
                   </button>
                   {send.data && !send.data.ok && (
                     <span className="text-xs text-destructive">{send.data.reason}</span>
