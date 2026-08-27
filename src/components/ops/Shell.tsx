@@ -1,7 +1,7 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import type { ReactNode } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { signOutOwnerSession } from "@/lib/owner-session.browser";
 import { cn } from "@/lib/utils";
 
 
@@ -31,7 +31,7 @@ export function Shell({ children }: { children: ReactNode }) {
   async function signOut() {
     await queryClient.cancelQueries();
     queryClient.clear();
-    await supabase.auth.signOut();
+    await signOutOwnerSession();
     navigate({ to: "/auth", replace: true });
   }
 

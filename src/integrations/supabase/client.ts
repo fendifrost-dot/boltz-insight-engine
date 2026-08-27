@@ -2,6 +2,7 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
 import { brokeredPreviewStorage } from './previewAuthStorage';
+import { ownerAuthStorage } from '../../lib/owner-session.storage';
 
 function isNewSupabaseApiKey(value: string): boolean {
   return value.startsWith('sb_publishable_') || value.startsWith('sb_secret_');
@@ -49,9 +50,10 @@ function createSupabaseClient() {
       fetch: createSupabaseFetch(anonKey),
     },
     auth: {
-      storage: brokeredPreviewStorage(),
+      storage: ownerAuthStorage(brokeredPreviewStorage()),
       persistSession: true,
       autoRefreshToken: true,
+      detectSessionInUrl: true,
     }
   });
 }
