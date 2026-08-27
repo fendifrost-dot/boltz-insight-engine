@@ -1,6 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { CONSENT_BASIS, buildConsentLeadUpdate, validateConsentOptIn } from "@/lib/start-owner-sms-policy";
+import { requireCapability, requireOwner } from "@/server/authz/require-capability.server";
 
 export const listLeads = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
@@ -246,6 +248,12 @@ export const getIntegrationHealth = createServerFn({ method: "GET" })
     }
   });
 
+const consentEvidenceSchema = z.object({
+  basis: z.enum(CONSENT_BASIS),
+  note: z.string().max(500).optional(),
+  evidenceRef: z.string().max(200).optional(),
+});
+
 export const startOwnerSms = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input) =>
@@ -258,11 +266,22 @@ export const startOwnerSms = createServerFn({ method: "POST" })
         vehicleMake: z.string().max(100).optional(),
         vehicleModel: z.string().max(100).optional(),
         leadSource: z.string().max(100).optional(),
-        markConsentOptIn: z.boolean().default(true),
+        markConsentOptIn: z.boolean().default(false),
+        consentEvidence: consentEvidenceSchema.optional(),
       })
       .parse(input),
   )
   .handler(async ({ data, context }) => {
+    await requireCapability(context, "communications.send");
+
+    const consentCheck = validateConsentOptIn({
+      markConsentOptIn: data.markConsentOptIn,
+      consentEvidence: data.consentEvidence,
+    });
+    if (!consentCheck.ok) {
+      return { ok: false as const, reason: consentCheck.reason, leadId: null };
+    }
+
     const { getOrCreateLeadThread, toE164, addEvent } = await import("@/server/lead-inbox/store.server");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { sendOutbound } = await import("@/server/lead-inbox/outbound.server");
@@ -286,16 +305,16 @@ export const startOwnerSms = createServerFn({ method: "POST" })
     if (data.vehicleMake?.trim()) leadUpdate["vehicle_make"] = data.vehicleMake.trim();
     if (data.vehicleModel?.trim()) leadUpdate["vehicle_model"] = data.vehicleModel.trim();
 
-    if (data.markConsentOptIn && lead.consent_status !== "opted_in") {
-      leadUpdate["consent_status"] = "opted_in";
-      leadUpdate["consent_evidence"] = {
-        source: leadSource,
-        asserted_by: context.userId,
-        at: new Date().toISOString(),
-        note: "Owner started SMS thread",
-      };
+    const consentUpdate = buildConsentLeadUpdate({
+      markConsentOptIn: data.markConsentOptIn,
+      consentEvidence: data.consentEvidence,
+      leadSource,
+      actorUserId: context.userId,
+      currentConsentStatus: lead.consent_status,
+    });
+    if (consentUpdate) {
+      Object.assign(leadUpdate, consentUpdate);
     }
-
 
     if (Object.keys(leadUpdate).length > 0) {
       const { error: updateError } = await supabaseAdmin
@@ -303,6 +322,20 @@ export const startOwnerSms = createServerFn({ method: "POST" })
         .update(leadUpdate as never)
         .eq("id", lead.id);
       if (updateError) throw new Error(updateError.message);
+
+      if (consentUpdate) {
+        await addEvent(
+          lead.id,
+          "consent_opted_in",
+          "SMS consent marked opted in for owner-started thread",
+          `owner:${context.userId}`,
+          {
+            basis: data.consentEvidence?.basis,
+            evidence_ref: data.consentEvidence?.evidenceRef ?? null,
+            lead_source: leadSource,
+          },
+        );
+      }
     }
 
     const { error: threadError } = await supabaseAdmin
@@ -311,10 +344,11 @@ export const startOwnerSms = createServerFn({ method: "POST" })
       .eq("id", thread.id);
     if (threadError) throw new Error(threadError.message);
 
-    const actor = `owner:${context.userId}`;
-    await addEvent(lead.id, "owner_outbound_started", "Owner started outbound SMS thread", actor, {
+    const actor = `staff:${context.userId}`;
+    await addEvent(lead.id, "owner_outbound_started", "Staff started outbound SMS thread", actor, {
       thread_id: thread.id,
       text_length: data.text.length,
+      consent_status: consentUpdate ? "opted_in" : lead.consent_status,
     });
 
     const outcome = await sendOutbound({
@@ -330,16 +364,6 @@ export const startOwnerSms = createServerFn({ method: "POST" })
       ? { ok: true as const, reason: null as string | null, leadId: lead.id }
       : { ok: false as const, reason: outcome.reason, leadId: lead.id };
   });
-
-/** Privileged actions bypass RLS, so verify the owner role through the user's own client. */
-async function requireOwner(context: { supabase: { rpc: Function }; userId: string }) {
-  const { data, error } = await context.supabase.rpc("has_role", {
-    _user_id: context.userId,
-    _role: "owner",
-  });
-  if (error || data !== true) throw new Error("Owner role required");
-}
-
 
 export const resumeAgentFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
