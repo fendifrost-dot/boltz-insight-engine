@@ -1,0 +1,108 @@
+{
+  "capturedAt": "2026-08-27T23:00:00Z",
+  "source": "Lovable Cloud Postgres (boltz-insight-engine production)",
+  "supabaseProjectId": "smrbsnnisvmubbwfhafy",
+  "tables": [
+    "agent_runs",
+    "escalations",
+    "integration_health_snapshots",
+    "lead_events",
+    "leads",
+    "message_jobs",
+    "message_threads",
+    "messages",
+    "ringcentral_subscriptions",
+    "user_roles"
+  ],
+  "enums": {
+    "agent_action": ["send", "escalate", "no_reply"],
+    "app_role": ["owner", "staff"],
+    "consent_status": ["unknown", "opted_in", "opted_out"],
+    "escalation_category": [
+      "threat",
+      "injury",
+      "legal_claim",
+      "insurance_liability",
+      "payment_dispute",
+      "harassment",
+      "unsupported_discount",
+      "human_requested",
+      "other_high_risk"
+    ],
+    "escalation_status": ["open", "acknowledged", "resolved"],
+    "lead_lifecycle": [
+      "New",
+      "Contacted",
+      "Qualified",
+      "Appointment Scheduled",
+      "Inspected",
+      "Estimate Sent",
+      "Approved",
+      "In Progress",
+      "Completed",
+      "Paid",
+      "Lost",
+      "No response",
+      "No-show",
+      "Duplicate",
+      "Spam",
+      "Outside service capability"
+    ],
+    "message_channel": ["SMS", "MMS"],
+    "message_delivery_state": [
+      "queued",
+      "sending",
+      "sent",
+      "delivered",
+      "failed",
+      "received"
+    ],
+    "message_direction": ["inbound", "outbound"],
+    "message_job_status": ["pending", "processing", "succeeded", "failed", "dead"],
+    "message_job_type": [
+      "process_inbound",
+      "send_outbound",
+      "reconcile",
+      "renew_subscription"
+    ],
+    "sms_capability": ["SmsSender", "A2PSmsSender", "none", "unknown"],
+    "thread_control_mode": ["auto", "human"]
+  },
+  "functions": [
+    "bootstrap_first_owner",
+    "deny_lead_event_mutation",
+    "has_role",
+    "is_staff",
+    "set_updated_at"
+  ],
+  "triggers": [
+    { "name": "escalations_set_updated_at", "table": "escalations" },
+    { "name": "lead_events_no_delete", "table": "lead_events" },
+    { "name": "lead_events_no_update", "table": "lead_events" },
+    { "name": "leads_set_updated_at", "table": "leads" },
+    { "name": "message_jobs_set_updated_at", "table": "message_jobs" },
+    { "name": "message_threads_set_updated_at", "table": "message_threads" },
+    { "name": "messages_set_updated_at", "table": "messages" },
+    { "name": "ringcentral_subscriptions_set_updated_at", "table": "ringcentral_subscriptions" },
+    { "name": "on_auth_user_created_bootstrap_owner", "table": "auth.users" }
+  ],
+  "policies": [
+    "agent_runs_staff_select",
+    "escalations_staff_all",
+    "integration_health_owner_select",
+    "lead_events_staff_insert",
+    "lead_events_staff_select",
+    "leads_staff_all",
+    "message_jobs_staff_select",
+    "message_jobs_staff_update",
+    "message_threads_staff_all",
+    "messages_staff_all",
+    "ringcentral_subscriptions_owner_select",
+    "user_roles_self_select"
+  ],
+  "migrationGapNotes": [
+    "Lead-inbox DDL was applied via Lovable Cloud before git migrations existed.",
+    "Git migrations before this baseline were incremental (grants, auth, role-probe lock).",
+    "Production role probes (has_role/is_staff) were not yet locked to auth.uid() at inventory time; apply 20260827230000_lock_role_probe_to_caller.sql manually."
+  ]
+}
