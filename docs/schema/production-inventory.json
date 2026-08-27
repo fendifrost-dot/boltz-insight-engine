@@ -104,5 +104,6 @@
     "Lead-inbox DDL was applied via Lovable Cloud before git migrations existed.",
     "Git migrations before this baseline were incremental (grants, auth, role-probe lock).",
     "Production role probes (has_role/is_staff) were not yet locked to auth.uid() at inventory time; apply 20260827230000_lock_role_probe_to_caller.sql manually."
-  ]
+  ],
+  "derivedFrom": "docs/schema/production-export.json"
 }

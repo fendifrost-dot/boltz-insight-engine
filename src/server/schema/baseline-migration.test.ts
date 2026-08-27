@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import inventory from "../../../docs/schema/production-inventory.json" with { type: "json" };
+import productionExport from "../../../docs/schema/production-export.json" with { type: "json" };
 import { Constants } from "../../integrations/supabase/types.ts";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -27,6 +28,17 @@ test("baseline migration is additive (no drop table / recreate)", () => {
   assert.doesNotMatch(baselineSql, /\btruncate\b/i);
   assert.match(baselineSql, /CREATE TABLE IF NOT EXISTS/i);
   assert.match(baselineSql, /CREATE EXTENSION IF NOT EXISTS/i);
+});
+
+test("production export documents nine lead-inbox tables from live database", () => {
+  assert.deepEqual(productionExport.leadInboxTables.length, 9);
+  for (const table of productionExport.leadInboxTables) {
+    assert.match(
+      baselineSql,
+      new RegExp(`CREATE TABLE IF NOT EXISTS public\\.${table}\\b`, "i"),
+      `baseline missing lead-inbox table ${table} from production export`,
+    );
+  }
 });
 
 test("baseline migration defines all production tables", () => {

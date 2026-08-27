@@ -8,8 +8,9 @@ Authoritative references today:
 
 | Source | Role |
 |--------|------|
-| `docs/schema/production-inventory.json` | Snapshot of live production (2026-08-27) |
-| `src/integrations/supabase/types.ts` | Generated/client-facing schema contract |
+| `docs/schema/production-export.json` | **Authoritative** read-only export from live production queries |
+| `docs/schema/production-inventory.json` | Curated inventory derived from `production-export.json` |
+| `src/integrations/supabase/types.ts` | Generated client types (enums only; not sufficient alone) |
 | `supabase/migrations/20260825155900_baseline_ops_schema_adoption.sql` | Additive adoption baseline |
 
 ## Baseline migration
@@ -22,7 +23,7 @@ Authoritative references today:
 - `DROP POLICY IF EXISTS` then `CREATE POLICY` (no table drops)
 - Safe on **empty** and **existing production** databases
 
-It includes tables, enums, indexes, foreign keys, functions, grants, triggers, and RLS policies matching production inventory.
+It includes tables, enums, indexes, foreign keys, functions, grants, triggers, and RLS policies matching the **production export** (`production-export.json`), not reconstructed from `types.ts` alone.
 
 Later migrations remain for historical ordering and incremental hardening (notably `20260827230000_lock_role_probe_to_caller.sql`).
 

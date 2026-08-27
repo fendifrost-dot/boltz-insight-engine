@@ -295,7 +295,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS message_jobs_inbound_provider_unique
 
 CREATE INDEX IF NOT EXISTS message_jobs_pending_idx
   ON public.message_jobs (status, run_after)
-  WHERE status IN ('pending', 'failed');
+  WHERE status = ANY (ARRAY['pending'::public.message_job_status, 'failed'::public.message_job_status]);
 
 CREATE TABLE IF NOT EXISTS public.agent_runs (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

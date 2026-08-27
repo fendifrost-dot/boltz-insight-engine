@@ -1,0 +1,169 @@
+{
+  "capturedAt": "2026-08-27T23:40:00Z",
+  "source": "read-only query_database against Lovable Cloud Postgres",
+  "lovableProjectId": "123c17f7-5e89-430e-8f62-3bd379b4b1fa",
+  "supabaseProjectId": "smrbsnnisvmubbwfhafy",
+  "leadInboxTables": [
+    "leads",
+    "lead_events",
+    "message_threads",
+    "messages",
+    "message_jobs",
+    "agent_runs",
+    "escalations",
+    "ringcentral_subscriptions",
+    "integration_health_snapshots"
+  ],
+  "authTables": [
+    "user_roles"
+  ],
+  "note": "Authoritative production schema export. Baseline migration derived from this export, not from types.ts alone.",
+  "enums": {
+    "agent_action": [
+      "send",
+      "escalate",
+      "no_reply"
+    ],
+    "app_role": [
+      "owner",
+      "staff"
+    ],
+    "consent_status": [
+      "unknown",
+      "opted_in",
+      "opted_out"
+    ],
+    "escalation_category": [
+      "threat",
+      "injury",
+      "legal_claim",
+      "insurance_liability",
+      "payment_dispute",
+      "harassment",
+      "unsupported_discount",
+      "human_requested",
+      "other_high_risk"
+    ],
+    "escalation_status": [
+      "open",
+      "acknowledged",
+      "resolved"
+    ],
+    "lead_lifecycle": [
+      "New",
+      "Contacted",
+      "Qualified",
+      "Appointment Scheduled",
+      "Inspected",
+      "Estimate Sent",
+      "Approved",
+      "In Progress",
+      "Completed",
+      "Paid",
+      "Lost",
+      "No response",
+      "No-show",
+      "Duplicate",
+      "Spam",
+      "Outside service capability"
+    ],
+    "message_channel": [
+      "SMS",
+      "MMS"
+    ],
+    "message_delivery_state": [
+      "queued",
+      "sending",
+      "sent",
+      "delivered",
+      "failed",
+      "received"
+    ],
+    "message_direction": [
+      "inbound",
+      "outbound"
+    ],
+    "message_job_status": [
+      "pending",
+      "processing",
+      "succeeded",
+      "failed",
+      "dead"
+    ],
+    "message_job_type": [
+      "process_inbound",
+      "send_outbound",
+      "reconcile",
+      "renew_subscription"
+    ],
+    "sms_capability": [
+      "SmsSender",
+      "A2PSmsSender",
+      "none",
+      "unknown"
+    ],
+    "thread_control_mode": [
+      "auto",
+      "human"
+    ]
+  },
+  "functions": [
+    "bootstrap_first_owner",
+    "deny_lead_event_mutation",
+    "has_role",
+    "is_staff",
+    "set_updated_at"
+  ],
+  "policies": [
+    "agent_runs_staff_select",
+    "escalations_staff_all",
+    "integration_health_owner_select",
+    "lead_events_staff_insert",
+    "lead_events_staff_select",
+    "leads_staff_all",
+    "message_jobs_staff_select",
+    "message_jobs_staff_update",
+    "message_threads_staff_all",
+    "messages_staff_all",
+    "ringcentral_subscriptions_owner_select",
+    "user_roles_self_select"
+  ],
+  "triggers": [
+    {
+      "name": "escalations_set_updated_at",
+      "table": "escalations"
+    },
+    {
+      "name": "lead_events_no_delete",
+      "table": "lead_events"
+    },
+    {
+      "name": "lead_events_no_update",
+      "table": "lead_events"
+    },
+    {
+      "name": "leads_set_updated_at",
+      "table": "leads"
+    },
+    {
+      "name": "message_jobs_set_updated_at",
+      "table": "message_jobs"
+    },
+    {
+      "name": "message_threads_set_updated_at",
+      "table": "message_threads"
+    },
+    {
+      "name": "messages_set_updated_at",
+      "table": "messages"
+    },
+    {
+      "name": "ringcentral_subscriptions_set_updated_at",
+      "table": "ringcentral_subscriptions"
+    },
+    {
+      "name": "on_auth_user_created_bootstrap_owner",
+      "table": "auth.users"
+    }
+  ]
+}
