@@ -1,7 +1,7 @@
--- Boltz Operations OS schema baseline (additive adoption migration).
--- Captures production lead-inbox + auth objects for reproducibility.
--- Safe on: empty database (creates objects) and existing production (IF NOT EXISTS / OR REPLACE).
--- Does NOT drop or recreate live tables. Manual rollout only — do not auto-deploy.
+-- Lead-inbox foundation baseline (pre-existing schema later migrations assumed).
+-- Creates nine lead-inbox tables, twelve enums, indexes, triggers, and helper functions.
+-- Does NOT create auth roles, staff RLS policies, or grants (see migrations after 20260825165448).
+-- Idempotent for production adoption and repeated execution. Manual rollout only.
 
 -- Lead inbox foundation for RingCentral SMS + Grok.
 -- Preserves null-for-unknown conventions used by SEO/GEO ops.
@@ -14,118 +14,130 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 -- ---------------------------------------------------------------------------
 
 
-  DO $$ BEGIN
-    CREATE TYPE public.lead_lifecycle AS ENUM (
-'New',
-'Contacted',
-'Qualified',
-'Appointment Scheduled',
-'Inspected',
-'Estimate Sent',
-'Approved',
-'In Progress',
-'Completed',
-'Paid',
-'Lost',
-'No response',
-'No-show',
-'Duplicate',
-'Spam',
-'Outside service capability'
-    );
-  EXCEPTION WHEN duplicate_object THEN NULL;
-  END $$;
+DO $$ BEGIN
+  CREATE TYPE public.lead_lifecycle AS ENUM (
+  'New',
+  'Contacted',
+  'Qualified',
+  'Appointment Scheduled',
+  'Inspected',
+  'Estimate Sent',
+  'Approved',
+  'In Progress',
+  'Completed',
+  'Paid',
+  'Lost',
+  'No response',
+  'No-show',
+  'Duplicate',
+  'Spam',
+  'Outside service capability'
+  );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 
-  DO $$ BEGIN
-    CREATE TYPE public.consent_status AS ENUM (
-'unknown',
-'opted_in',
-'opted_out'
-    );
-  EXCEPTION WHEN duplicate_object THEN NULL;
-  END $$;
+DO $$ BEGIN
+  CREATE TYPE public.consent_status AS ENUM (
+  'unknown',
+  'opted_in',
+  'opted_out'
+  );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
-CREATE TYPE public.message_direction AS ENUM ('inbound', 'outbound');
+DO $$ BEGIN
+  CREATE TYPE public.message_direction AS ENUM ('inbound', 'outbound');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
-CREATE TYPE public.message_channel AS ENUM ('SMS', 'MMS');
-
-
-  DO $$ BEGIN
-    CREATE TYPE public.message_delivery_state AS ENUM (
-'queued',
-'sending',
-'sent',
-'delivered',
-'failed',
-'received'
-    );
-  EXCEPTION WHEN duplicate_object THEN NULL;
-  END $$;
-
-CREATE TYPE public.thread_control_mode AS ENUM ('auto', 'human');
+DO $$ BEGIN
+  CREATE TYPE public.message_channel AS ENUM ('SMS', 'MMS');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 
-  DO $$ BEGIN
-    CREATE TYPE public.message_job_type AS ENUM (
-'process_inbound',
-'send_outbound',
-'reconcile',
-'renew_subscription'
-    );
-  EXCEPTION WHEN duplicate_object THEN NULL;
-  END $$;
+DO $$ BEGIN
+  CREATE TYPE public.message_delivery_state AS ENUM (
+  'queued',
+  'sending',
+  'sent',
+  'delivered',
+  'failed',
+  'received'
+  );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  CREATE TYPE public.thread_control_mode AS ENUM ('auto', 'human');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 
-  DO $$ BEGIN
-    CREATE TYPE public.message_job_status AS ENUM (
-'pending',
-'processing',
-'succeeded',
-'failed',
-'dead'
-    );
-  EXCEPTION WHEN duplicate_object THEN NULL;
-  END $$;
-
-CREATE TYPE public.agent_action AS ENUM ('send', 'escalate', 'no_reply');
+DO $$ BEGIN
+  CREATE TYPE public.message_job_type AS ENUM (
+  'process_inbound',
+  'send_outbound',
+  'reconcile',
+  'renew_subscription'
+  );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 
-  DO $$ BEGIN
-    CREATE TYPE public.escalation_category AS ENUM (
-'threat',
-'injury',
-'legal_claim',
-'insurance_liability',
-'payment_dispute',
-'harassment',
-'unsupported_discount',
-'human_requested',
-'other_high_risk'
-    );
-  EXCEPTION WHEN duplicate_object THEN NULL;
-  END $$;
+DO $$ BEGIN
+  CREATE TYPE public.message_job_status AS ENUM (
+  'pending',
+  'processing',
+  'succeeded',
+  'failed',
+  'dead'
+  );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  CREATE TYPE public.agent_action AS ENUM ('send', 'escalate', 'no_reply');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 
-  DO $$ BEGIN
-    CREATE TYPE public.escalation_status AS ENUM (
-'open',
-'acknowledged',
-'resolved'
-    );
-  EXCEPTION WHEN duplicate_object THEN NULL;
-  END $$;
+DO $$ BEGIN
+  CREATE TYPE public.escalation_category AS ENUM (
+  'threat',
+  'injury',
+  'legal_claim',
+  'insurance_liability',
+  'payment_dispute',
+  'harassment',
+  'unsupported_discount',
+  'human_requested',
+  'other_high_risk'
+  );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 
-  DO $$ BEGIN
-    CREATE TYPE public.sms_capability AS ENUM (
-'SmsSender',
-'A2PSmsSender',
-'none',
-'unknown'
-    );
-  EXCEPTION WHEN duplicate_object THEN NULL;
-  END $$;
+DO $$ BEGIN
+  CREATE TYPE public.escalation_status AS ENUM (
+  'open',
+  'acknowledged',
+  'resolved'
+  );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+
+DO $$ BEGIN
+  CREATE TYPE public.sms_capability AS ENUM (
+  'SmsSender',
+  'A2PSmsSender',
+  'none',
+  'unknown'
+  );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- ---------------------------------------------------------------------------
 -- Tables
@@ -201,10 +213,12 @@ BEGIN
 END;
 $$;
 
+DROP TRIGGER IF EXISTS lead_events_no_update ON public.lead_events;
 CREATE TRIGGER lead_events_no_update
   BEFORE UPDATE ON public.lead_events
   FOR EACH ROW EXECUTE FUNCTION public.deny_lead_event_mutation();
 
+DROP TRIGGER IF EXISTS lead_events_no_delete ON public.lead_events;
 CREATE TRIGGER lead_events_no_delete
   BEFORE DELETE ON public.lead_events
   FOR EACH ROW EXECUTE FUNCTION public.deny_lead_event_mutation();
@@ -391,26 +405,32 @@ BEGIN
 END;
 $$;
 
+DROP TRIGGER IF EXISTS leads_set_updated_at ON public.leads;
 CREATE TRIGGER leads_set_updated_at
   BEFORE UPDATE ON public.leads
   FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
+DROP TRIGGER IF EXISTS message_threads_set_updated_at ON public.message_threads;
 CREATE TRIGGER message_threads_set_updated_at
   BEFORE UPDATE ON public.message_threads
   FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
+DROP TRIGGER IF EXISTS messages_set_updated_at ON public.messages;
 CREATE TRIGGER messages_set_updated_at
   BEFORE UPDATE ON public.messages
   FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
+DROP TRIGGER IF EXISTS message_jobs_set_updated_at ON public.message_jobs;
 CREATE TRIGGER message_jobs_set_updated_at
   BEFORE UPDATE ON public.message_jobs
   FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
+DROP TRIGGER IF EXISTS escalations_set_updated_at ON public.escalations;
 CREATE TRIGGER escalations_set_updated_at
   BEFORE UPDATE ON public.escalations
   FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
+DROP TRIGGER IF EXISTS ringcentral_subscriptions_set_updated_at ON public.ringcentral_subscriptions;
 CREATE TRIGGER ringcentral_subscriptions_set_updated_at
   BEFORE UPDATE ON public.ringcentral_subscriptions
   FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
@@ -418,70 +438,7 @@ CREATE TRIGGER ringcentral_subscriptions_set_updated_at
 -- ---------------------------------------------------------------------------
 
 -- ---------------------------------------------------------------------------
--- Auth helpers (must exist before staff/owner RLS policies)
--- ---------------------------------------------------------------------------
-
-DO $$ BEGIN
-  CREATE TYPE public.app_role AS ENUM ('owner', 'staff');
-EXCEPTION WHEN duplicate_object THEN NULL;
-END $$;
-
-CREATE TABLE IF NOT EXISTS public.user_roles (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id uuid REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
-  role public.app_role NOT NULL,
-  created_at timestamptz NOT NULL DEFAULT now(),
-  UNIQUE (user_id, role)
-);
-
-ALTER TABLE public.user_roles ENABLE ROW LEVEL SECURITY;
-
-CREATE OR REPLACE FUNCTION public.has_role(_user_id uuid, _role public.app_role)
-RETURNS boolean
-LANGUAGE sql
-STABLE
-SECURITY DEFINER
-SET search_path = public
-AS $$
-  SELECT EXISTS (
-    SELECT 1 FROM public.user_roles WHERE user_id = _user_id AND role = _role
-  );
-$$;
-
-CREATE OR REPLACE FUNCTION public.is_staff(_user_id uuid)
-RETURNS boolean
-LANGUAGE sql
-STABLE
-SECURITY DEFINER
-SET search_path = public
-AS $$
-  SELECT EXISTS (
-    SELECT 1 FROM public.user_roles WHERE user_id = _user_id AND role IN ('owner', 'staff')
-  );
-$$;
-
-CREATE OR REPLACE FUNCTION public.bootstrap_first_owner()
-RETURNS trigger
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM public.user_roles WHERE role = 'owner') THEN
-    INSERT INTO public.user_roles (user_id, role) VALUES (NEW.id, 'owner')
-    ON CONFLICT DO NOTHING;
-  END IF;
-  RETURN NEW;
-END;
-$$;
-
-DROP TRIGGER IF EXISTS on_auth_user_created_bootstrap_owner ON auth.users;
-CREATE TRIGGER on_auth_user_created_bootstrap_owner
-  AFTER INSERT ON auth.users
-  FOR EACH ROW EXECUTE FUNCTION public.bootstrap_first_owner();
-
--- ---------------------------------------------------------------------------
--- Row Level Security — staff/owner portal (production baseline)
+-- Row Level Security (enabled; policies added by later migrations)
 -- ---------------------------------------------------------------------------
 
 ALTER TABLE public.leads ENABLE ROW LEVEL SECURITY;
@@ -493,107 +450,3 @@ ALTER TABLE public.agent_runs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.escalations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ringcentral_subscriptions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.integration_health_snapshots ENABLE ROW LEVEL SECURITY;
-
--- Drop legacy permissive policies if present (safe on production adoption)
-DROP POLICY IF EXISTS leads_authenticated_all ON public.leads;
-DROP POLICY IF EXISTS lead_events_authenticated_select ON public.lead_events;
-DROP POLICY IF EXISTS lead_events_authenticated_insert ON public.lead_events;
-DROP POLICY IF EXISTS message_threads_authenticated_all ON public.message_threads;
-DROP POLICY IF EXISTS messages_authenticated_all ON public.messages;
-DROP POLICY IF EXISTS message_jobs_authenticated_select ON public.message_jobs;
-DROP POLICY IF EXISTS message_jobs_authenticated_update ON public.message_jobs;
-DROP POLICY IF EXISTS agent_runs_authenticated_select ON public.agent_runs;
-DROP POLICY IF EXISTS escalations_authenticated_all ON public.escalations;
-DROP POLICY IF EXISTS ringcentral_subscriptions_authenticated_select ON public.ringcentral_subscriptions;
-DROP POLICY IF EXISTS integration_health_authenticated_select ON public.integration_health_snapshots;
-
-DROP POLICY IF EXISTS agent_runs_staff_select ON public.agent_runs;
-CREATE POLICY agent_runs_staff_select ON public.agent_runs
-  FOR SELECT TO authenticated USING (public.is_staff(auth.uid()));
-
-DROP POLICY IF EXISTS escalations_staff_all ON public.escalations;
-CREATE POLICY escalations_staff_all ON public.escalations
-  FOR ALL TO authenticated USING (public.is_staff(auth.uid())) WITH CHECK (public.is_staff(auth.uid()));
-
-DROP POLICY IF EXISTS integration_health_owner_select ON public.integration_health_snapshots;
-CREATE POLICY integration_health_owner_select ON public.integration_health_snapshots
-  FOR SELECT TO authenticated USING (public.has_role(auth.uid(), 'owner'));
-
-DROP POLICY IF EXISTS lead_events_staff_select ON public.lead_events;
-CREATE POLICY lead_events_staff_select ON public.lead_events
-  FOR SELECT TO authenticated USING (public.is_staff(auth.uid()));
-
-DROP POLICY IF EXISTS lead_events_staff_insert ON public.lead_events;
-CREATE POLICY lead_events_staff_insert ON public.lead_events
-  FOR INSERT TO authenticated WITH CHECK (public.is_staff(auth.uid()));
-
-DROP POLICY IF EXISTS leads_staff_all ON public.leads;
-CREATE POLICY leads_staff_all ON public.leads
-  FOR ALL TO authenticated USING (public.is_staff(auth.uid())) WITH CHECK (public.is_staff(auth.uid()));
-
-DROP POLICY IF EXISTS message_jobs_staff_select ON public.message_jobs;
-CREATE POLICY message_jobs_staff_select ON public.message_jobs
-  FOR SELECT TO authenticated USING (public.is_staff(auth.uid()));
-
-DROP POLICY IF EXISTS message_jobs_staff_update ON public.message_jobs;
-CREATE POLICY message_jobs_staff_update ON public.message_jobs
-  FOR UPDATE TO authenticated USING (public.is_staff(auth.uid())) WITH CHECK (public.is_staff(auth.uid()));
-
-DROP POLICY IF EXISTS message_threads_staff_all ON public.message_threads;
-CREATE POLICY message_threads_staff_all ON public.message_threads
-  FOR ALL TO authenticated USING (public.is_staff(auth.uid())) WITH CHECK (public.is_staff(auth.uid()));
-
-DROP POLICY IF EXISTS messages_staff_all ON public.messages;
-CREATE POLICY messages_staff_all ON public.messages
-  FOR ALL TO authenticated USING (public.is_staff(auth.uid())) WITH CHECK (public.is_staff(auth.uid()));
-
-DROP POLICY IF EXISTS ringcentral_subscriptions_owner_select ON public.ringcentral_subscriptions;
-CREATE POLICY ringcentral_subscriptions_owner_select ON public.ringcentral_subscriptions
-  FOR SELECT TO authenticated USING (public.has_role(auth.uid(), 'owner'));
-
-DROP POLICY IF EXISTS user_roles_self_select ON public.user_roles;
-CREATE POLICY user_roles_self_select ON public.user_roles
-  FOR SELECT TO authenticated
-  USING (user_id = auth.uid() OR public.has_role(auth.uid(), 'owner'));
-
--- ---------------------------------------------------------------------------
--- Grants (matches production + later incremental migrations)
--- ---------------------------------------------------------------------------
-
-REVOKE ALL ON public.leads FROM anon;
-REVOKE ALL ON public.lead_events FROM anon;
-REVOKE ALL ON public.message_threads FROM anon;
-REVOKE ALL ON public.messages FROM anon;
-REVOKE ALL ON public.message_jobs FROM anon;
-REVOKE ALL ON public.agent_runs FROM anon;
-REVOKE ALL ON public.escalations FROM anon;
-REVOKE ALL ON public.ringcentral_subscriptions FROM anon;
-REVOKE ALL ON public.integration_health_snapshots FROM anon;
-
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.leads TO authenticated;
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.message_threads TO authenticated;
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.messages TO authenticated;
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.escalations TO authenticated;
-GRANT SELECT, INSERT ON public.lead_events TO authenticated;
-GRANT SELECT, UPDATE ON public.message_jobs TO authenticated;
-GRANT SELECT ON public.agent_runs TO authenticated;
-GRANT SELECT ON public.ringcentral_subscriptions TO authenticated;
-GRANT SELECT ON public.integration_health_snapshots TO authenticated;
-
-GRANT ALL ON public.leads TO service_role;
-GRANT ALL ON public.lead_events TO service_role;
-GRANT ALL ON public.message_threads TO service_role;
-GRANT ALL ON public.messages TO service_role;
-GRANT ALL ON public.message_jobs TO service_role;
-GRANT ALL ON public.agent_runs TO service_role;
-GRANT ALL ON public.escalations TO service_role;
-GRANT ALL ON public.ringcentral_subscriptions TO service_role;
-GRANT ALL ON public.integration_health_snapshots TO service_role;
-
-GRANT SELECT ON public.user_roles TO authenticated;
-GRANT ALL ON public.user_roles TO service_role;
-
-REVOKE ALL ON FUNCTION public.has_role(uuid, public.app_role) FROM PUBLIC, anon;
-REVOKE ALL ON FUNCTION public.is_staff(uuid) FROM PUBLIC, anon;
-GRANT EXECUTE ON FUNCTION public.has_role(uuid, public.app_role) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.is_staff(uuid) TO authenticated;

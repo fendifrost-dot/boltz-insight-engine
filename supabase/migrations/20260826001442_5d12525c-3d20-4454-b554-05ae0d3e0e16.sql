@@ -1,10 +1,7 @@
 
-DO $$ BEGIN
-  CREATE TYPE public.app_role AS ENUM ('owner','staff');
-EXCEPTION WHEN duplicate_object THEN NULL;
-END $$;
+create type public.app_role as enum ('owner','staff');
 
-CREATE TABLE IF NOT EXISTS public.user_roles (
+create table public.user_roles (
   id uuid primary key default gen_random_uuid(),
   user_id uuid references auth.users(id) on delete cascade not null,
   role public.app_role not null,
