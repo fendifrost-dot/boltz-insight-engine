@@ -148,8 +148,8 @@ export const setAdsCampaignStatus = createServerFn({ method: "POST" })
 
     const result = await adsMutate("campaigns", operations, {
       confirmed: data.confirm,
-      dryRun: data.dryRun ?? true,
-    } as never);
+      validateOnly: data.dryRun ?? true,
+    });
 
     return {
       ok: result.ok,
