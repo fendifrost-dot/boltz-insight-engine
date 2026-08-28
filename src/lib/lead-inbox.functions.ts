@@ -107,6 +107,7 @@ export const sendOwnerMessage = createServerFn({ method: "POST" })
         leadId: z.string().uuid(),
         threadId: z.string().uuid(),
         text: z.string().min(1).max(480),
+        operationId: z.string().uuid(),
         expectedPhone: z.string().max(40).optional(),
       })
       .parse(input),
@@ -157,7 +158,7 @@ export const sendOwnerMessage = createServerFn({ method: "POST" })
       threadId: thread.id,
       to: leadPhone,
       text: data.text,
-      idempotencyKey: `owner:${thread.id}:${Date.now()}`,
+      idempotencyKey: `owner:${thread.id}:${data.operationId}`,
       actor: `owner:${context.userId}`,
     });
     return outcome.ok
@@ -278,6 +279,7 @@ export const startOwnerSms = createServerFn({ method: "POST" })
       .object({
         phone: z.string().min(1),
         text: z.string().min(1).max(480),
+        operationId: z.string().uuid(),
         name: z.string().max(200).optional(),
         vehicleYear: z.coerce.number().int().min(1900).max(2100).optional(),
         vehicleMake: z.string().max(100).optional(),
@@ -373,7 +375,7 @@ export const startOwnerSms = createServerFn({ method: "POST" })
       threadId: thread.id,
       to: normalized,
       text: data.text,
-      idempotencyKey: `owner-new:${thread.id}:${Date.now()}`,
+      idempotencyKey: `owner-new:${thread.id}:${data.operationId}`,
       actor,
     });
 

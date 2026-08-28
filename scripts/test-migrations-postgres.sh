@@ -33,6 +33,7 @@ MIGRATIONS=(
   "supabase/migrations/20260828013000_apply_lead_lifecycle_transition.sql"
   "supabase/migrations/20260828070000_claim_message_jobs_rpc.sql"
   "supabase/migrations/20260828110000_correlation_outbound_idempotency.sql"
+  "supabase/migrations/20260828140000_outbound_reservation_hardening.sql"
 )
 
 psql_cmd() {
@@ -520,6 +521,7 @@ DECLARE
   v_reserve_b jsonb;
   v_complete jsonb;
   v_retry jsonb;
+  v_generation integer;
 BEGIN
   v_corr_a := public.derive_inbound_correlation_id('ringcentral', 'prov-123');
   v_corr_b := public.derive_inbound_correlation_id('ringcentral', 'prov-123');
@@ -583,13 +585,23 @@ BEGIN
     RAISE EXCEPTION 'concurrent reservation must skip while sending, got %', v_reserve_b;
   END IF;
 
+  v_generation := (v_reserve_a->>'claim_generation')::integer;
+  IF v_generation IS NULL OR v_generation < 1 THEN
+    RAISE EXCEPTION 'reservation must return claim_generation, got %', v_reserve_a;
+  END IF;
+
   v_complete := public.complete_outbound_send(
     'agent:test-message',
+    v_generation,
     'rc-msg-1',
     NULL
   );
   IF v_complete->>'status' <> 'sent' THEN
     RAISE EXCEPTION 'complete_outbound_send must mark sent, got %', v_complete;
+  END IF;
+
+  IF public.complete_outbound_send('agent:test-message', v_generation, 'rc-msg-2', NULL)->>'status' <> 'lost_reservation' THEN
+    RAISE EXCEPTION 'complete_outbound_send must fence stale claim generation';
   END IF;
 
   v_retry := public.reserve_outbound_send(
@@ -614,7 +626,10 @@ BEGIN
     'Ambiguous body',
     120000
   );
-  PERFORM public.mark_outbound_send_ambiguous('agent:ambiguous', 'rc-msg-2', 'provider succeeded locally failed');
+  v_generation := (
+    SELECT claim_generation FROM public.outbound_send_reservations WHERE idempotency_key = 'agent:ambiguous'
+  );
+  PERFORM public.mark_outbound_send_ambiguous('agent:ambiguous', v_generation, 'rc-msg-2', 'provider succeeded locally failed');
   v_retry := public.reserve_outbound_send(
     'agent:ambiguous',
     v_corr_a,
@@ -626,6 +641,58 @@ BEGIN
   );
   IF v_retry->>'action' <> 'review' OR v_retry->>'status' <> 'ambiguous' THEN
     RAISE EXCEPTION 'ambiguous reservation must require review, got %', v_retry;
+  END IF;
+
+  v_retry := public.reserve_outbound_send(
+    'agent:stale',
+    v_corr_a,
+    v_lead_id,
+    v_thread_id,
+    '+15555550999',
+    'stale body',
+    120000
+  );
+  UPDATE public.outbound_send_reservations
+  SET status = 'sending', locked_at = now() - interval '10 minutes', claim_generation = 3
+  WHERE idempotency_key = 'agent:stale';
+
+  v_retry := public.reserve_outbound_send(
+    'agent:stale',
+    v_corr_a,
+    v_lead_id,
+    v_thread_id,
+    '+15555550999',
+    'stale body',
+    120000
+  );
+  IF v_retry->>'action' <> 'review' OR v_retry->>'status' <> 'ambiguous' THEN
+    RAISE EXCEPTION 'expired sending lease must become ambiguous review, got %', v_retry;
+  END IF;
+
+  v_retry := public.reserve_outbound_send(
+    'agent:retryable',
+    v_corr_a,
+    v_lead_id,
+    v_thread_id,
+    '+15555550999',
+    'retry body',
+    120000
+  );
+  IF v_retry->>'action' <> 'send' THEN
+    RAISE EXCEPTION 'initial retryable reservation must allow send, got %', v_retry;
+  END IF;
+  PERFORM public.fail_outbound_send('agent:retryable', 1, 'confirmed provider rejection');
+  v_retry := public.reserve_outbound_send(
+    'agent:retryable',
+    v_corr_a,
+    v_lead_id,
+    v_thread_id,
+    '+15555550999',
+    'retry body',
+    120000
+  );
+  IF v_retry->>'action' <> 'send' THEN
+    RAISE EXCEPTION 'retryable confirmed failure may reclaim send, got %', v_retry;
   END IF;
 
   BEGIN

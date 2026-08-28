@@ -425,6 +425,7 @@ export type Database = {
       outbound_send_reservations: {
         Row: {
           body_hash: string
+          claim_generation: number
           correlation_id: string | null
           created_at: string
           id: string
@@ -435,6 +436,7 @@ export type Database = {
           message_id: string | null
           provider_message_id: string | null
           recipient_e164: string
+          retryable: boolean
           sent_at: string | null
           status: Database["public"]["Enums"]["outbound_send_status"]
           thread_id: string
@@ -452,6 +454,7 @@ export type Database = {
           message_id?: string | null
           provider_message_id?: string | null
           recipient_e164: string
+          retryable?: boolean
           sent_at?: string | null
           status?: Database["public"]["Enums"]["outbound_send_status"]
           thread_id: string
@@ -459,6 +462,7 @@ export type Database = {
         }
         Update: {
           body_hash?: string
+          claim_generation?: number
           correlation_id?: string | null
           created_at?: string
           id?: string
@@ -731,6 +735,7 @@ export type Database = {
       }
       complete_outbound_send: {
         Args: {
+          _expected_claim_generation: number
           _idempotency_key: string
           _message_id: string | null
           _provider_message_id: string | null
@@ -750,7 +755,7 @@ export type Database = {
         Returns: Json
       }
       fail_outbound_send: {
-        Args: { _error: string; _idempotency_key: string }
+        Args: { _error: string; _expected_claim_generation: number; _idempotency_key: string }
         Returns: Json
       }
       has_role: {
@@ -764,6 +769,7 @@ export type Database = {
       mark_outbound_send_ambiguous: {
         Args: {
           _detail: string
+          _expected_claim_generation: number
           _idempotency_key: string
           _provider_message_id: string | null
         }

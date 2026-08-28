@@ -4,6 +4,7 @@ export type OutboundReservationResult = {
   action: OutboundReservationAction;
   status: string;
   reservationId?: string;
+  claimGeneration?: number;
   messageId?: string | null;
   providerMessageId?: string | null;
   reason?: string;
@@ -19,6 +20,12 @@ export function parseOutboundReservationResult(data: unknown): OutboundReservati
     action,
     status: String(payload.status ?? "unknown"),
     reservationId: typeof payload.reservation_id === "string" ? payload.reservation_id : undefined,
+    claimGeneration:
+      typeof payload.claim_generation === "number"
+        ? payload.claim_generation
+        : typeof payload.claim_generation === "string"
+          ? Number(payload.claim_generation)
+          : undefined,
     messageId: typeof payload.message_id === "string" ? payload.message_id : null,
     providerMessageId:
       typeof payload.provider_message_id === "string" ? payload.provider_message_id : null,

@@ -1,6 +1,10 @@
 // Single outbound send path: capability check, reservation, idempotency, audit.
 import { logCorrelation } from "./correlation-log";
 import { resolveSmsCapability, sendSms, redact } from "./ringcentral.server";
+import {
+  RingCentralSendError,
+  isAmbiguousSendError,
+} from "./ringcentral-send-error.ts";
 import { requireSecret } from "./env.server";
 import { validateOutbound } from "./safety.server";
 import {
@@ -30,6 +34,20 @@ export async function cachedCapability(force = false) {
 export type SendOutcome =
   | { ok: true; message: MessageRow | null; duplicate: boolean }
   | { ok: false; reason: string; tags?: string[]; requiresReview?: boolean };
+
+async function markSendAmbiguous(args: {
+  idempotencyKey: string;
+  claimGeneration: number;
+  providerMessageId?: string | null;
+  detail: string;
+}): Promise<void> {
+  await markOutboundSendAmbiguous({
+    idempotencyKey: args.idempotencyKey,
+    claimGeneration: args.claimGeneration,
+    providerMessageId: args.providerMessageId ?? null,
+    detail: args.detail,
+  });
+}
 
 export async function sendOutbound(args: {
   leadId: string;
@@ -84,6 +102,7 @@ export async function sendOutbound(args: {
     status: reservation.status,
     idempotency_key: args.idempotencyKey,
     actor: args.actor,
+    claim_generation: reservation.claimGeneration ?? null,
   });
 
   if (reservation.action === "skip") {
@@ -107,8 +126,19 @@ export async function sendOutbound(args: {
     };
   }
 
+  const claimGeneration = reservation.claimGeneration;
+  if (claimGeneration == null || Number.isNaN(claimGeneration)) {
+    return { ok: false, reason: "Outbound reservation missing claim generation", requiresReview: true };
+  }
+
+  let providerAccepted = false;
+  let providerMessageId: string | null = null;
+
   try {
     const result = await sendSms({ to, text: args.text, capability: capability.capability });
+    providerAccepted = true;
+    providerMessageId = result.providerMessageId;
+
     let message: MessageRow | null = null;
     try {
       message = await recordOutboundMessage({
@@ -129,16 +159,29 @@ export async function sendOutbound(args: {
       }
       await completeOutboundSendReservation({
         idempotencyKey: args.idempotencyKey,
+        claimGeneration,
         providerMessageId: result.providerMessageId,
         messageId: message?.id ?? null,
       });
     } catch (persistError) {
-      await markOutboundSendAmbiguous({
+      const detail = persistError instanceof Error ? persistError.message : String(persistError);
+      await markSendAmbiguous({
         idempotencyKey: args.idempotencyKey,
+        claimGeneration,
         providerMessageId: result.providerMessageId,
-        detail: persistError instanceof Error ? persistError.message : String(persistError),
+        detail: `Provider accepted SMS but local persistence failed: ${detail}`,
       });
-      throw persistError;
+      await recordHealth({
+        provider: "ringcentral",
+        checkName: "send_sms",
+        ok: false,
+        detail: redact(detail),
+      });
+      return {
+        ok: false,
+        reason: "SMS provider accepted the message but local persistence failed; requires human review",
+        requiresReview: true,
+      };
     }
 
     await addEvent(
@@ -154,7 +197,33 @@ export async function sendOutbound(args: {
     return { ok: true, message, duplicate: message === null };
   } catch (error) {
     const detail = redact(error instanceof Error ? error.message : String(error));
-    await failOutboundSendReservation({ idempotencyKey: args.idempotencyKey, error: detail });
+    const ambiguous =
+      providerAccepted ||
+      (error instanceof RingCentralSendError && error.kind === "ambiguous") ||
+      isAmbiguousSendError(error);
+
+    if (ambiguous) {
+      await markSendAmbiguous({
+        idempotencyKey: args.idempotencyKey,
+        claimGeneration,
+        providerMessageId,
+        detail: providerAccepted
+          ? `Provider may have accepted SMS before failure: ${detail}`
+          : detail,
+      });
+      await recordHealth({ provider: "ringcentral", checkName: "send_sms", ok: false, detail });
+      return {
+        ok: false,
+        reason: "Outbound send outcome is ambiguous; requires human review before retry",
+        requiresReview: true,
+      };
+    }
+
+    await failOutboundSendReservation({
+      idempotencyKey: args.idempotencyKey,
+      claimGeneration,
+      error: detail,
+    });
     await recordHealth({ provider: "ringcentral", checkName: "send_sms", ok: false, detail });
     return { ok: false, reason: detail };
   }

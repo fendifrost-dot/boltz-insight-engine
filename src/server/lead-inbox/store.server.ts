@@ -272,11 +272,13 @@ export async function reserveOutboundSend(args: {
 
 export async function completeOutboundSendReservation(args: {
   idempotencyKey: string;
+  claimGeneration: number;
   providerMessageId: string | null;
   messageId: string | null;
 }): Promise<void> {
   const { data, error } = await supabaseAdmin.rpc("complete_outbound_send", {
     _idempotency_key: args.idempotencyKey,
+    _expected_claim_generation: args.claimGeneration,
     _provider_message_id: args.providerMessageId,
     _message_id: args.messageId,
   });
@@ -292,10 +294,12 @@ export async function completeOutboundSendReservation(args: {
 
 export async function failOutboundSendReservation(args: {
   idempotencyKey: string;
+  claimGeneration: number;
   error: string;
 }): Promise<void> {
   const { data, error } = await supabaseAdmin.rpc("fail_outbound_send", {
     _idempotency_key: args.idempotencyKey,
+    _expected_claim_generation: args.claimGeneration,
     _error: args.error.slice(0, 600),
   });
   if (error) throw error;
@@ -303,11 +307,13 @@ export async function failOutboundSendReservation(args: {
 
 export async function markOutboundSendAmbiguous(args: {
   idempotencyKey: string;
+  claimGeneration: number;
   providerMessageId?: string | null;
   detail: string;
 }): Promise<void> {
   const { data, error } = await supabaseAdmin.rpc("mark_outbound_send_ambiguous", {
     _idempotency_key: args.idempotencyKey,
+    _expected_claim_generation: args.claimGeneration,
     _provider_message_id: args.providerMessageId ?? null,
     _detail: args.detail.slice(0, 600),
   });

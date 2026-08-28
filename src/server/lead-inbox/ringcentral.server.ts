@@ -1,5 +1,9 @@
 // RingCentral REST adapter. Server-only: never call from the browser.
 import { readSecret, requireSecret } from "./env.server";
+import {
+  RingCentralSendError,
+  classifyRingCentralHttpFailure,
+} from "./ringcentral-send-error.ts";
 
 type TokenCache = { token: string; expiresAt: number };
 let tokenCache: TokenCache | undefined;
@@ -56,6 +60,38 @@ async function rcJson<T>(path: string, init: RequestInit = {}): Promise<T> {
   return (text ? JSON.parse(text) : {}) as T;
 }
 
+async function rcSendJson<T>(path: string, init: RequestInit = {}): Promise<T> {
+  let res: Response;
+  try {
+    res = await rcFetch(path, init);
+  } catch (error) {
+    throw new RingCentralSendError(
+      error instanceof Error ? error.message : String(error),
+      "ambiguous",
+    );
+  }
+
+  const text = await res.text();
+  if (!res.ok) {
+    throw new RingCentralSendError(
+      `RingCentral ${path} failed (${res.status}): ${redact(text)}`,
+      classifyRingCentralHttpFailure(res.status),
+      res.status,
+    );
+  }
+
+  if (!text) return {} as T;
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new RingCentralSendError(
+      `RingCentral ${path} returned unparseable provider response`,
+      "ambiguous",
+      res.status,
+    );
+  }
+}
+
 /** Strip anything token-shaped out of provider error text before logging. */
 export function redact(text: string): string {
   return text
@@ -108,7 +144,7 @@ export async function sendSms(args: {
   const from = requireSecret("RINGCENTRAL_FROM_NUMBER");
 
   if (args.capability === "A2PSmsSender") {
-    const json = await rcJson<{
+    const json = await rcSendJson<{
       id?: string;
       creationTime?: string;
       messages?: { id?: string }[];
@@ -127,7 +163,7 @@ export async function sendSms(args: {
     };
   }
 
-  const json = await rcJson<{
+  const json = await rcSendJson<{
     id?: number | string;
     creationTime?: string;
     messageStatus?: string;

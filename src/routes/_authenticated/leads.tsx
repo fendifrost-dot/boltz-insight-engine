@@ -93,6 +93,7 @@ function LeadsPage() {
           leadId: check.leadId,
           threadId: check.threadId,
           text,
+          operationId: crypto.randomUUID(),
           expectedPhone: headerPhone ?? undefined,
         },
       });
@@ -118,6 +119,7 @@ function LeadsPage() {
         data: {
           phone: newPhone,
           text: newText,
+          operationId: crypto.randomUUID(),
           name: newName || undefined,
         },
       }),

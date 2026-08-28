@@ -9,7 +9,7 @@
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
     "lint": "eslint .",
-    "test": "node --experimental-strip-types --test src/lib/lead-inbox-thread-sync.test.ts src/lib/start-owner-sms-policy.test.ts src/lib/start-owner-sms-auth.test.ts src/lib/lifecycle-transitions.test.ts src/lib/grok-prompt.test.ts src/lib/correlation.test.ts src/lib/server-capability-gates.test.ts src/server/authz/capabilities.test.ts src/server/authz/role-probe-migration.test.ts src/server/schema/baseline-migration.test.ts src/server/lead-inbox/job-lease.test.ts src/server/lead-inbox/outbound-reservation.test.ts src/server/lead-inbox/correlation-idempotency.test.ts",
+    "test": "node --experimental-strip-types --test src/lib/lead-inbox-thread-sync.test.ts src/lib/start-owner-sms-policy.test.ts src/lib/start-owner-sms-auth.test.ts src/lib/lifecycle-transitions.test.ts src/lib/grok-prompt.test.ts src/lib/correlation.test.ts src/lib/server-capability-gates.test.ts src/server/authz/capabilities.test.ts src/server/authz/role-probe-migration.test.ts src/server/schema/baseline-migration.test.ts src/server/lead-inbox/job-lease.test.ts src/server/lead-inbox/outbound-reservation.test.ts src/server/lead-inbox/correlation-idempotency.test.ts src/server/lead-inbox/ringcentral-send-error.test.ts src/server/lead-inbox/outbound-failure.test.ts",
     "test:migrations": "bash scripts/test-migrations-postgres.sh",
     "test:migrations:local": "bash scripts/test-migrations-local.sh",
     "db:types": "supabase gen types typescript --project-id smrbsnnisvmubbwfhafy > src/integrations/supabase/types.ts",
