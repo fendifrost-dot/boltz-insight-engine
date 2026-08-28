@@ -2,6 +2,11 @@
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import type { Database } from "@/integrations/supabase/types";
 import { JobLeaseLostError, assertJobLeaseRpcStatus } from "./job-lease.ts";
+import {
+  OutboundReservationLostError,
+  parseOutboundReservationResult,
+  type OutboundReservationResult,
+} from "./outbound-reservation.ts";
 
 type Tables = Database["public"]["Tables"];
 export type LeadRow = Tables["leads"]["Row"];
@@ -79,6 +84,7 @@ export async function addEvent(
   actor: string,
   metadata?: Record<string, unknown>,
   lifecycle?: { from: LeadRow["lifecycle"] | null; to: LeadRow["lifecycle"] | null },
+  correlationId?: string | null,
 ): Promise<void> {
   const { error } = await supabaseAdmin.from("lead_events").insert({
     lead_id: leadId,
@@ -88,6 +94,7 @@ export async function addEvent(
     metadata: (metadata ?? null) as never,
     from_lifecycle: lifecycle?.from ?? null,
     to_lifecycle: lifecycle?.to ?? null,
+    correlation_id: correlationId ?? null,
   });
   if (error) throw error;
 }
@@ -113,10 +120,8 @@ export async function recordInboundMessage(args: {
   channel: Database["public"]["Enums"]["message_channel"];
   attachmentUrls?: string[];
   metadata?: Record<string, unknown>;
+  correlationId?: string | null;
 }): Promise<MessageRow | null> {
-  const existing = await findMessageByProviderId(args.providerMessageId);
-  if (existing) return null;
-
   const { data, error } = await supabaseAdmin
     .from("messages")
     .insert({
@@ -133,6 +138,7 @@ export async function recordInboundMessage(args: {
       delivery_state: "received",
       attachment_urls: (args.attachmentUrls ?? null) as never,
       provider_metadata_redacted: (args.metadata ?? null) as never,
+      correlation_id: args.correlationId ?? null,
     })
     .select("*")
     .single();
@@ -166,15 +172,8 @@ export async function recordOutboundMessage(args: {
   providerMessageId: string | null;
   providerCreatedAt: string | null;
   metadata?: Record<string, unknown>;
+  correlationId?: string | null;
 }): Promise<MessageRow | null> {
-  const { data: existing, error: existingError } = await supabaseAdmin
-    .from("messages")
-    .select("*")
-    .eq("idempotency_key", args.idempotencyKey)
-    .maybeSingle();
-  if (existingError) throw existingError;
-  if (existing) return null;
-
   const { data, error } = await supabaseAdmin
     .from("messages")
     .insert({
@@ -191,6 +190,7 @@ export async function recordOutboundMessage(args: {
       idempotency_key: args.idempotencyKey,
       delivery_state: args.deliveryState,
       provider_metadata_redacted: (args.metadata ?? null) as never,
+      correlation_id: args.correlationId ?? null,
     })
     .select("*")
     .single();
@@ -207,6 +207,111 @@ export async function recordOutboundMessage(args: {
   await supabaseAdmin.from("message_threads").update({ last_message_at: now }).eq("id", args.threadId);
 
   return data;
+}
+
+export async function findOutboundMessageByIdempotencyKey(
+  idempotencyKey: string,
+): Promise<MessageRow | null> {
+  const { data, error } = await supabaseAdmin
+    .from("messages")
+    .select("*")
+    .eq("idempotency_key", idempotencyKey)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+export type EnqueueInboundJobResult = {
+  created: boolean;
+  jobId: string;
+  correlationId: string;
+};
+
+/** Atomically enqueue an inbound processing job with deterministic correlation identity. */
+export async function enqueueInboundMessageJob(args: {
+  inboundProviderMessageId: string;
+  payload: Record<string, unknown>;
+}): Promise<EnqueueInboundJobResult | null> {
+  const { data, error } = await supabaseAdmin.rpc("enqueue_inbound_message_job", {
+    _inbound_provider_message_id: args.inboundProviderMessageId,
+    _payload: args.payload as never,
+  });
+  if (error) throw error;
+  const payload = (data ?? {}) as Record<string, unknown>;
+  if (typeof payload.job_id !== "string" || typeof payload.correlation_id !== "string") {
+    return null;
+  }
+  return {
+    created: payload.created === true,
+    jobId: payload.job_id,
+    correlationId: payload.correlation_id,
+  };
+}
+
+export async function reserveOutboundSend(args: {
+  idempotencyKey: string;
+  correlationId?: string | null;
+  leadId: string;
+  threadId: string;
+  recipientE164: string;
+  body: string;
+  leaseMs?: number;
+}): Promise<OutboundReservationResult> {
+  const { data, error } = await supabaseAdmin.rpc("reserve_outbound_send", {
+    _idempotency_key: args.idempotencyKey,
+    _correlation_id: args.correlationId ?? null,
+    _lead_id: args.leadId,
+    _thread_id: args.threadId,
+    _recipient_e164: args.recipientE164,
+    _body: args.body,
+    _lease_ms: args.leaseMs ?? DEFAULT_JOB_LEASE_MS,
+  });
+  if (error) throw error;
+  return parseOutboundReservationResult(data);
+}
+
+export async function completeOutboundSendReservation(args: {
+  idempotencyKey: string;
+  providerMessageId: string | null;
+  messageId: string | null;
+}): Promise<void> {
+  const { data, error } = await supabaseAdmin.rpc("complete_outbound_send", {
+    _idempotency_key: args.idempotencyKey,
+    _provider_message_id: args.providerMessageId,
+    _message_id: args.messageId,
+  });
+  if (error) throw error;
+  const status = (data as { status?: string } | null)?.status;
+  if (status === "lost_reservation") {
+    throw new OutboundReservationLostError();
+  }
+  if (status !== "sent") {
+    throw new Error(`Unexpected complete_outbound_send status: ${String(status)}`);
+  }
+}
+
+export async function failOutboundSendReservation(args: {
+  idempotencyKey: string;
+  error: string;
+}): Promise<void> {
+  const { data, error } = await supabaseAdmin.rpc("fail_outbound_send", {
+    _idempotency_key: args.idempotencyKey,
+    _error: args.error.slice(0, 600),
+  });
+  if (error) throw error;
+}
+
+export async function markOutboundSendAmbiguous(args: {
+  idempotencyKey: string;
+  providerMessageId?: string | null;
+  detail: string;
+}): Promise<void> {
+  const { data, error } = await supabaseAdmin.rpc("mark_outbound_send_ambiguous", {
+    _idempotency_key: args.idempotencyKey,
+    _provider_message_id: args.providerMessageId ?? null,
+    _detail: args.detail.slice(0, 600),
+  });
+  if (error) throw error;
 }
 
 export async function enqueueJob(args: {

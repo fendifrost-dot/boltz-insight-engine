@@ -9,7 +9,8 @@ import {
   redact,
   renewSubscription,
 } from "./ringcentral.server";
-import { enqueueJob, recordHealth } from "./store.server";
+import { enqueueInboundMessageJob, recordHealth } from "./store.server";
+import { logCorrelation } from "./correlation-log";
 
 export function authorizeCron(request: Request): Response | null {
   const secret = readSecret("CRON_SECRET");
@@ -132,26 +133,27 @@ export async function reconcileMessages(lookbackMinutes = 180): Promise<{
     const from = record.from?.phoneNumber;
     if (!from) continue;
 
-    const { data: existing } = await supabaseAdmin
-      .from("messages")
-      .select("id")
-      .eq("provider_message_id", String(record.id))
-      .maybeSingle();
-    if (existing) continue;
+    const providerMessageId = String(record.id);
+    const payload = {
+      provider_message_id: providerMessageId,
+      body: record.subject ?? "",
+      from,
+      to: (record.to ?? []).map((t) => t.phoneNumber).filter((p): p is string => Boolean(p)),
+      provider_created_at: record.creationTime ?? null,
+      channel: record.type === "MMS" ? "MMS" : "SMS",
+    };
 
-    const job = await enqueueJob({
-      jobType: "process_inbound",
-      inboundProviderMessageId: String(record.id),
-      payload: {
-        provider_message_id: String(record.id),
-        body: record.subject ?? "",
-        from,
-        to: (record.to ?? []).map((t) => t.phoneNumber).filter((p): p is string => Boolean(p)),
-        provider_created_at: record.creationTime ?? null,
-        channel: record.type === "MMS" ? "MMS" : "SMS",
-      },
+    const enqueuedJob = await enqueueInboundMessageJob({
+      inboundProviderMessageId: providerMessageId,
+      payload,
     });
-    if (job) enqueued += 1;
+    if (enqueuedJob?.created) {
+      logCorrelation(enqueuedJob.correlationId, "inbound_job_enqueued", {
+        source: "reconciliation",
+        provider_message_id: providerMessageId,
+      });
+      enqueued += 1;
+    }
   }
 
   await recordHealth({

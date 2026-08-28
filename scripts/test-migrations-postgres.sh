@@ -32,6 +32,7 @@ MIGRATIONS=(
   "supabase/migrations/20260827230000_lock_role_probe_to_caller.sql"
   "supabase/migrations/20260828013000_apply_lead_lifecycle_transition.sql"
   "supabase/migrations/20260828070000_claim_message_jobs_rpc.sql"
+  "supabase/migrations/20260828110000_correlation_outbound_idempotency.sql"
 )
 
 psql_cmd() {
@@ -90,10 +91,11 @@ assert_lead_inbox_tables() {
     WHERE table_schema = 'public'
       AND table_name IN (
         'leads','lead_events','message_threads','messages','message_jobs',
-        'agent_runs','escalations','ringcentral_subscriptions','integration_health_snapshots'
+        'agent_runs','escalations','ringcentral_subscriptions','integration_health_snapshots',
+        'outbound_send_reservations'
       );")"
-  if [[ "${count}" != "9" ]]; then
-    echo "ERROR: expected 9 lead-inbox tables, found ${count}" >&2
+  if [[ "${count}" != "10" ]]; then
+    echo "ERROR: expected 10 lead-inbox tables, found ${count}" >&2
     exit 1
   fi
 }
@@ -481,6 +483,172 @@ END $$;
 SQL
 }
 
+assert_correlation_outbound_rpc() {
+  local derive_def enqueue_def reserve_def
+  derive_def="$(psql_cmd -d "${TEST_DB}" -Atc "SELECT pg_get_functiondef('public.derive_inbound_correlation_id(text, text)'::regprocedure);")"
+  enqueue_def="$(psql_cmd -d "${TEST_DB}" -Atc "SELECT pg_get_functiondef('public.enqueue_inbound_message_job(text, jsonb)'::regprocedure);")"
+  reserve_def="$(psql_cmd -d "${TEST_DB}" -Atc "SELECT pg_get_functiondef('public.reserve_outbound_send(text, uuid, uuid, uuid, text, text, integer)'::regprocedure);")"
+  if [[ "${derive_def}" != *"SET search_path TO 'public'"* ]] && [[ "${derive_def}" != *"SET search_path = public"* ]]; then
+    echo "ERROR: derive_inbound_correlation_id missing SET search_path = public" >&2
+    exit 1
+  fi
+  if [[ "${enqueue_def}" != *"ON CONFLICT"* ]]; then
+    echo "ERROR: enqueue_inbound_message_job must use ON CONFLICT for atomic idempotency" >&2
+    exit 1
+  fi
+  if ! psql_cmd -d "${TEST_DB}" -Atc "SELECT has_function_privilege('authenticated', 'public.enqueue_inbound_message_job(text, jsonb)', 'EXECUTE');" | grep -q f; then
+    echo "ERROR: authenticated must not execute enqueue_inbound_message_job" >&2
+    exit 1
+  fi
+  if ! psql_cmd -d "${TEST_DB}" -Atc "SELECT has_function_privilege('service_role', 'public.reserve_outbound_send(text, uuid, uuid, uuid, text, text, integer)', 'EXECUTE');" | grep -q t; then
+    echo "ERROR: service_role must execute reserve_outbound_send" >&2
+    exit 1
+  fi
+}
+
+test_correlation_outbound_idempotency() {
+  psql_cmd -d "${TEST_DB}" <<'SQL'
+DO $$
+DECLARE
+  v_corr_a uuid;
+  v_corr_b uuid;
+  v_first jsonb;
+  v_second jsonb;
+  v_lead_id uuid;
+  v_thread_id uuid;
+  v_reserve_a jsonb;
+  v_reserve_b jsonb;
+  v_complete jsonb;
+  v_retry jsonb;
+BEGIN
+  v_corr_a := public.derive_inbound_correlation_id('ringcentral', 'prov-123');
+  v_corr_b := public.derive_inbound_correlation_id('ringcentral', 'prov-123');
+  IF v_corr_a <> v_corr_b THEN
+    RAISE EXCEPTION 'correlation id must be deterministic';
+  END IF;
+
+  v_first := public.enqueue_inbound_message_job(
+    'prov-123',
+    '{"provider_message_id":"prov-123","from":"+15555550123"}'::jsonb
+  );
+  v_second := public.enqueue_inbound_message_job(
+    'prov-123',
+    '{"provider_message_id":"prov-123","from":"+15555550123"}'::jsonb
+  );
+
+  IF (v_first->>'created')::boolean IS DISTINCT FROM true THEN
+    RAISE EXCEPTION 'first enqueue must create job';
+  END IF;
+  IF (v_second->>'created')::boolean IS DISTINCT FROM false THEN
+    RAISE EXCEPTION 'duplicate enqueue must not create another job';
+  END IF;
+  IF v_first->>'job_id' <> v_second->>'job_id' THEN
+    RAISE EXCEPTION 'duplicate enqueue must return the same job id';
+  END IF;
+  IF v_first->>'correlation_id' <> v_second->>'correlation_id' THEN
+    RAISE EXCEPTION 'duplicate enqueue must return the same correlation id';
+  END IF;
+
+  INSERT INTO public.leads (phone_e164, lifecycle)
+  VALUES ('+15555550999', 'New')
+  RETURNING id INTO v_lead_id;
+
+  INSERT INTO public.message_threads (lead_id, phone_e164, control_mode)
+  VALUES (v_lead_id, '+15555550999', 'auto')
+  RETURNING id INTO v_thread_id;
+
+  v_reserve_a := public.reserve_outbound_send(
+    'agent:test-message',
+    v_corr_a,
+    v_lead_id,
+    v_thread_id,
+    '+15555550999',
+    'Hello from Boltz',
+    120000
+  );
+  IF v_reserve_a->>'action' <> 'send' THEN
+    RAISE EXCEPTION 'first reservation must allow send, got %', v_reserve_a;
+  END IF;
+
+  v_reserve_b := public.reserve_outbound_send(
+    'agent:test-message',
+    v_corr_a,
+    v_lead_id,
+    v_thread_id,
+    '+15555550999',
+    'Hello from Boltz',
+    120000
+  );
+  IF v_reserve_b->>'action' <> 'skip' OR v_reserve_b->>'status' <> 'sending' THEN
+    RAISE EXCEPTION 'concurrent reservation must skip while sending, got %', v_reserve_b;
+  END IF;
+
+  v_complete := public.complete_outbound_send(
+    'agent:test-message',
+    'rc-msg-1',
+    NULL
+  );
+  IF v_complete->>'status' <> 'sent' THEN
+    RAISE EXCEPTION 'complete_outbound_send must mark sent, got %', v_complete;
+  END IF;
+
+  v_retry := public.reserve_outbound_send(
+    'agent:test-message',
+    v_corr_a,
+    v_lead_id,
+    v_thread_id,
+    '+15555550999',
+    'Hello from Boltz',
+    120000
+  );
+  IF v_retry->>'action' <> 'skip' OR v_retry->>'status' <> 'sent' THEN
+    RAISE EXCEPTION 'retry after sent must skip, got %', v_retry;
+  END IF;
+
+  PERFORM public.reserve_outbound_send(
+    'agent:ambiguous',
+    v_corr_a,
+    v_lead_id,
+    v_thread_id,
+    '+15555550999',
+    'Ambiguous body',
+    120000
+  );
+  PERFORM public.mark_outbound_send_ambiguous('agent:ambiguous', 'rc-msg-2', 'provider succeeded locally failed');
+  v_retry := public.reserve_outbound_send(
+    'agent:ambiguous',
+    v_corr_a,
+    v_lead_id,
+    v_thread_id,
+    '+15555550999',
+    'Ambiguous body',
+    120000
+  );
+  IF v_retry->>'action' <> 'review' OR v_retry->>'status' <> 'ambiguous' THEN
+    RAISE EXCEPTION 'ambiguous reservation must require review, got %', v_retry;
+  END IF;
+
+  BEGIN
+    PERFORM public.reserve_outbound_send(
+      'agent:bad-lease',
+      v_corr_a,
+      v_lead_id,
+      v_thread_id,
+      '+15555550999',
+      'Lease test',
+      500
+    );
+    RAISE EXCEPTION 'lease below 1000ms must be rejected';
+  EXCEPTION
+    WHEN OTHERS THEN
+      IF SQLERRM NOT LIKE '%lease_ms must be between 1000 and 3600000%' THEN
+        RAISE;
+      END IF;
+  END;
+END $$;
+SQL
+}
+
 echo "Creating isolated database ${TEST_DB} (PGHOST=${PGHOST} PGUSER=${PGUSER} sudo=${USE_SUDO})..."
 psql_cmd -c "DROP DATABASE IF EXISTS \"${TEST_DB}\";" postgres >/dev/null
 psql_cmd -c "CREATE DATABASE \"${TEST_DB}\";" postgres
@@ -498,12 +666,16 @@ assert_role_probes_locked
 assert_trigger_functions_have_search_path
 assert_lifecycle_transition_rpc
 assert_claim_message_jobs_rpc
+assert_correlation_outbound_rpc
 
 echo "Test 4: lifecycle transition RPC is atomic and returns stale without audit"
 test_lifecycle_transition_rpc
 
 echo "Test 5: claim_message_jobs recovers stale processing leases and claims atomically"
 test_claim_message_jobs_rpc
+
+echo "Test 6: correlation identity and outbound reservation idempotency"
+test_correlation_outbound_idempotency
 
 echo "Test 2: baseline is idempotent on production-shaped schema"
 apply_baseline
