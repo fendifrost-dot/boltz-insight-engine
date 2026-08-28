@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
+import { Route as AuthenticatedAdsRouteImport } from './routes/_authenticated/ads'
 import { Route as AuthenticatedAiVisibilityRouteImport } from './routes/_authenticated/ai-visibility'
 import { Route as AuthenticatedCompetitorsRouteImport } from './routes/_authenticated/competitors'
 import { Route as AuthenticatedContextRouteImport } from './routes/_authenticated/context'
@@ -43,6 +44,11 @@ const AuthRoute = AuthRouteImport.update({
 const AuthenticatedIndexRoute = AuthenticatedIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedAdsRoute = AuthenticatedAdsRouteImport.update({
+  id: '/ads',
+  path: '/ads',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedAiVisibilityRoute =
@@ -149,6 +155,7 @@ const ApiPublicRingcentralWebhookRoute =
 export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedIndexRoute
   '/auth': typeof AuthRoute
+  '/ads': typeof AuthenticatedAdsRoute
   '/ai-visibility': typeof AuthenticatedAiVisibilityRoute
   '/competitors': typeof AuthenticatedCompetitorsRoute
   '/context': typeof AuthenticatedContextRoute
@@ -170,6 +177,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
+  '/ads': typeof AuthenticatedAdsRoute
   '/ai-visibility': typeof AuthenticatedAiVisibilityRoute
   '/competitors': typeof AuthenticatedCompetitorsRoute
   '/context': typeof AuthenticatedContextRoute
@@ -194,6 +202,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
+  '/_authenticated/ads': typeof AuthenticatedAdsRoute
   '/_authenticated/ai-visibility': typeof AuthenticatedAiVisibilityRoute
   '/_authenticated/competitors': typeof AuthenticatedCompetitorsRoute
   '/_authenticated/context': typeof AuthenticatedContextRoute
@@ -219,6 +228,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/auth'
+    | '/ads'
     | '/ai-visibility'
     | '/competitors'
     | '/context'
@@ -240,6 +250,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/auth'
+    | '/ads'
     | '/ai-visibility'
     | '/competitors'
     | '/context'
@@ -263,6 +274,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/_authenticated'
     | '/auth'
+    | '/_authenticated/ads'
     | '/_authenticated/ai-visibility'
     | '/_authenticated/competitors'
     | '/_authenticated/context'
@@ -315,6 +327,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof AuthenticatedIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/ads': {
+      id: '/_authenticated/ads'
+      path: '/ads'
+      fullPath: '/ads'
+      preLoaderRoute: typeof AuthenticatedAdsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/ai-visibility': {
@@ -447,6 +466,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthenticatedRouteRouteChildren {
+  AuthenticatedAdsRoute: typeof AuthenticatedAdsRoute
   AuthenticatedAiVisibilityRoute: typeof AuthenticatedAiVisibilityRoute
   AuthenticatedCompetitorsRoute: typeof AuthenticatedCompetitorsRoute
   AuthenticatedContextRoute: typeof AuthenticatedContextRoute
@@ -464,6 +484,7 @@ interface AuthenticatedRouteRouteChildren {
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedAdsRoute: AuthenticatedAdsRoute,
   AuthenticatedAiVisibilityRoute: AuthenticatedAiVisibilityRoute,
   AuthenticatedCompetitorsRoute: AuthenticatedCompetitorsRoute,
   AuthenticatedContextRoute: AuthenticatedContextRoute,
