@@ -18,6 +18,7 @@ export type Database = {
         Row: {
           action: Database["public"]["Enums"]["agent_action"]
           audit_summary: string | null
+          correlation_id: string | null
           created_at: string
           escalation_category:
             | Database["public"]["Enums"]["escalation_category"]
@@ -39,6 +40,7 @@ export type Database = {
         Insert: {
           action: Database["public"]["Enums"]["agent_action"]
           audit_summary?: string | null
+          correlation_id?: string | null
           created_at?: string
           escalation_category?:
             | Database["public"]["Enums"]["escalation_category"]
@@ -60,6 +62,7 @@ export type Database = {
         Update: {
           action?: Database["public"]["Enums"]["agent_action"]
           audit_summary?: string | null
+          correlation_id?: string | null
           created_at?: string
           escalation_category?:
             | Database["public"]["Enums"]["escalation_category"]
@@ -206,6 +209,7 @@ export type Database = {
       lead_events: {
         Row: {
           actor: string | null
+          correlation_id: string | null
           created_at: string
           event_type: string
           from_lifecycle: Database["public"]["Enums"]["lead_lifecycle"] | null
@@ -217,6 +221,7 @@ export type Database = {
         }
         Insert: {
           actor?: string | null
+          correlation_id?: string | null
           created_at?: string
           event_type: string
           from_lifecycle?: Database["public"]["Enums"]["lead_lifecycle"] | null
@@ -228,6 +233,7 @@ export type Database = {
         }
         Update: {
           actor?: string | null
+          correlation_id?: string | null
           created_at?: string
           event_type?: string
           from_lifecycle?: Database["public"]["Enums"]["lead_lifecycle"] | null
@@ -338,6 +344,7 @@ export type Database = {
         Row: {
           attempts: number
           completed_at: string | null
+          correlation_id: string | null
           created_at: string
           id: string
           inbound_provider_message_id: string | null
@@ -356,6 +363,7 @@ export type Database = {
         Insert: {
           attempts?: number
           completed_at?: string | null
+          correlation_id?: string | null
           created_at?: string
           id?: string
           inbound_provider_message_id?: string | null
@@ -374,6 +382,7 @@ export type Database = {
         Update: {
           attempts?: number
           completed_at?: string | null
+          correlation_id?: string | null
           created_at?: string
           id?: string
           inbound_provider_message_id?: string | null
@@ -406,6 +415,86 @@ export type Database = {
           },
           {
             foreignKeyName: "message_jobs_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "message_threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      outbound_send_reservations: {
+        Row: {
+          body_hash: string
+          claim_generation: number
+          correlation_id: string | null
+          created_at: string
+          id: string
+          idempotency_key: string
+          last_error: string | null
+          lead_id: string
+          locked_at: string | null
+          message_id: string | null
+          provider_message_id: string | null
+          recipient_e164: string
+          retryable: boolean
+          sent_at: string | null
+          status: Database["public"]["Enums"]["outbound_send_status"]
+          thread_id: string
+          updated_at: string
+        }
+        Insert: {
+          body_hash: string
+          correlation_id?: string | null
+          created_at?: string
+          id?: string
+          idempotency_key: string
+          last_error?: string | null
+          lead_id: string
+          locked_at?: string | null
+          message_id?: string | null
+          provider_message_id?: string | null
+          recipient_e164: string
+          retryable?: boolean
+          sent_at?: string | null
+          status?: Database["public"]["Enums"]["outbound_send_status"]
+          thread_id: string
+          updated_at?: string
+        }
+        Update: {
+          body_hash?: string
+          claim_generation?: number
+          correlation_id?: string | null
+          created_at?: string
+          id?: string
+          idempotency_key?: string
+          last_error?: string | null
+          lead_id?: string
+          locked_at?: string | null
+          message_id?: string | null
+          provider_message_id?: string | null
+          recipient_e164?: string
+          sent_at?: string | null
+          status?: Database["public"]["Enums"]["outbound_send_status"]
+          thread_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "outbound_send_reservations_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "outbound_send_reservations_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "outbound_send_reservations_thread_id_fkey"
             columns: ["thread_id"]
             isOneToOne: false
             referencedRelation: "message_threads"
@@ -462,6 +551,7 @@ export type Database = {
           attachment_urls: Json | null
           body: string | null
           channel: Database["public"]["Enums"]["message_channel"]
+          correlation_id: string | null
           created_at: string
           delivery_state: Database["public"]["Enums"]["message_delivery_state"]
           direction: Database["public"]["Enums"]["message_direction"]
@@ -484,6 +574,7 @@ export type Database = {
           attachment_urls?: Json | null
           body?: string | null
           channel?: Database["public"]["Enums"]["message_channel"]
+          correlation_id?: string | null
           created_at?: string
           delivery_state?: Database["public"]["Enums"]["message_delivery_state"]
           direction: Database["public"]["Enums"]["message_direction"]
@@ -506,6 +597,7 @@ export type Database = {
           attachment_urls?: Json | null
           body?: string | null
           channel?: Database["public"]["Enums"]["message_channel"]
+          correlation_id?: string | null
           created_at?: string
           delivery_state?: Database["public"]["Enums"]["message_delivery_state"]
           direction?: Database["public"]["Enums"]["message_direction"]
@@ -641,8 +733,29 @@ export type Database = {
         Args: { _expected_attempts: number; _job_id: string }
         Returns: Json
       }
+      complete_outbound_send: {
+        Args: {
+          _expected_claim_generation: number
+          _idempotency_key: string
+          _message_id: string | null
+          _provider_message_id: string | null
+        }
+        Returns: Json
+      }
+      derive_inbound_correlation_id: {
+        Args: { _provider: string; _provider_message_id: string }
+        Returns: string
+      }
+      enqueue_inbound_message_job: {
+        Args: { _inbound_provider_message_id: string; _payload: Json }
+        Returns: Json
+      }
       fail_message_job: {
         Args: { _error: string; _expected_attempts: number; _job_id: string }
+        Returns: Json
+      }
+      fail_outbound_send: {
+        Args: { _error: string; _expected_claim_generation: number; _idempotency_key: string }
         Returns: Json
       }
       has_role: {
@@ -653,6 +766,27 @@ export type Database = {
         Returns: boolean
       }
       is_staff: { Args: { _user_id: string }; Returns: boolean }
+      mark_outbound_send_ambiguous: {
+        Args: {
+          _detail: string
+          _expected_claim_generation: number
+          _idempotency_key: string
+          _provider_message_id: string | null
+        }
+        Returns: Json
+      }
+      reserve_outbound_send: {
+        Args: {
+          _body: string
+          _correlation_id: string | null
+          _idempotency_key: string
+          _lead_id: string
+          _lease_ms?: number
+          _recipient_e164: string
+          _thread_id: string
+        }
+        Returns: Json
+      }
     }
     Enums: {
       agent_action: "send" | "escalate" | "no_reply"
@@ -706,6 +840,7 @@ export type Database = {
         | "send_outbound"
         | "reconcile"
         | "renew_subscription"
+      outbound_send_status: "queued" | "sending" | "sent" | "failed" | "ambiguous"
       sms_capability: "SmsSender" | "A2PSmsSender" | "none" | "unknown"
       thread_control_mode: "auto" | "human"
     }

@@ -1,5 +1,6 @@
 // Bounded, idempotent job processing for the lead inbox.
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { logCorrelation } from "./correlation-log";
 import { GrokDeniedError, PROMPT_VERSION, decideReply } from "./grok.server";
 import { sendOutbound } from "./outbound.server";
 import {
@@ -145,13 +146,26 @@ type InboundPayload = {
   provider_created_at: string | null;
   channel?: "SMS" | "MMS";
   attachment_urls?: string[];
+  correlation_id?: string;
 };
+
+function jobCorrelationId(job: JobRow): string | null {
+  if (job.correlation_id) return job.correlation_id;
+  const payload = (job.payload ?? {}) as InboundPayload;
+  return payload.correlation_id ?? null;
+}
 
 export async function processInbound(job: JobRow): Promise<void> {
   const payload = (job.payload ?? {}) as unknown as InboundPayload;
   if (!payload.provider_message_id || !payload.from) {
     throw new Error("Inbound job payload missing provider_message_id/from");
   }
+
+  const correlationId = jobCorrelationId(job);
+  logCorrelation(correlationId, "process_inbound_started", {
+    job_id: job.id,
+    provider_message_id: payload.provider_message_id,
+  });
 
   const { lead, thread } = await getOrCreateLeadThread(payload.from, "RingCentral SMS");
   const message = await recordInboundMessage({
@@ -163,10 +177,17 @@ export async function processInbound(job: JobRow): Promise<void> {
     recipients: (payload.to ?? []).map(toE164),
     providerCreatedAt: payload.provider_created_at ?? null,
     channel: payload.channel === "MMS" ? "MMS" : "SMS",
+    correlationId,
     ...(payload.attachment_urls ? { attachmentUrls: payload.attachment_urls } : {}),
   });
 
-  if (!message) return; // already processed
+  if (!message) {
+    logCorrelation(correlationId, "process_inbound_duplicate_message", {
+      job_id: job.id,
+      provider_message_id: payload.provider_message_id,
+    });
+    return;
+  }
 
   const body = payload.body ?? "";
 
@@ -179,7 +200,7 @@ export async function processInbound(job: JobRow): Promise<void> {
         consent_evidence: { source: "sms_keyword", message_id: message.id } as never,
       })
       .eq("id", lead.id);
-    await addEvent(lead.id, "opted_out", "Customer texted an opt-out keyword", "system");
+    await addEvent(lead.id, "opted_out", "Customer texted an opt-out keyword", "system", undefined, undefined, correlationId);
     await sendOutbound({
       leadId: lead.id,
       threadId: thread.id,
@@ -187,6 +208,7 @@ export async function processInbound(job: JobRow): Promise<void> {
       text: OPT_OUT_CONFIRMATION,
       idempotencyKey: `optout:${message.id}`,
       actor: "system",
+      correlationId,
     });
     return;
   }
@@ -200,11 +222,19 @@ export async function processInbound(job: JobRow): Promise<void> {
         consent_evidence: { source: "sms_keyword", message_id: message.id } as never,
       })
       .eq("id", lead.id);
-    await addEvent(lead.id, "opted_in", "Customer texted an opt-in keyword", "system");
+    await addEvent(lead.id, "opted_in", "Customer texted an opt-in keyword", "system", undefined, undefined, correlationId);
   }
 
   if (lead.consent_status === "opted_out" && !detectOptIn(body)) {
-    await addEvent(lead.id, "reply_suppressed", "Lead is opted out; no automated reply sent", "system");
+    await addEvent(
+      lead.id,
+      "reply_suppressed",
+      "Lead is opted out; no automated reply sent",
+      "system",
+      undefined,
+      undefined,
+      correlationId,
+    );
     return;
   }
 
@@ -225,7 +255,7 @@ export async function processInbound(job: JobRow): Promise<void> {
     .eq("id", thread.id)
     .maybeSingle();
   if (freshThread?.control_mode === "human") {
-    await addEvent(lead.id, "reply_suppressed", "Thread is under human control", "system");
+    await addEvent(lead.id, "reply_suppressed", "Thread is under human control", "system", undefined, undefined, correlationId);
     return;
   }
 
@@ -252,6 +282,7 @@ export async function processInbound(job: JobRow): Promise<void> {
       lead_field_updates: (decision.lead_field_updates ?? null) as never,
       policy_tags: decision.policy_tags,
       raw_decision: raw as never,
+      correlation_id: correlationId,
     })
     .select("id")
     .single();
@@ -262,7 +293,7 @@ export async function processInbound(job: JobRow): Promise<void> {
     const updates = sanitizeLeadUpdates(decision.lead_field_updates);
     if (Object.keys(updates).length > 0) {
       await supabaseAdmin.from("leads").update(updates as never).eq("id", lead.id);
-      await addEvent(lead.id, "lead_fields_updated", "Agent updated lead details", "grok", updates);
+      await addEvent(lead.id, "lead_fields_updated", "Agent updated lead details", "grok", updates, undefined, correlationId);
     }
   }
 
@@ -293,6 +324,8 @@ export async function processInbound(job: JobRow): Promise<void> {
           inbound_message_id: message.id,
           code: transition.code,
         },
+        undefined,
+        correlationId,
       );
     }
   }
@@ -316,6 +349,7 @@ export async function processInbound(job: JobRow): Promise<void> {
       text: decision.reply_text,
       idempotencyKey: `agent:${message.id}`,
       actor: "grok",
+      correlationId,
     });
     if (!outcome.ok) {
       await openEscalation({
@@ -364,6 +398,7 @@ async function processSendOutbound(job: JobRow): Promise<void> {
     text: payload.text,
     idempotencyKey: `job:${job.id}`,
     actor: payload.actor ?? "system",
+    correlationId: job.correlation_id,
   });
   if (!outcome.ok) throw new Error(outcome.reason);
 }

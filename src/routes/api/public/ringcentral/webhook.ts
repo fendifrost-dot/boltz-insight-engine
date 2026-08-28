@@ -42,7 +42,8 @@ async function handle(request: Request): Promise<Response> {
   const rawBody = await request.text();
   if (!rawBody) return new Response(null, { status: 200 });
 
-  const { enqueueJob, recordHealth } = await import("@/server/lead-inbox/store.server");
+  const { enqueueInboundMessageJob, recordHealth } = await import("@/server/lead-inbox/store.server");
+  const { logCorrelation } = await import("@/server/lead-inbox/correlation-log");
   const { processJobs } = await import("@/server/lead-inbox/jobs.server");
 
   let notification: RcNotification;
@@ -64,21 +65,29 @@ async function handle(request: Request): Promise<Response> {
     message?.direction === "Inbound" && (message?.type === "SMS" || message?.type === "MMS");
 
   if (isInboundSms && message?.id != null && message.from?.phoneNumber) {
-    const job = await enqueueJob({
-      jobType: "process_inbound",
-      inboundProviderMessageId: String(message.id),
-      payload: {
-        provider_message_id: String(message.id),
-        body: message.subject ?? "",
-        from: message.from.phoneNumber,
-        to: (message.to ?? []).map((t) => t.phoneNumber).filter((p): p is string => Boolean(p)),
-        provider_created_at: message.creationTime ?? null,
-        channel: message.type === "MMS" ? "MMS" : "SMS",
-      },
+    const providerMessageId = String(message.id);
+    const payload = {
+      provider_message_id: providerMessageId,
+      body: message.subject ?? "",
+      from: message.from.phoneNumber,
+      to: (message.to ?? []).map((t) => t.phoneNumber).filter((p): p is string => Boolean(p)),
+      provider_created_at: message.creationTime ?? null,
+      channel: message.type === "MMS" ? "MMS" : "SMS",
+    };
+    const enqueued = await enqueueInboundMessageJob({
+      inboundProviderMessageId: providerMessageId,
+      payload,
     });
-    if (job) {
-      // Bounded inline drain keeps reply latency low without unbounded fan-out.
-      await processJobs(3);
+    if (enqueued) {
+      logCorrelation(enqueued.correlationId, "inbound_job_enqueued", {
+        source: "webhook",
+        created: enqueued.created,
+        provider_message_id: providerMessageId,
+      });
+      if (enqueued.created) {
+        // Bounded inline drain keeps reply latency low without unbounded fan-out.
+        await processJobs(3);
+      }
     }
   }
 
