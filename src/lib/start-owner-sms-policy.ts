@@ -12,13 +12,13 @@ export type ConsentBasis = (typeof CONSENT_BASIS)[number];
 
 export type ConsentEvidenceInput = {
   basis: ConsentBasis;
-  note?: string;
-  evidenceRef?: string;
+  note?: string | undefined;
+  evidenceRef?: string | undefined;
 };
 
 export type ConsentValidationInput = {
   markConsentOptIn: boolean;
-  consentEvidence?: ConsentEvidenceInput;
+  consentEvidence?: ConsentEvidenceInput | undefined;
 };
 
 export function validateConsentOptIn(

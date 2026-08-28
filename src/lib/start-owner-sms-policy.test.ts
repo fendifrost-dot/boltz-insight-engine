@@ -56,10 +56,10 @@ test("buildConsentLeadUpdate records basis, actor, and timestamp", () => {
   assert.equal(update?.["consent_status"], "opted_in");
   assert.equal(update?.["consent_updated_at"], "2026-08-27T22:00:00.000Z");
   const evidence = update?.["consent_evidence"] as Record<string, unknown>;
-  assert.equal(evidence.basis, "verbal");
-  assert.equal(evidence.asserted_by, "user-owner");
-  assert.equal(evidence.evidence_ref, "call-log-42");
-  assert.equal(evidence.source, "owner_outbound");
+  assert.equal(evidence["basis"], "verbal");
+  assert.equal(evidence["asserted_by"], "user-owner");
+  assert.equal(evidence["evidence_ref"], "call-log-42");
+  assert.equal(evidence["source"], "owner_outbound");
 });
 
 test("buildConsentLeadUpdate skips when lead is already opted in", () => {
