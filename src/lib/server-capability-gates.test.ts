@@ -121,6 +121,19 @@ test("transitionLeadLifecycle requires cases.transition before lead lookup", () 
   assert.ok(capIdx < lookupIdx, "capability must run before database reads");
 });
 
+test("transitionLeadLifecycle requires financial_status.confirm when touching Paid", () => {
+  const block = handlerBlock("transitionLeadLifecycle");
+  assert.match(block, /requiresFinancialConfirm\(/);
+  assert.match(block, /requireCapability\(context, "financial_status\.confirm"\)/);
+});
+
+test("transitionLeadLifecycle maps owner actors separately from staff", () => {
+  const block = handlerBlock("transitionLeadLifecycle");
+  assert.match(block, /checkCapability\(context, "integrations\.manage"\)/);
+  assert.match(block, /owner:\$\{context\.userId\}/);
+  assert.match(block, /staff:\$\{context\.userId\}/);
+});
+
 test("staff can transition lifecycle with cases.transition", async () => {
   const allowed = await checkCapabilityWithProbe(
     { isStaff: async () => true, isOwner: async () => false },

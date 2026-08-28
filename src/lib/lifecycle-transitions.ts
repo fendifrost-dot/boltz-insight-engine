@@ -18,7 +18,7 @@ export const LIFECYCLE_FUNNEL: readonly Lifecycle[] = [
   "Paid",
 ];
 
-/** Terminal or disqualifying states. */
+/** Terminal or disqualifying states — not executable by Grok. */
 export const LIFECYCLE_TERMINAL: readonly Lifecycle[] = [
   "Lost",
   "No response",
@@ -28,15 +28,15 @@ export const LIFECYCLE_TERMINAL: readonly Lifecycle[] = [
   "Outside service capability",
 ];
 
-/** Terminal states the SMS agent may propose from early intake. */
-export const AGENT_TERMINAL: readonly Lifecycle[] = [
+/** Terminal states Grok may recommend but must not execute. */
+export const GROK_RECOMMENDED_TERMINAL: readonly Lifecycle[] = [
   "Lost",
   "No response",
   "Spam",
   "Outside service capability",
 ];
 
-/** Intake stages where Grok may still influence lifecycle. */
+/** Intake stages where Grok may advance lifecycle one step. */
 export const AGENT_INTAKE_STAGES: readonly Lifecycle[] = ["New", "Contacted", "Qualified"];
 
 export const LIFECYCLE_EVIDENCE_BASIS = [
@@ -63,7 +63,7 @@ export type LifecycleEvidence = {
   at?: string;
 };
 
-export type TransitionActorKind = "grok" | "staff" | "system";
+export type TransitionActorKind = "grok" | "staff" | "owner" | "system";
 
 const STAFF_EVIDENCE_BASIS: readonly LifecycleEvidenceBasis[] = [
   "customer_message",
@@ -71,8 +71,12 @@ const STAFF_EVIDENCE_BASIS: readonly LifecycleEvidenceBasis[] = [
   "appointment_record",
   "inspection_record",
   "estimate_record",
-  "payment_record",
   "manual_correction",
+];
+
+const OWNER_EVIDENCE_BASIS: readonly LifecycleEvidenceBasis[] = [
+  ...STAFF_EVIDENCE_BASIS,
+  "payment_record",
 ];
 
 const SYSTEM_EVIDENCE_BASIS: readonly LifecycleEvidenceBasis[] = ["system_rule"];
@@ -89,6 +93,10 @@ function isTerminalState(state: Lifecycle): boolean {
   return (LIFECYCLE_TERMINAL as readonly string[]).includes(state);
 }
 
+function touchesPaid(state: Lifecycle): boolean {
+  return state === "Paid";
+}
+
 function adjacentForward(from: Lifecycle): Lifecycle | null {
   const index = funnelIndex(from);
   if (index < 0 || index >= LIFECYCLE_FUNNEL.length - 1) return null;
@@ -101,6 +109,10 @@ function adjacentBackward(from: Lifecycle): Lifecycle | null {
   return LIFECYCLE_FUNNEL[index - 1] ?? null;
 }
 
+export function requiresFinancialConfirm(from: Lifecycle, to: Lifecycle): boolean {
+  return touchesPaid(from) || touchesPaid(to);
+}
+
 export function isAllowedLifecycleTransition(args: {
   from: Lifecycle;
   to: Lifecycle;
@@ -111,13 +123,29 @@ export function isAllowedLifecycleTransition(args: {
 
   if (actor === "grok") {
     if (!(AGENT_INTAKE_STAGES as readonly string[]).includes(from)) return false;
-    if ((AGENT_TERMINAL as readonly string[]).includes(to)) return true;
     const next = adjacentForward(from);
     if (next !== to) return false;
     return (AGENT_INTAKE_STAGES as readonly string[]).includes(to);
   }
 
   if (actor === "staff") {
+    if (touchesPaid(from) || touchesPaid(to)) return false;
+    if (isFunnelState(from) && isFunnelState(to)) {
+      return adjacentForward(from) === to || adjacentBackward(from) === to;
+    }
+    if (isFunnelState(from) && isTerminalState(to)) return true;
+    if (isTerminalState(from) && to === "Contacted") return true;
+    return false;
+  }
+
+  if (actor === "owner") {
+    if (from === "Completed" && to === "Paid") {
+      return adjacentForward(from) === to;
+    }
+    if (from === "Paid" && to === "Completed") {
+      return adjacentBackward(from) === to;
+    }
+    if (touchesPaid(from) || touchesPaid(to)) return false;
     if (isFunnelState(from) && isFunnelState(to)) {
       return adjacentForward(from) === to || adjacentBackward(from) === to;
     }
@@ -132,6 +160,90 @@ export function isAllowedLifecycleTransition(args: {
   }
 
   return false;
+}
+
+function hasEvidenceRef(evidence: LifecycleEvidence): boolean {
+  return Boolean(evidence.evidenceRef?.trim());
+}
+
+function validateDestinationEvidence(args: {
+  from: Lifecycle;
+  to: Lifecycle;
+  actor: TransitionActorKind;
+  evidence: LifecycleEvidence;
+}): { ok: true } | { ok: false; reason: string } {
+  const { from, to, actor, evidence } = args;
+
+  if (to === "Appointment Scheduled") {
+    if (evidence.basis !== "appointment_record") {
+      return { ok: false, reason: "Appointment Scheduled requires appointment_record evidence" };
+    }
+    if (!hasEvidenceRef(evidence)) {
+      return { ok: false, reason: "Appointment Scheduled requires evidence_ref" };
+    }
+  }
+
+  if (to === "Inspected") {
+    if (evidence.basis !== "inspection_record") {
+      return { ok: false, reason: "Inspected requires inspection_record evidence" };
+    }
+    if (!hasEvidenceRef(evidence)) {
+      return { ok: false, reason: "Inspected requires evidence_ref" };
+    }
+  }
+
+  if (to === "Estimate Sent") {
+    if (evidence.basis !== "estimate_record") {
+      return { ok: false, reason: "Estimate Sent requires estimate_record evidence" };
+    }
+    if (!hasEvidenceRef(evidence)) {
+      return { ok: false, reason: "Estimate Sent requires evidence_ref" };
+    }
+  }
+
+  if (to === "Approved") {
+    if (evidence.basis !== "customer_message" && evidence.basis !== "estimate_record") {
+      return {
+        ok: false,
+        reason: "Approved requires customer_message or estimate_record evidence",
+      };
+    }
+    if (!hasEvidenceRef(evidence)) {
+      return { ok: false, reason: "Approved requires evidence_ref" };
+    }
+  }
+
+  if (to === "Paid") {
+    if (actor !== "owner") {
+      return { ok: false, reason: "Only owners may mark a lead Paid" };
+    }
+    if (from !== "Completed") {
+      return { ok: false, reason: "Paid requires a Completed lead" };
+    }
+    if (evidence.basis !== "payment_record") {
+      return { ok: false, reason: "Paid requires payment_record evidence" };
+    }
+    if (!hasEvidenceRef(evidence)) {
+      return { ok: false, reason: "Paid requires evidence_ref" };
+    }
+  }
+
+  if (from === "Paid") {
+    if (actor !== "owner") {
+      return { ok: false, reason: "Only owners may reverse a Paid lifecycle" };
+    }
+    if (to !== "Completed") {
+      return { ok: false, reason: "Paid may only revert to Completed with documented correction" };
+    }
+    if (evidence.basis !== "manual_correction") {
+      return { ok: false, reason: "Paid reversal requires manual_correction evidence" };
+    }
+    if (!hasEvidenceRef(evidence)) {
+      return { ok: false, reason: "Paid reversal requires evidence_ref" };
+    }
+  }
+
+  return { ok: true };
 }
 
 export function validateLifecycleEvidence(args: {
@@ -163,8 +275,21 @@ export function validateLifecycleEvidence(args: {
     if (!STAFF_EVIDENCE_BASIS.includes(evidence.basis)) {
       return { ok: false, reason: "Staff lifecycle transitions require operational evidence basis" };
     }
+    if (evidence.basis === "payment_record") {
+      return { ok: false, reason: "Staff may not use payment_record evidence" };
+    }
     if (!evidence.assertedBy) {
       return { ok: false, reason: "Staff lifecycle transitions require asserted_by user id" };
+    }
+    return { ok: true };
+  }
+
+  if (args.actor === "owner") {
+    if (!OWNER_EVIDENCE_BASIS.includes(evidence.basis)) {
+      return { ok: false, reason: "Owner lifecycle transitions require operational evidence basis" };
+    }
+    if (!evidence.assertedBy) {
+      return { ok: false, reason: "Owner lifecycle transitions require asserted_by user id" };
     }
     return { ok: true };
   }
@@ -202,6 +327,18 @@ export function validateLifecycleTransition(args: {
     };
   }
 
+  if (!args.evidence) {
+    return { ok: false, reason: "Lifecycle transition requires evidence" };
+  }
+
+  const destinationResult = validateDestinationEvidence({
+    from: args.from,
+    to: args.to,
+    actor: args.actor,
+    evidence: args.evidence,
+  });
+  if (!destinationResult.ok) return destinationResult;
+
   return { ok: true };
 }
 
@@ -223,6 +360,7 @@ export function buildLifecycleEvidenceMetadata(
 /** Map persisted lead_events.actor strings to policy actor kinds. */
 export function resolveTransitionActorKind(actor: string): TransitionActorKind | null {
   if (actor === "grok" || actor === "system") return actor;
-  if (actor.startsWith("staff:") || actor.startsWith("owner:")) return "staff";
+  if (actor.startsWith("owner:")) return "owner";
+  if (actor.startsWith("staff:")) return "staff";
   return null;
 }
