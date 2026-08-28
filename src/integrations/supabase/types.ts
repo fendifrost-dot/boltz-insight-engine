@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.17"
+    PostgrestVersion: "14.5"
   }
   public: {
     Tables: {
@@ -621,18 +621,6 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      apply_lead_lifecycle_transition: {
-        Args: {
-          _lead_id: string
-          _expected_from: Database["public"]["Enums"]["lead_lifecycle"]
-          _to: Database["public"]["Enums"]["lead_lifecycle"]
-          _event_type: string
-          _summary: string
-          _actor: string
-          _metadata?: Json
-        }
-        Returns: Json
-      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
