@@ -134,6 +134,6 @@ test("migration chain is ordered with baseline before grants migration", () => {
     assert.ok(readFileSync(join(migrationsDir, file), "utf8").length > 0, `missing ${file}`);
   }
   assert.deepEqual(migrationFiles.slice().sort(), migrationFiles);
-  assert.ok(migrationFiles[0].startsWith("20260825155900"));
-  assert.ok(migrationFiles[1].startsWith("20260825165448"));
+  assert.ok(migrationFiles[0]?.startsWith("20260825155900"));
+  assert.ok(migrationFiles[1]?.startsWith("20260825165448"));
 });
