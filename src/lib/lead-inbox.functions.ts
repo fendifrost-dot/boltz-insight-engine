@@ -4,6 +4,13 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { CONSENT_BASIS, buildConsentLeadUpdate, validateConsentOptIn } from "@/lib/start-owner-sms-policy";
 import { requireCapability, requireOwner } from "@/server/authz/require-capability.server";
 
+/**
+ * Server-fn authorization audit (createServerFn handlers in this module):
+ * - listLeads, getThread, listEscalations, updateEscalation, setThreadControl: authenticated client + RLS only.
+ * - sendOwnerMessage, startOwnerSms: service-role outbound path → requireCapability("communications.send").
+ * - getIntegrationHealth, resumeAgentFn, ensureSubscription: secrets/provider/integration → integrations.manage (owner).
+ */
+
 export const listLeads = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
@@ -102,6 +109,8 @@ export const sendOwnerMessage = createServerFn({ method: "POST" })
       .parse(input),
   )
   .handler(async ({ data, context }) => {
+    await requireCapability(context, "communications.send");
+
     const [leadRes, threadRes] = await Promise.all([
       context.supabase
         .from("leads")
@@ -193,11 +202,13 @@ export const updateEscalation = createServerFn({ method: "POST" })
 export const getIntegrationHealth = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
+    await requireCapability(context, "integrations.manage");
+
     try {
       const { secretStatus } = await import("@/server/lead-inbox/env.server");
       const { agentCircuitState } = await import("@/server/lead-inbox/jobs.server");
 
-    const [snapshotsRes, subsRes, jobsRes] = await Promise.all([
+      const [snapshotsRes, subsRes, jobsRes] = await Promise.all([
       context.supabase
         .from("integration_health_snapshots")
         .select("*")
@@ -215,17 +226,17 @@ export const getIntegrationHealth = createServerFn({ method: "GET" })
         .limit(30),
     ]);
 
-    let capability: { capability: string; detail: string } | null = null;
-    try {
-      const { cachedCapability } = await import("@/server/lead-inbox/outbound.server");
-      const result = await cachedCapability();
-      capability = { capability: result.capability, detail: result.detail };
-    } catch (error) {
-      capability = {
-        capability: "unknown",
-        detail: error instanceof Error ? error.message.slice(0, 300) : "capability check failed",
-      };
-    }
+      let capability: { capability: string; detail: string } | null = null;
+      try {
+        const { cachedCapability } = await import("@/server/lead-inbox/outbound.server");
+        const result = await cachedCapability();
+        capability = { capability: result.capability, detail: result.detail };
+      } catch (error) {
+        capability = {
+          capability: "unknown",
+          detail: error instanceof Error ? error.message.slice(0, 300) : "capability check failed",
+        };
+      }
 
       return {
         secrets: secretStatus(),
@@ -236,6 +247,9 @@ export const getIntegrationHealth = createServerFn({ method: "GET" })
         jobs: jobsRes.data ?? [],
       };
     } catch (error) {
+      if (error instanceof Error && error.message.startsWith("Missing capability:")) {
+        throw error;
+      }
       console.error("getIntegrationHealth failed", error);
       return {
         secrets: [],

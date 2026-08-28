@@ -9,7 +9,7 @@
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
     "lint": "eslint .",
-    "test": "node --experimental-strip-types --test src/lib/lead-inbox-thread-sync.test.ts src/lib/start-owner-sms-policy.test.ts src/lib/start-owner-sms-auth.test.ts src/server/authz/capabilities.test.ts src/server/authz/role-probe-migration.test.ts",
+    "test": "node --experimental-strip-types --test src/lib/lead-inbox-thread-sync.test.ts src/lib/start-owner-sms-policy.test.ts src/lib/start-owner-sms-auth.test.ts src/lib/server-capability-gates.test.ts src/server/authz/capabilities.test.ts src/server/authz/role-probe-migration.test.ts",
     "format": "prettier --write ."
   },
   "overrides": {
