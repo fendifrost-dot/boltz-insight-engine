@@ -30,6 +30,7 @@ MIGRATIONS=(
   "supabase/migrations/20260826001442_5d12525c-3d20-4454-b554-05ae0d3e0e16.sql"
   "supabase/migrations/20260826001500_c6b8bc61-c333-4d63-ad2d-ed758784bc3e.sql"
   "supabase/migrations/20260827230000_lock_role_probe_to_caller.sql"
+  "supabase/migrations/20260828013000_apply_lead_lifecycle_transition.sql"
 )
 
 psql_cmd() {
@@ -124,6 +125,149 @@ assert_trigger_functions_have_search_path() {
   fi
 }
 
+assert_lifecycle_transition_rpc() {
+  local fn_def
+  fn_def="$(psql_cmd -d "${TEST_DB}" -Atc "SELECT pg_get_functiondef('public.apply_lead_lifecycle_transition(uuid, public.lead_lifecycle, public.lead_lifecycle, text, text, text, jsonb)'::regprocedure);")"
+  if [[ "${fn_def}" != *"SET search_path TO 'public'"* ]] && [[ "${fn_def}" != *"SET search_path = public"* ]]; then
+    echo "ERROR: apply_lead_lifecycle_transition missing SET search_path = public" >&2
+    exit 1
+  fi
+  if ! psql_cmd -d "${TEST_DB}" -Atc "SELECT has_function_privilege('authenticated', 'public.apply_lead_lifecycle_transition(uuid, public.lead_lifecycle, public.lead_lifecycle, text, text, text, jsonb)', 'EXECUTE');" | grep -q f; then
+    echo "ERROR: authenticated must not execute apply_lead_lifecycle_transition" >&2
+    exit 1
+  fi
+  if ! psql_cmd -d "${TEST_DB}" -Atc "SELECT has_function_privilege('service_role', 'public.apply_lead_lifecycle_transition(uuid, public.lead_lifecycle, public.lead_lifecycle, text, text, text, jsonb)', 'EXECUTE');" | grep -q t; then
+    echo "ERROR: service_role must execute apply_lead_lifecycle_transition" >&2
+    exit 1
+  fi
+}
+
+test_lifecycle_transition_rpc() {
+  psql_cmd -d "${TEST_DB}" <<'SQL'
+DO $$
+DECLARE
+  v_lead_id uuid;
+  v_result jsonb;
+  v_count integer;
+BEGIN
+  INSERT INTO public.leads (phone_e164, lifecycle)
+  VALUES ('+15555550101', 'New')
+  RETURNING id INTO v_lead_id;
+
+  v_result := public.apply_lead_lifecycle_transition(
+    v_lead_id,
+    'New',
+    'Contacted',
+    'lifecycle_changed',
+    'Test apply',
+    'grok',
+    '{"basis":"agent_decision","agent_run_id":"run-1","inbound_message_id":"msg-1"}'::jsonb
+  );
+  IF v_result->>'status' <> 'applied' THEN
+    RAISE EXCEPTION 'expected applied, got %', v_result;
+  END IF;
+
+  IF (SELECT lifecycle FROM public.leads WHERE id = v_lead_id) <> 'Contacted' THEN
+    RAISE EXCEPTION 'lead lifecycle was not updated';
+  END IF;
+
+  SELECT count(*) INTO v_count
+  FROM public.lead_events
+  WHERE lead_id = v_lead_id AND event_type = 'lifecycle_changed';
+  IF v_count <> 1 THEN
+    RAISE EXCEPTION 'expected one lifecycle_changed event, got %', v_count;
+  END IF;
+
+  v_result := public.apply_lead_lifecycle_transition(
+    v_lead_id,
+    'New',
+    'Qualified',
+    'lifecycle_changed',
+    'Stale apply',
+    'grok',
+    '{}'::jsonb
+  );
+  IF v_result->>'status' <> 'stale' THEN
+    RAISE EXCEPTION 'expected stale, got %', v_result;
+  END IF;
+
+  IF (SELECT lifecycle FROM public.leads WHERE id = v_lead_id) <> 'Contacted' THEN
+    RAISE EXCEPTION 'stale transition must not change lifecycle';
+  END IF;
+
+  SELECT count(*) INTO v_count
+  FROM public.lead_events
+  WHERE lead_id = v_lead_id AND event_type = 'lifecycle_changed';
+  IF v_count <> 1 THEN
+    RAISE EXCEPTION 'stale transition must not insert audit event, got %', v_count;
+  END IF;
+END $$;
+SQL
+
+  psql_cmd -d "${TEST_DB}" <<'SQL'
+CREATE OR REPLACE FUNCTION public.test_force_lead_event_fail()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = public
+AS $$
+BEGIN
+  IF NEW.metadata ? 'test_force_fail' THEN
+    RAISE EXCEPTION 'forced failure for atomicity test';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS test_force_lead_event_fail ON public.lead_events;
+CREATE TRIGGER test_force_lead_event_fail
+  BEFORE INSERT ON public.lead_events
+  FOR EACH ROW EXECUTE FUNCTION public.test_force_lead_event_fail();
+SQL
+
+  psql_cmd -d "${TEST_DB}" <<'SQL'
+DO $$
+DECLARE
+  v_lead_id uuid;
+BEGIN
+  INSERT INTO public.leads (phone_e164, lifecycle)
+  VALUES ('+15555550102', 'New')
+  RETURNING id INTO v_lead_id;
+
+  BEGIN
+    PERFORM public.apply_lead_lifecycle_transition(
+      v_lead_id,
+      'New',
+      'Contacted',
+      'lifecycle_changed',
+      'Forced failure',
+      'grok',
+      '{"test_force_fail":true}'::jsonb
+    );
+    RAISE EXCEPTION 'expected forced failure';
+  EXCEPTION
+    WHEN OTHERS THEN
+      NULL;
+  END;
+
+  IF (SELECT lifecycle FROM public.leads WHERE id = v_lead_id) <> 'New' THEN
+    RAISE EXCEPTION 'failed event insert must roll back lifecycle update';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM public.lead_events
+    WHERE lead_id = v_lead_id AND event_type = 'lifecycle_changed'
+  ) THEN
+    RAISE EXCEPTION 'failed event insert must not leave audit row';
+  END IF;
+END $$;
+SQL
+
+  psql_cmd -d "${TEST_DB}" <<'SQL'
+DROP TRIGGER IF EXISTS test_force_lead_event_fail ON public.lead_events;
+DROP FUNCTION IF EXISTS public.test_force_lead_event_fail();
+SQL
+}
+
 echo "Creating isolated database ${TEST_DB} (PGHOST=${PGHOST} PGUSER=${PGUSER} sudo=${USE_SUDO})..."
 psql_cmd -c "DROP DATABASE IF EXISTS \"${TEST_DB}\";" postgres >/dev/null
 psql_cmd -c "CREATE DATABASE \"${TEST_DB}\";" postgres
@@ -139,6 +283,10 @@ done
 assert_lead_inbox_tables
 assert_role_probes_locked
 assert_trigger_functions_have_search_path
+assert_lifecycle_transition_rpc
+
+echo "Test 4: lifecycle transition RPC is atomic and returns stale without audit"
+test_lifecycle_transition_rpc
 
 echo "Test 2: baseline is idempotent on production-shaped schema"
 apply_baseline

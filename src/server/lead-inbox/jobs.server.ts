@@ -257,6 +257,7 @@ export async function processInbound(job: JobRow): Promise<void> {
           from_lifecycle: lead.lifecycle,
           agent_run_id: run?.id ?? null,
           inbound_message_id: message.id,
+          code: transition.code,
         },
       );
     }

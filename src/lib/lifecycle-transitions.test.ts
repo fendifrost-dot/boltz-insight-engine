@@ -170,3 +170,14 @@ test("jobs.server applies lifecycle through gated transition service", () => {
   assert.match(source, /applyLifecycleTransition\(/);
   assert.doesNotMatch(source, /\.from\("leads"\)\.update\(\{ lifecycle:/);
 });
+
+test("lifecycle.server uses atomic RPC instead of separate update and event insert", () => {
+  const lifecycleServerPath = join(
+    dirname(fileURLToPath(import.meta.url)),
+    "../server/lead-inbox/lifecycle.server.ts",
+  );
+  const source = readFileSync(lifecycleServerPath, "utf8");
+  assert.match(source, /rpc\("apply_lead_lifecycle_transition"/);
+  assert.doesNotMatch(source, /addEvent\(/);
+  assert.match(source, /code: "stale"/);
+});

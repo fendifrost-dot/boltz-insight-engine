@@ -429,7 +429,12 @@ export const transitionLeadLifecycle = createServerFn({ method: "POST" })
     });
 
     if (!result.ok) {
-      return { ok: false as const, reason: result.reason, applied: false as const };
+      return {
+        ok: false as const,
+        reason: result.reason,
+        applied: false as const,
+        code: result.code,
+      };
     }
     if (!result.applied) {
       return { ok: true as const, reason: null as string | null, applied: false as const };
