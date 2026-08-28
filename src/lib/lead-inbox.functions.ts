@@ -4,6 +4,14 @@ import { Constants } from "@/integrations/supabase/types";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { CONSENT_BASIS, buildConsentLeadUpdate, validateConsentOptIn } from "@/lib/start-owner-sms-policy";
 import { LIFECYCLE_EVIDENCE_BASIS, requiresFinancialConfirm } from "@/lib/lifecycle-transitions";
+import {
+  FIRST_SMS_OUTBOUND_WINDOW_MS,
+  LEAD_LIST_SELECT,
+  buildLeadListRows,
+  mergeLeadListSources,
+  recentOutboundBlocksFirstSms,
+  sortLeadListRows,
+} from "@/lib/lead-inbox-first-sms";
 import { checkCapability, requireCapability, requireOwner } from "@/server/authz/require-capability.server";
 
 /**
@@ -18,17 +26,50 @@ export const listLeads = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     try {
-      const { data, error } = await context.supabase
-        .from("leads")
-        .select(
-          "id, name, phone_e164, lifecycle, consent_status, vehicle_year, vehicle_make, vehicle_model, vehicle_mileage, symptoms, lead_source, last_inbound_at, last_outbound_at, last_message_at, unread_count, created_at",
-        )
-        .order("last_message_at", { ascending: false, nullsFirst: false })
-        .order("id", { ascending: true })
-        .limit(200);
+      const recentOutboundSince = new Date(Date.now() - FIRST_SMS_OUTBOUND_WINDOW_MS).toISOString();
+      const [byMessage, byCreated, recentMessagesRes] = await Promise.all([
+        context.supabase
+          .from("leads")
+          .select(LEAD_LIST_SELECT)
+          .order("last_message_at", { ascending: false, nullsFirst: false })
+          .order("id", { ascending: true })
+          .limit(200),
+        context.supabase
+          .from("leads")
+          .select(LEAD_LIST_SELECT)
+          .order("created_at", { ascending: false })
+          .limit(50),
+        context.supabase
+          .from("messages")
+          .select("lead_id, body, direction, delivery_state, created_at")
+          .gte("created_at", recentOutboundSince)
+          .order("created_at", { ascending: false })
+          .limit(500),
+      ]);
 
-      if (error) throw new Error(error.message);
-      return data ?? [];
+      if (byMessage.error) throw new Error(byMessage.error.message);
+      if (byCreated.error) throw new Error(byCreated.error.message);
+
+      const recentMessages = recentMessagesRes.error ? [] : (recentMessagesRes.data ?? []);
+      const known = mergeLeadListSources(byMessage.data ?? [], byCreated.data ?? []);
+      const knownIds = new Set(known.map((row) => row.id));
+      const missingIds = [
+        ...new Set(
+          recentMessages.map((message) => message.lead_id).filter((id) => !knownIds.has(id)),
+        ),
+      ];
+
+      let extra = known;
+      if (missingIds.length > 0) {
+        const missingRes = await context.supabase
+          .from("leads")
+          .select(LEAD_LIST_SELECT)
+          .in("id", missingIds);
+        if (missingRes.error) throw new Error(missingRes.error.message);
+        extra = mergeLeadListSources(known, missingRes.data ?? []);
+      }
+
+      return sortLeadListRows(buildLeadListRows(extra, recentMessages));
     } catch (error) {
       console.error("listLeads failed", error);
       return [];
@@ -314,6 +355,40 @@ export const startOwnerSms = createServerFn({ method: "POST" })
 
     if (lead.consent_status === "opted_out") {
       return { ok: false as const, reason: "Lead has opted out of texts", leadId: lead.id };
+    }
+
+    const windowStart = new Date(Date.now() - FIRST_SMS_OUTBOUND_WINDOW_MS).toISOString();
+    const [recentOutboundRes, sentEventRes] = await Promise.all([
+      supabaseAdmin
+        .from("messages")
+        .select("created_at")
+        .eq("lead_id", lead.id)
+        .eq("direction", "outbound")
+        .gte("created_at", windowStart)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      supabaseAdmin
+        .from("lead_events")
+        .select("created_at")
+        .eq("lead_id", lead.id)
+        .eq("event_type", "outbound_sent")
+        .gte("created_at", windowStart)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    ]);
+    if (recentOutboundRes.error) throw new Error(recentOutboundRes.error.message);
+    if (sentEventRes.error) throw new Error(sentEventRes.error.message);
+
+    const firstSmsGuard = recentOutboundBlocksFirstSms({
+      nowMs: Date.now(),
+      lastOutboundAt: lead.last_outbound_at,
+      latestOutboundMessageAt: recentOutboundRes.data?.created_at ?? null,
+      latestOutboundSentEventAt: sentEventRes.data?.created_at ?? null,
+    });
+    if (firstSmsGuard.block) {
+      return { ok: false as const, reason: firstSmsGuard.reason, leadId: lead.id };
     }
 
     const leadUpdate: Record<string, unknown> = {};

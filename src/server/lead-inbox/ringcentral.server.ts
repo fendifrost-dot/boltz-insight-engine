@@ -1,4 +1,5 @@
 // RingCentral REST adapter. Server-only: never call from the browser.
+import { mapProviderDeliveryState } from "@/lib/lead-inbox-first-sms";
 import { readSecret, requireSecret } from "./env.server";
 
 type TokenCache = { token: string; expiresAt: number };
@@ -96,7 +97,7 @@ export async function resolveSmsCapability(): Promise<{
 export type SendSmsResult = {
   providerMessageId: string | null;
   providerCreatedAt: string | null;
-  deliveryState: "sent" | "queued";
+  deliveryState: ReturnType<typeof mapProviderDeliveryState>;
   raw: Record<string, unknown>;
 };
 
@@ -122,7 +123,7 @@ export async function sendSms(args: {
     return {
       providerMessageId: json.messages?.[0]?.id ?? json.id ?? null,
       providerCreatedAt: json.creationTime ?? null,
-      deliveryState: "queued",
+      deliveryState: mapProviderDeliveryState("Queued"),
       raw: sanitize(json),
     };
   }
@@ -143,7 +144,7 @@ export async function sendSms(args: {
   return {
     providerMessageId: json.id != null ? String(json.id) : null,
     providerCreatedAt: json.creationTime ?? null,
-    deliveryState: json.messageStatus === "Sent" ? "sent" : "queued",
+    deliveryState: mapProviderDeliveryState(json.messageStatus),
     raw: sanitize(json),
   };
 }
