@@ -14,6 +14,7 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
 import { Route as AuthenticatedAdsRouteImport } from './routes/_authenticated/ads'
 import { Route as AuthenticatedAiVisibilityRouteImport } from './routes/_authenticated/ai-visibility'
+import { Route as AuthenticatedAppointmentsRouteImport } from './routes/_authenticated/appointments'
 import { Route as AuthenticatedCompetitorsRouteImport } from './routes/_authenticated/competitors'
 import { Route as AuthenticatedContextRouteImport } from './routes/_authenticated/context'
 import { Route as AuthenticatedDecisionsRouteImport } from './routes/_authenticated/decisions'
@@ -55,6 +56,12 @@ const AuthenticatedAiVisibilityRoute =
   AuthenticatedAiVisibilityRouteImport.update({
     id: '/ai-visibility',
     path: '/ai-visibility',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedAppointmentsRoute =
+  AuthenticatedAppointmentsRouteImport.update({
+    id: '/appointments',
+    path: '/appointments',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedCompetitorsRoute =
@@ -157,6 +164,7 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRoute
   '/ads': typeof AuthenticatedAdsRoute
   '/ai-visibility': typeof AuthenticatedAiVisibilityRoute
+  '/appointments': typeof AuthenticatedAppointmentsRoute
   '/competitors': typeof AuthenticatedCompetitorsRoute
   '/context': typeof AuthenticatedContextRoute
   '/decisions': typeof AuthenticatedDecisionsRoute
@@ -179,6 +187,7 @@ export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/ads': typeof AuthenticatedAdsRoute
   '/ai-visibility': typeof AuthenticatedAiVisibilityRoute
+  '/appointments': typeof AuthenticatedAppointmentsRoute
   '/competitors': typeof AuthenticatedCompetitorsRoute
   '/context': typeof AuthenticatedContextRoute
   '/decisions': typeof AuthenticatedDecisionsRoute
@@ -204,6 +213,7 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/_authenticated/ads': typeof AuthenticatedAdsRoute
   '/_authenticated/ai-visibility': typeof AuthenticatedAiVisibilityRoute
+  '/_authenticated/appointments': typeof AuthenticatedAppointmentsRoute
   '/_authenticated/competitors': typeof AuthenticatedCompetitorsRoute
   '/_authenticated/context': typeof AuthenticatedContextRoute
   '/_authenticated/decisions': typeof AuthenticatedDecisionsRoute
@@ -230,6 +240,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/ads'
     | '/ai-visibility'
+    | '/appointments'
     | '/competitors'
     | '/context'
     | '/decisions'
@@ -252,6 +263,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/ads'
     | '/ai-visibility'
+    | '/appointments'
     | '/competitors'
     | '/context'
     | '/decisions'
@@ -276,6 +288,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/_authenticated/ads'
     | '/_authenticated/ai-visibility'
+    | '/_authenticated/appointments'
     | '/_authenticated/competitors'
     | '/_authenticated/context'
     | '/_authenticated/decisions'
@@ -341,6 +354,13 @@ declare module '@tanstack/react-router' {
       path: '/ai-visibility'
       fullPath: '/ai-visibility'
       preLoaderRoute: typeof AuthenticatedAiVisibilityRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/appointments': {
+      id: '/_authenticated/appointments'
+      path: '/appointments'
+      fullPath: '/appointments'
+      preLoaderRoute: typeof AuthenticatedAppointmentsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/competitors': {
@@ -468,6 +488,7 @@ declare module '@tanstack/react-router' {
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAdsRoute: typeof AuthenticatedAdsRoute
   AuthenticatedAiVisibilityRoute: typeof AuthenticatedAiVisibilityRoute
+  AuthenticatedAppointmentsRoute: typeof AuthenticatedAppointmentsRoute
   AuthenticatedCompetitorsRoute: typeof AuthenticatedCompetitorsRoute
   AuthenticatedContextRoute: typeof AuthenticatedContextRoute
   AuthenticatedDecisionsRoute: typeof AuthenticatedDecisionsRoute
@@ -486,6 +507,7 @@ interface AuthenticatedRouteRouteChildren {
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAdsRoute: AuthenticatedAdsRoute,
   AuthenticatedAiVisibilityRoute: AuthenticatedAiVisibilityRoute,
+  AuthenticatedAppointmentsRoute: AuthenticatedAppointmentsRoute,
   AuthenticatedCompetitorsRoute: AuthenticatedCompetitorsRoute,
   AuthenticatedContextRoute: AuthenticatedContextRoute,
   AuthenticatedDecisionsRoute: AuthenticatedDecisionsRoute,

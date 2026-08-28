@@ -34,6 +34,7 @@ MIGRATIONS=(
   "supabase/migrations/20260828070000_claim_message_jobs_rpc.sql"
   "supabase/migrations/20260828110000_correlation_outbound_idempotency.sql"
   "supabase/migrations/20260828140000_outbound_reservation_hardening.sql"
+  "supabase/migrations/20260828130000_appointments.sql"
 )
 
 psql_cmd() {
@@ -93,10 +94,11 @@ assert_lead_inbox_tables() {
       AND table_name IN (
         'leads','lead_events','message_threads','messages','message_jobs',
         'agent_runs','escalations','ringcentral_subscriptions','integration_health_snapshots',
-        'outbound_send_reservations'
+        'outbound_send_reservations',
+        'appointments'
       );")"
-  if [[ "${count}" != "10" ]]; then
-    echo "ERROR: expected 10 lead-inbox tables, found ${count}" >&2
+  if [[ "${count}" != "11" ]]; then
+    echo "ERROR: expected 11 lead-inbox tables, found ${count}" >&2
     exit 1
   fi
 }
@@ -743,6 +745,74 @@ test_claim_message_jobs_rpc
 
 echo "Test 6: correlation identity and outbound reservation idempotency"
 test_correlation_outbound_idempotency
+
+test_appointments_migration() {
+  psql_cmd -d "${TEST_DB}" <<'SQL'
+DO $$
+DECLARE
+  v_lead_id uuid;
+  v_first jsonb;
+  v_second jsonb;
+  v_event_count integer;
+BEGIN
+  INSERT INTO public.leads (phone_e164, lifecycle)
+  VALUES ('+15555550200', 'Qualified')
+  RETURNING id INTO v_lead_id;
+
+  v_first := public.create_appointment_atomic(
+    v_lead_id,
+    timestamptz '2026-08-28 14:00:00+00',
+    timestamptz '2026-08-28 15:00:00+00',
+    'America/Chicago',
+    2014,
+    'Toyota',
+    'Camry',
+    NULL,
+    'Rough idle inspection',
+    'shop_manager',
+    NULL,
+    'staff:test',
+    false,
+    NULL
+  );
+
+  IF v_first->>'status' <> 'created' THEN
+    RAISE EXCEPTION 'expected created appointment, got %', v_first;
+  END IF;
+
+  v_second := public.create_appointment_atomic(
+    v_lead_id,
+    timestamptz '2026-08-28 14:30:00+00',
+    timestamptz '2026-08-28 15:30:00+00',
+    'America/Chicago',
+    2014,
+    'Toyota',
+    'Camry',
+    NULL,
+    'Overlapping arrival window',
+    'shop_manager',
+    NULL,
+    'staff:test',
+    false,
+    NULL
+  );
+
+  IF v_second->>'status' <> 'created' THEN
+    RAISE EXCEPTION 'overlapping arrival windows must be allowed, got %', v_second;
+  END IF;
+
+  SELECT count(*) INTO v_event_count
+  FROM public.lead_events
+  WHERE lead_id = v_lead_id AND event_type = 'appointment_created';
+  IF v_event_count <> 2 THEN
+    RAISE EXCEPTION 'expected two appointment_created audit events, got %', v_event_count;
+  END IF;
+END $$;
+SQL
+}
+
+echo "Test 7: appointments allow overlapping arrival windows with audit events"
+test_appointments_migration
 
 echo "Test 2: baseline is idempotent on production-shaped schema"
 apply_baseline

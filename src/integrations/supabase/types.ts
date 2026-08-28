@@ -112,6 +112,83 @@ export type Database = {
           },
         ]
       }
+      appointments: {
+        Row: {
+          cancellation_reason: string | null
+          capacity_override_reason: string | null
+          created_at: string
+          created_by: string
+          ends_at: string
+          external_reference: string | null
+          id: string
+          lead_id: string
+          no_show_reason: string | null
+          service_summary: string
+          shop_timezone: string
+          source: string
+          starts_at: string
+          status: Database["public"]["Enums"]["appointment_status"]
+          updated_at: string
+          updated_by: string
+          vehicle_description: string | null
+          vehicle_make: string | null
+          vehicle_model: string | null
+          vehicle_year: number | null
+        }
+        Insert: {
+          cancellation_reason?: string | null
+          capacity_override_reason?: string | null
+          created_at?: string
+          created_by: string
+          ends_at: string
+          external_reference?: string | null
+          id?: string
+          lead_id: string
+          no_show_reason?: string | null
+          service_summary: string
+          shop_timezone?: string
+          source?: string
+          starts_at: string
+          status?: Database["public"]["Enums"]["appointment_status"]
+          updated_at?: string
+          updated_by: string
+          vehicle_description?: string | null
+          vehicle_make?: string | null
+          vehicle_model?: string | null
+          vehicle_year?: number | null
+        }
+        Update: {
+          cancellation_reason?: string | null
+          capacity_override_reason?: string | null
+          created_at?: string
+          created_by?: string
+          ends_at?: string
+          external_reference?: string | null
+          id?: string
+          lead_id?: string
+          no_show_reason?: string | null
+          service_summary?: string
+          shop_timezone?: string
+          source?: string
+          starts_at?: string
+          status?: Database["public"]["Enums"]["appointment_status"]
+          updated_at?: string
+          updated_by?: string
+          vehicle_description?: string | null
+          vehicle_make?: string | null
+          vehicle_model?: string | null
+          vehicle_year?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "appointments_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       escalations: {
         Row: {
           agent_run_id: string | null
@@ -729,6 +806,59 @@ export type Database = {
         Args: { _lease_ms?: number; _limit: number }
         Returns: Json
       }
+      create_appointment_atomic: {
+        Args: {
+          _capacity_override: boolean
+          _created_by: string
+          _ends_at: string
+          _external_reference: string | null
+          _lead_id: string
+          _override_reason: string | null
+          _service_summary: string
+          _shop_timezone: string
+          _source: string
+          _starts_at: string
+          _vehicle_description: string | null
+          _vehicle_make: string | null
+          _vehicle_model: string | null
+          _vehicle_year: number | null
+        }
+        Returns: Json
+      }
+      cancel_appointment_atomic: {
+        Args: {
+          _appointment_id: string
+          _reason: string
+          _updated_by: string
+        }
+        Returns: Json
+      }
+      mark_appointment_arrived_atomic: {
+        Args: {
+          _appointment_id: string
+          _updated_by: string
+        }
+        Returns: Json
+      }
+      mark_appointment_no_show_atomic: {
+        Args: {
+          _appointment_id: string
+          _reason: string
+          _updated_by: string
+        }
+        Returns: Json
+      }
+      reschedule_appointment_atomic: {
+        Args: {
+          _appointment_id: string
+          _capacity_override: boolean
+          _ends_at: string
+          _override_reason: string | null
+          _starts_at: string
+          _updated_by: string
+        }
+        Returns: Json
+      }
       complete_message_job: {
         Args: { _expected_attempts: number; _job_id: string }
         Returns: Json
@@ -790,6 +920,14 @@ export type Database = {
     }
     Enums: {
       agent_action: "send" | "escalate" | "no_reply"
+      appointment_status:
+        | "scheduled"
+        | "confirmed"
+        | "arrived"
+        | "in_service"
+        | "completed"
+        | "cancelled"
+        | "no_show"
       app_role: "owner" | "staff"
       consent_status: "unknown" | "opted_in" | "opted_out"
       escalation_category:
@@ -971,6 +1109,15 @@ export const Constants = {
   public: {
     Enums: {
       agent_action: ["send", "escalate", "no_reply"],
+      appointment_status: [
+        "scheduled",
+        "confirmed",
+        "arrived",
+        "in_service",
+        "completed",
+        "cancelled",
+        "no_show",
+      ],
       app_role: ["owner", "staff"],
       consent_status: ["unknown", "opted_in", "opted_out"],
       escalation_category: [

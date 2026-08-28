@@ -12,6 +12,7 @@ const NAV: { to: string; label: string; group: string }[] = [
   { to: "/experiments", label: "Experiment Registry", group: "Operate" },
   { to: "/measurement", label: "Measurement", group: "Operate" },
   { to: "/leads", label: "Lead Inbox", group: "Leads" },
+  { to: "/appointments", label: "Appointments", group: "Leads" },
   { to: "/escalations", label: "Escalations", group: "Leads" },
   { to: "/integration-health", label: "Integration Health", group: "Leads" },
   { to: "/ads", label: "Google Ads", group: "Research" },
