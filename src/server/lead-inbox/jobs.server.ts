@@ -15,6 +15,7 @@ import {
   completeJob,
   failJob,
   getOrCreateLeadThread,
+  JobLeaseLostError,
   openEscalation,
   recordHealth,
   recordInboundMessage,
@@ -49,6 +50,9 @@ export async function resumeAgent(detail = "Resumed by owner"): Promise<void> {
 
 export type ProcessSummary = {
   claimed: number;
+  recoveredStale: number;
+  expiredDead: number;
+  lostLease: number;
   succeeded: number;
   failed: number;
   paused: boolean;
@@ -59,6 +63,9 @@ export async function processJobs(limit = BATCH_SIZE): Promise<ProcessSummary> {
   const circuit = await agentCircuitState();
   const summary: ProcessSummary = {
     claimed: 0,
+    recoveredStale: 0,
+    expiredDead: 0,
+    lostLease: 0,
     succeeded: 0,
     failed: 0,
     paused: circuit.paused,
@@ -67,29 +74,51 @@ export async function processJobs(limit = BATCH_SIZE): Promise<ProcessSummary> {
 
   // Paused: allow a single probe item per run to detect out-of-band recovery.
   const effectiveLimit = circuit.paused ? 1 : limit;
-  const jobs = await claimJobs(effectiveLimit);
+  const { jobs, recovered, expiredDead } = await claimJobs(effectiveLimit);
   summary.claimed = jobs.length;
+  summary.recoveredStale = recovered;
+  summary.expiredDead = expiredDead;
 
   for (const job of jobs) {
     try {
       await runJob(job);
-      await completeJob(job.id);
+      await completeJob(job);
       summary.succeeded += 1;
       if (circuit.paused) {
         await resumeAgent("Probe succeeded; agent resumed automatically");
         summary.paused = false;
       }
     } catch (error) {
+      if (error instanceof JobLeaseLostError) {
+        summary.lostLease += 1;
+        continue;
+      }
       if (error instanceof GrokDeniedError && !error.retryable && (error.status === 402 || error.status === 403)) {
         await pauseAgent(error.message);
         summary.paused = true;
         summary.pauseDetail = error.message;
-        await failJob(job, error.message);
-        summary.failed += 1;
+        try {
+          await failJob(job, error.message);
+          summary.failed += 1;
+        } catch (failError) {
+          if (failError instanceof JobLeaseLostError) {
+            summary.lostLease += 1;
+          } else {
+            throw failError;
+          }
+        }
         break;
       }
-      await failJob(job, error instanceof Error ? error.message : String(error));
-      summary.failed += 1;
+      try {
+        await failJob(job, error instanceof Error ? error.message : String(error));
+        summary.failed += 1;
+      } catch (failError) {
+        if (failError instanceof JobLeaseLostError) {
+          summary.lostLease += 1;
+        } else {
+          throw failError;
+        }
+      }
     }
   }
 

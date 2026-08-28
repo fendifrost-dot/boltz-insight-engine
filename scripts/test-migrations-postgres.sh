@@ -31,6 +31,7 @@ MIGRATIONS=(
   "supabase/migrations/20260826001500_c6b8bc61-c333-4d63-ad2d-ed758784bc3e.sql"
   "supabase/migrations/20260827230000_lock_role_probe_to_caller.sql"
   "supabase/migrations/20260828013000_apply_lead_lifecycle_transition.sql"
+  "supabase/migrations/20260828070000_claim_message_jobs_rpc.sql"
 )
 
 psql_cmd() {
@@ -268,6 +269,218 @@ DROP FUNCTION IF EXISTS public.test_force_lead_event_fail();
 SQL
 }
 
+assert_claim_message_jobs_rpc() {
+  local fn_def complete_def fail_def
+  fn_def="$(psql_cmd -d "${TEST_DB}" -Atc "SELECT pg_get_functiondef('public.claim_message_jobs(integer, integer)'::regprocedure);")"
+  complete_def="$(psql_cmd -d "${TEST_DB}" -Atc "SELECT pg_get_functiondef('public.complete_message_job(uuid, integer)'::regprocedure);")"
+  fail_def="$(psql_cmd -d "${TEST_DB}" -Atc "SELECT pg_get_functiondef('public.fail_message_job(uuid, integer, text)'::regprocedure);")"
+  if [[ "${fn_def}" != *"SET search_path TO 'public'"* ]] && [[ "${fn_def}" != *"SET search_path = public"* ]]; then
+    echo "ERROR: claim_message_jobs missing SET search_path = public" >&2
+    exit 1
+  fi
+  if [[ "${complete_def}" != *"attempts = _expected_attempts"* ]]; then
+    echo "ERROR: complete_message_job must fence on expected attempts" >&2
+    exit 1
+  fi
+  if [[ "${fail_def}" != *"attempts = _expected_attempts"* ]]; then
+    echo "ERROR: fail_message_job must fence on expected attempts" >&2
+    exit 1
+  fi
+  if ! psql_cmd -d "${TEST_DB}" -Atc "SELECT has_function_privilege('authenticated', 'public.claim_message_jobs(integer, integer)', 'EXECUTE');" | grep -q f; then
+    echo "ERROR: authenticated must not execute claim_message_jobs" >&2
+    exit 1
+  fi
+  if ! psql_cmd -d "${TEST_DB}" -Atc "SELECT has_function_privilege('service_role', 'public.claim_message_jobs(integer, integer)', 'EXECUTE');" | grep -q t; then
+    echo "ERROR: service_role must execute claim_message_jobs" >&2
+    exit 1
+  fi
+  if ! psql_cmd -d "${TEST_DB}" -Atc "SELECT has_function_privilege('service_role', 'public.complete_message_job(uuid, integer)', 'EXECUTE');" | grep -q t; then
+    echo "ERROR: service_role must execute complete_message_job" >&2
+    exit 1
+  fi
+}
+
+test_claim_message_jobs_rpc() {
+  psql_cmd -d "${TEST_DB}" <<'SQL'
+DO $$
+DECLARE
+  v_stale_id uuid;
+  v_fresh_id uuid;
+  v_fresh_processing_id uuid;
+  v_max_stale_id uuid;
+  v_max_pending_id uuid;
+  v_single_id uuid;
+  v_result jsonb;
+  v_status public.message_job_status;
+  v_attempts integer;
+  v_seen boolean;
+BEGIN
+  INSERT INTO public.message_jobs (job_type, status, locked_at, attempts, max_attempts, run_after, payload)
+  VALUES (
+    'process_inbound',
+    'processing',
+    now() - interval '10 minutes',
+    2,
+    5,
+    now(),
+    '{"stale":true}'::jsonb
+  )
+  RETURNING id INTO v_stale_id;
+
+  INSERT INTO public.message_jobs (job_type, status, run_after, payload)
+  VALUES (
+    'process_inbound',
+    'pending',
+    now(),
+    '{"fresh":true}'::jsonb
+  )
+  RETURNING id INTO v_fresh_id;
+
+  INSERT INTO public.message_jobs (job_type, status, locked_at, attempts, max_attempts, run_after, payload)
+  VALUES (
+    'process_inbound',
+    'processing',
+    now(),
+    1,
+    5,
+    now(),
+    '{"fresh_processing":true}'::jsonb
+  )
+  RETURNING id INTO v_fresh_processing_id;
+
+  INSERT INTO public.message_jobs (job_type, status, locked_at, attempts, max_attempts, run_after, payload)
+  VALUES (
+    'process_inbound',
+    'processing',
+    now() - interval '10 minutes',
+    5,
+    5,
+    now(),
+    '{"max_stale":true}'::jsonb
+  )
+  RETURNING id INTO v_max_stale_id;
+
+  INSERT INTO public.message_jobs (job_type, status, attempts, max_attempts, run_after, payload)
+  VALUES (
+    'process_inbound',
+    'pending',
+    5,
+    5,
+    now(),
+    '{"max_pending":true}'::jsonb
+  )
+  RETURNING id INTO v_max_pending_id;
+
+  v_result := public.claim_message_jobs(5, 120000);
+
+  IF COALESCE((v_result->>'recovered')::integer, 0) <> 1 THEN
+    RAISE EXCEPTION 'expected one recovered stale job, got %', v_result;
+  END IF;
+
+  IF COALESCE((v_result->>'expired_dead')::integer, 0) <> 1 THEN
+    RAISE EXCEPTION 'expected one expired-dead stale job, got %', v_result;
+  END IF;
+
+  SELECT status, attempts INTO v_status, v_attempts
+  FROM public.message_jobs
+  WHERE id = v_stale_id;
+  IF v_status <> 'processing' OR v_attempts <> 3 THEN
+    RAISE EXCEPTION 'stale recoverable job should be reclaimed as processing attempts=3, got %/%', v_status, v_attempts;
+  END IF;
+
+  SELECT status, completed_at IS NOT NULL
+  INTO v_status, v_seen
+  FROM public.message_jobs
+  WHERE id = v_max_stale_id;
+  IF v_status <> 'dead' OR NOT v_seen THEN
+    RAISE EXCEPTION 'max-attempt stale job should be dead with completed_at';
+  END IF;
+
+  SELECT status INTO v_status FROM public.message_jobs WHERE id = v_fresh_processing_id;
+  IF v_status <> 'processing' THEN
+    RAISE EXCEPTION 'fresh processing job must remain untouched, got %', v_status;
+  END IF;
+
+  SELECT status INTO v_status FROM public.message_jobs WHERE id = v_max_pending_id;
+  IF v_status <> 'pending' THEN
+    RAISE EXCEPTION 'max-attempt pending job must not be claimed, got %', v_status;
+  END IF;
+
+  SELECT EXISTS (
+    SELECT 1 FROM jsonb_array_elements(v_result->'jobs') elem
+    WHERE (elem->>'id')::uuid = v_stale_id
+  ) INTO v_seen;
+  IF NOT v_seen THEN
+    RAISE EXCEPTION 'claimed jobs must include stale job id';
+  END IF;
+
+  SELECT EXISTS (
+    SELECT 1 FROM jsonb_array_elements(v_result->'jobs') elem
+    WHERE (elem->>'id')::uuid = v_fresh_id
+  ) INTO v_seen;
+  IF NOT v_seen THEN
+    RAISE EXCEPTION 'claimed jobs must include fresh pending job id';
+  END IF;
+
+  IF (SELECT count(*) FROM jsonb_array_elements(v_result->'jobs')) <> 2 THEN
+    RAISE EXCEPTION 'expected exactly two claimed jobs, got %', v_result->'jobs';
+  END IF;
+
+  IF public.complete_message_job(v_stale_id, 2)->>'status' <> 'lost_lease' THEN
+    RAISE EXCEPTION 'old worker must not complete after reclaim incremented attempts';
+  END IF;
+
+  IF public.complete_message_job(v_stale_id, 3)->>'status' <> 'completed' THEN
+    RAISE EXCEPTION 'current worker must complete with matching attempts';
+  END IF;
+
+  INSERT INTO public.message_jobs (job_type, status, run_after, payload)
+  VALUES ('process_inbound', 'pending', now(), '{"single":true}'::jsonb)
+  RETURNING id INTO v_single_id;
+
+  v_result := public.claim_message_jobs(1, 120000);
+  IF (SELECT count(*) FROM jsonb_array_elements(v_result->'jobs')) <> 1 THEN
+    RAISE EXCEPTION 'single claim should return one job';
+  END IF;
+
+  v_result := public.claim_message_jobs(1, 120000);
+  IF (SELECT count(*) FROM jsonb_array_elements(v_result->'jobs')) <> 0 THEN
+    RAISE EXCEPTION 'second concurrent-style claim must not return the same job';
+  END IF;
+
+  SELECT attempts INTO v_attempts FROM public.message_jobs WHERE id = v_single_id;
+  IF v_attempts <> 1 THEN
+    RAISE EXCEPTION 'valid claim must increment attempts exactly once, got %', v_attempts;
+  END IF;
+
+  v_result := public.claim_message_jobs(0, 120000);
+  IF jsonb_array_length(v_result->'jobs') <> 0 THEN
+    RAISE EXCEPTION 'limit 0 must return no jobs';
+  END IF;
+
+  BEGIN
+    PERFORM public.claim_message_jobs(101, 120000);
+    RAISE EXCEPTION 'limit above 100 must be rejected';
+  EXCEPTION
+    WHEN OTHERS THEN
+      IF SQLERRM NOT LIKE '%limit must be between 1 and 100%' THEN
+        RAISE;
+      END IF;
+  END;
+
+  BEGIN
+    PERFORM public.claim_message_jobs(1, 500);
+    RAISE EXCEPTION 'lease below 1000ms must be rejected';
+  EXCEPTION
+    WHEN OTHERS THEN
+      IF SQLERRM NOT LIKE '%lease_ms must be between 1000 and 3600000%' THEN
+        RAISE;
+      END IF;
+  END;
+END $$;
+SQL
+}
+
 echo "Creating isolated database ${TEST_DB} (PGHOST=${PGHOST} PGUSER=${PGUSER} sudo=${USE_SUDO})..."
 psql_cmd -c "DROP DATABASE IF EXISTS \"${TEST_DB}\";" postgres >/dev/null
 psql_cmd -c "CREATE DATABASE \"${TEST_DB}\";" postgres
@@ -284,9 +497,13 @@ assert_lead_inbox_tables
 assert_role_probes_locked
 assert_trigger_functions_have_search_path
 assert_lifecycle_transition_rpc
+assert_claim_message_jobs_rpc
 
 echo "Test 4: lifecycle transition RPC is atomic and returns stale without audit"
 test_lifecycle_transition_rpc
+
+echo "Test 5: claim_message_jobs recovers stale processing leases and claims atomically"
+test_claim_message_jobs_rpc
 
 echo "Test 2: baseline is idempotent on production-shaped schema"
 apply_baseline

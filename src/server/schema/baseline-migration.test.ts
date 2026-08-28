@@ -48,6 +48,7 @@ const migrationFiles = [
   "20260826001500_c6b8bc61-c333-4d63-ad2d-ed758784bc3e.sql",
   "20260827230000_lock_role_probe_to_caller.sql",
   "20260828013000_apply_lead_lifecycle_transition.sql",
+  "20260828070000_claim_message_jobs_rpc.sql",
 ];
 
 test("baseline is lead-inbox foundation only (no auth duplication)", () => {
