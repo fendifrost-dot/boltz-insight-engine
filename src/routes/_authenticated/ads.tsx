@@ -52,10 +52,10 @@ function AdsPage() {
         {s && (
           <div className="space-y-3">
             <div className="flex flex-wrap gap-2">
-              <Tag tone={s.reachable ? "ok" : "warn"}>
+              <Tag tone={s.reachable ? "success" : "warning"}>
                 {s.reachable ? `Connected${s.accountName ? ` · ${s.accountName}` : ""}` : "Offline"}
               </Tag>
-              <Tag tone={s.writeFreezeActive ? "warn" : "neutral"}>
+              <Tag tone={s.writeFreezeActive ? "warning" : "neutral"}>
                 {s.writeFreezeActive ? "Write freeze ACTIVE" : "Writes permitted after approval"}
               </Tag>
             </div>
@@ -78,11 +78,11 @@ function AdsPage() {
                     <Td className="font-mono text-xs">{sec.name}</Td>
                     <Td>
                       {sec.configured ? (
-                        <Tag tone="ok">Configured</Tag>
+                        <Tag tone="success">Configured</Tag>
                       ) : sec.optional ? (
                         <Tag tone="neutral">Optional · not set</Tag>
                       ) : (
-                        <Tag tone="warn">Missing</Tag>
+                        <Tag tone="warning">Missing</Tag>
                       )}
                     </Td>
                     <Td className="text-xs text-muted-foreground">{sec.masked ?? "—"}</Td>
