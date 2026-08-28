@@ -1,12 +1,13 @@
 // xAI (Grok) agent adapter. Server-only.
 import { z } from "zod";
+import { buildGrokChatMessages } from "@/lib/grok-prompt";
 import { Constants } from "@/integrations/supabase/types";
 import { readSecret, requireSecret } from "./env.server";
 import { BUSINESS } from "@/data/context";
 import type { Database } from "@/integrations/supabase/types";
 import type { LeadRow, MessageRow } from "./store.server";
 
-export const PROMPT_VERSION = "boltz-sms-agent-v2";
+export const PROMPT_VERSION = "boltz-sms-agent-v3";
 
 type Lifecycle = Database["public"]["Enums"]["lead_lifecycle"];
 type EscalationCategory = Database["public"]["Enums"]["escalation_category"];
@@ -93,19 +94,23 @@ export async function decideReply(args: {
   lead: LeadRow;
   history: MessageRow[];
   inboundBody: string;
+  inboundMessageId?: string;
 }): Promise<{ decision: AgentDecision; model: string; raw: unknown }> {
   const apiKey = requireSecret("XAI_API_KEY");
   const model = resolveModel();
 
-  const messages = [
-    { role: "system", content: systemPrompt() },
-    { role: "system", content: `Current lead record — ${leadSummary(args.lead)}` },
-    ...args.history.map((m) => ({
-      role: m.direction === "inbound" ? "user" : "assistant",
-      content: m.body ?? "",
+  const messages = buildGrokChatMessages({
+    businessSystemPrompt: systemPrompt(),
+    leadSummaryText: `Current lead record — ${leadSummary(args.lead)}`,
+    history: args.history.map((message) => ({
+      id: message.id,
+      direction: message.direction,
+      body: message.body,
+      created_at: message.created_at,
     })),
-    { role: "user", content: args.inboundBody },
-  ];
+    inboundBody: args.inboundBody,
+    inboundMessageId: args.inboundMessageId,
+  });
 
   const res = await fetch("https://api.x.ai/v1/chat/completions", {
     method: "POST",
