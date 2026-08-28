@@ -637,6 +637,14 @@ export type Database = {
         Args: { _lease_ms?: number; _limit: number }
         Returns: Json
       }
+      complete_message_job: {
+        Args: { _expected_attempts: number; _job_id: string }
+        Returns: Json
+      }
+      fail_message_job: {
+        Args: { _error: string; _expected_attempts: number; _job_id: string }
+        Returns: Json
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

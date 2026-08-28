@@ -1,6 +1,7 @@
 // Supabase persistence for the lead inbox (service role, server-only).
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import type { Database } from "@/integrations/supabase/types";
+import { JobLeaseLostError, assertJobLeaseRpcStatus } from "./job-lease.ts";
 
 type Tables = Database["public"]["Tables"];
 export type LeadRow = Tables["leads"]["Row"];
@@ -255,6 +256,7 @@ export const DEFAULT_JOB_LEASE_MS = 120_000;
 type ClaimJobsResult = {
   jobs: JobRow[];
   recovered: number;
+  expiredDead: number;
 };
 
 /** Bounded claim with stale-lease recovery and row-level locking. */
@@ -268,33 +270,39 @@ export async function claimJobs(
   });
   if (error) throw error;
 
-  const payload = data as { recovered?: number; jobs?: JobRow[] } | null;
+  const payload = data as { recovered?: number; expired_dead?: number; jobs?: JobRow[] } | null;
   return {
     jobs: payload?.jobs ?? [],
     recovered: payload?.recovered ?? 0,
+    expiredDead: payload?.expired_dead ?? 0,
   };
 }
 
-export async function completeJob(id: string): Promise<void> {
-  await supabaseAdmin
-    .from("message_jobs")
-    .update({ status: "succeeded", completed_at: new Date().toISOString(), locked_at: null, last_error: null })
-    .eq("id", id);
+export { JobLeaseLostError };
+
+export async function completeJob(job: JobRow): Promise<void> {
+  const { data, error } = await supabaseAdmin.rpc("complete_message_job", {
+    _job_id: job.id,
+    _expected_attempts: job.attempts,
+  });
+  if (error) throw error;
+  const status = assertJobLeaseRpcStatus(data, ["completed", "lost_lease"]);
+  if (status === "lost_lease") {
+    throw new JobLeaseLostError();
+  }
 }
 
 export async function failJob(job: JobRow, message: string): Promise<void> {
-  const dead = job.attempts >= job.max_attempts;
-  const backoffMs = Math.min(30 * 60_000, 60_000 * 2 ** Math.max(0, job.attempts - 1));
-  await supabaseAdmin
-    .from("message_jobs")
-    .update({
-      status: dead ? "dead" : "pending",
-      last_error: message.slice(0, 600),
-      locked_at: null,
-      run_after: new Date(Date.now() + backoffMs).toISOString(),
-      completed_at: dead ? new Date().toISOString() : null,
-    })
-    .eq("id", job.id);
+  const { data, error } = await supabaseAdmin.rpc("fail_message_job", {
+    _job_id: job.id,
+    _expected_attempts: job.attempts,
+    _error: message.slice(0, 600),
+  });
+  if (error) throw error;
+  const status = assertJobLeaseRpcStatus(data, ["pending", "dead", "lost_lease"]);
+  if (status === "lost_lease") {
+    throw new JobLeaseLostError();
+  }
 }
 
 export async function recordHealth(args: {
