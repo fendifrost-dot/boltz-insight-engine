@@ -49,6 +49,7 @@ export async function resumeAgent(detail = "Resumed by owner"): Promise<void> {
 
 export type ProcessSummary = {
   claimed: number;
+  recoveredStale: number;
   succeeded: number;
   failed: number;
   paused: boolean;
@@ -59,6 +60,7 @@ export async function processJobs(limit = BATCH_SIZE): Promise<ProcessSummary> {
   const circuit = await agentCircuitState();
   const summary: ProcessSummary = {
     claimed: 0,
+    recoveredStale: 0,
     succeeded: 0,
     failed: 0,
     paused: circuit.paused,
@@ -67,8 +69,9 @@ export async function processJobs(limit = BATCH_SIZE): Promise<ProcessSummary> {
 
   // Paused: allow a single probe item per run to detect out-of-band recovery.
   const effectiveLimit = circuit.paused ? 1 : limit;
-  const jobs = await claimJobs(effectiveLimit);
+  const { jobs, recovered } = await claimJobs(effectiveLimit);
   summary.claimed = jobs.length;
+  summary.recoveredStale = recovered;
 
   for (const job of jobs) {
     try {

@@ -31,6 +31,7 @@ MIGRATIONS=(
   "supabase/migrations/20260826001500_c6b8bc61-c333-4d63-ad2d-ed758784bc3e.sql"
   "supabase/migrations/20260827230000_lock_role_probe_to_caller.sql"
   "supabase/migrations/20260828013000_apply_lead_lifecycle_transition.sql"
+  "supabase/migrations/20260828070000_claim_message_jobs_rpc.sql"
 )
 
 psql_cmd() {
@@ -268,6 +269,82 @@ DROP FUNCTION IF EXISTS public.test_force_lead_event_fail();
 SQL
 }
 
+assert_claim_message_jobs_rpc() {
+  local fn_def
+  fn_def="$(psql_cmd -d "${TEST_DB}" -Atc "SELECT pg_get_functiondef('public.claim_message_jobs(integer, integer)'::regprocedure);")"
+  if [[ "${fn_def}" != *"SET search_path TO 'public'"* ]] && [[ "${fn_def}" != *"SET search_path = public"* ]]; then
+    echo "ERROR: claim_message_jobs missing SET search_path = public" >&2
+    exit 1
+  fi
+  if ! psql_cmd -d "${TEST_DB}" -Atc "SELECT has_function_privilege('authenticated', 'public.claim_message_jobs(integer, integer)', 'EXECUTE');" | grep -q f; then
+    echo "ERROR: authenticated must not execute claim_message_jobs" >&2
+    exit 1
+  fi
+  if ! psql_cmd -d "${TEST_DB}" -Atc "SELECT has_function_privilege('service_role', 'public.claim_message_jobs(integer, integer)', 'EXECUTE');" | grep -q t; then
+    echo "ERROR: service_role must execute claim_message_jobs" >&2
+    exit 1
+  fi
+}
+
+test_claim_message_jobs_rpc() {
+  psql_cmd -d "${TEST_DB}" <<'SQL'
+DO $$
+DECLARE
+  v_stale_id uuid;
+  v_fresh_id uuid;
+  v_result jsonb;
+  v_status public.message_job_status;
+  v_attempts integer;
+BEGIN
+  INSERT INTO public.message_jobs (job_type, status, locked_at, attempts, run_after, payload)
+  VALUES (
+    'process_inbound',
+    'processing',
+    now() - interval '10 minutes',
+    2,
+    now(),
+    '{"stale":true}'::jsonb
+  )
+  RETURNING id INTO v_stale_id;
+
+  INSERT INTO public.message_jobs (job_type, status, run_after, payload)
+  VALUES (
+    'process_inbound',
+    'pending',
+    now(),
+    '{"fresh":true}'::jsonb
+  )
+  RETURNING id INTO v_fresh_id;
+
+  v_result := public.claim_message_jobs(5, 120000);
+
+  IF COALESCE((v_result->>'recovered')::integer, 0) <> 1 THEN
+    RAISE EXCEPTION 'expected one recovered stale job, got %', v_result;
+  END IF;
+
+  SELECT status, attempts INTO v_status, v_attempts
+  FROM public.message_jobs
+  WHERE id = v_stale_id;
+
+  IF v_status <> 'processing' THEN
+    RAISE EXCEPTION 'stale job should be reclaimed as processing, got %', v_status;
+  END IF;
+
+  IF v_attempts <> 3 THEN
+    RAISE EXCEPTION 'stale job should increment attempts on reclaim, got %', v_attempts;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM jsonb_array_elements(v_result->'jobs') elem
+    WHERE (elem->>'id')::uuid IN (v_stale_id, v_fresh_id)
+  ) THEN
+    RAISE EXCEPTION 'claimed jobs payload missing expected ids: %', v_result;
+  END IF;
+END $$;
+SQL
+}
+
 echo "Creating isolated database ${TEST_DB} (PGHOST=${PGHOST} PGUSER=${PGUSER} sudo=${USE_SUDO})..."
 psql_cmd -c "DROP DATABASE IF EXISTS \"${TEST_DB}\";" postgres >/dev/null
 psql_cmd -c "CREATE DATABASE \"${TEST_DB}\";" postgres
@@ -284,9 +361,13 @@ assert_lead_inbox_tables
 assert_role_probes_locked
 assert_trigger_functions_have_search_path
 assert_lifecycle_transition_rpc
+assert_claim_message_jobs_rpc
 
 echo "Test 4: lifecycle transition RPC is atomic and returns stale without audit"
 test_lifecycle_transition_rpc
+
+echo "Test 5: claim_message_jobs recovers stale processing leases and claims atomically"
+test_claim_message_jobs_rpc
 
 echo "Test 2: baseline is idempotent on production-shaped schema"
 apply_baseline

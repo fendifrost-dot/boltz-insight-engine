@@ -633,6 +633,10 @@ export type Database = {
         }
         Returns: Json
       }
+      claim_message_jobs: {
+        Args: { _lease_ms?: number; _limit: number }
+        Returns: Json
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
