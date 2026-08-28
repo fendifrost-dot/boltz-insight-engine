@@ -230,7 +230,12 @@ export async function processInbound(job: JobRow): Promise<void> {
   }
 
   const history = await threadHistory(thread.id, 20);
-  const { decision, model, raw } = await decideReply({ lead, history, inboundBody: body });
+  const { decision, model, raw } = await decideReply({
+    lead,
+    history,
+    inboundBody: body,
+    inboundMessageId: message.id,
+  });
 
   const { data: run } = await supabaseAdmin
     .from("agent_runs")
