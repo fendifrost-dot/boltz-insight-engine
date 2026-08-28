@@ -8,6 +8,7 @@ import {
   detectOptIn,
   detectOptOut,
 } from "./safety.server";
+import { applyLifecycleTransition } from "./lifecycle.server";
 import {
   addEvent,
   claimJobs,
@@ -232,15 +233,34 @@ export async function processInbound(job: JobRow): Promise<void> {
   }
 
   if (decision.proposed_lifecycle && decision.proposed_lifecycle !== lead.lifecycle) {
-    await supabaseAdmin.from("leads").update({ lifecycle: decision.proposed_lifecycle }).eq("id", lead.id);
-    await addEvent(
-      lead.id,
-      "lifecycle_changed",
-      `Agent moved lifecycle to ${decision.proposed_lifecycle}`,
-      "grok",
-      undefined,
-      { from: lead.lifecycle, to: decision.proposed_lifecycle },
-    );
+    const transition = await applyLifecycleTransition({
+      leadId: lead.id,
+      fromLifecycle: lead.lifecycle,
+      toLifecycle: decision.proposed_lifecycle,
+      actor: "grok",
+      evidence: {
+        basis: "agent_decision",
+        agentRunId: run?.id,
+        inboundMessageId: message.id,
+        note: decision.audit_summary,
+      },
+      summary: `Agent proposed lifecycle move to ${decision.proposed_lifecycle}`,
+    });
+    if (!transition.ok) {
+      await addEvent(
+        lead.id,
+        "lifecycle_transition_rejected",
+        transition.reason,
+        "grok",
+        {
+          proposed_to: decision.proposed_lifecycle,
+          from_lifecycle: lead.lifecycle,
+          agent_run_id: run?.id ?? null,
+          inbound_message_id: message.id,
+          code: transition.code,
+        },
+      );
+    }
   }
 
   if (decision.action === "escalate") {

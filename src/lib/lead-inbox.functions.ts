@@ -1,13 +1,16 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { Constants } from "@/integrations/supabase/types";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { CONSENT_BASIS, buildConsentLeadUpdate, validateConsentOptIn } from "@/lib/start-owner-sms-policy";
-import { requireCapability, requireOwner } from "@/server/authz/require-capability.server";
+import { LIFECYCLE_EVIDENCE_BASIS, requiresFinancialConfirm } from "@/lib/lifecycle-transitions";
+import { checkCapability, requireCapability, requireOwner } from "@/server/authz/require-capability.server";
 
 /**
  * Server-fn authorization audit (createServerFn handlers in this module):
  * - listLeads, getThread, listEscalations, updateEscalation, setThreadControl: authenticated client + RLS only.
  * - sendOwnerMessage, startOwnerSms: service-role outbound path → requireCapability("communications.send").
+ * - transitionLeadLifecycle: cases.transition; financial_status.confirm when touching Paid; owner vs staff actor.
  * - getIntegrationHealth, resumeAgentFn, ensureSubscription: secrets/provider/integration → integrations.manage (owner).
  */
 
@@ -377,6 +380,71 @@ export const startOwnerSms = createServerFn({ method: "POST" })
     return outcome.ok
       ? { ok: true as const, reason: null as string | null, leadId: lead.id }
       : { ok: false as const, reason: outcome.reason, leadId: lead.id };
+  });
+
+const lifecycleEvidenceSchema = z.object({
+  basis: z.enum(LIFECYCLE_EVIDENCE_BASIS),
+  note: z.string().max(500).optional(),
+  evidenceRef: z.string().max(200).optional(),
+});
+
+export const transitionLeadLifecycle = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) =>
+    z
+      .object({
+        leadId: z.string().uuid(),
+        toLifecycle: z.enum(Constants.public.Enums.lead_lifecycle),
+        evidence: lifecycleEvidenceSchema,
+      })
+      .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    await requireCapability(context, "cases.transition");
+
+    const { applyLifecycleTransition } = await import("@/server/lead-inbox/lifecycle.server");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    const { data: lead, error } = await supabaseAdmin
+      .from("leads")
+      .select("id, lifecycle")
+      .eq("id", data.leadId)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!lead) return { ok: false as const, reason: "Lead not found", applied: false as const };
+
+    if (requiresFinancialConfirm(lead.lifecycle, data.toLifecycle)) {
+      await requireCapability(context, "financial_status.confirm");
+    }
+
+    const isOwner = await checkCapability(context, "integrations.manage");
+    const actor = isOwner ? `owner:${context.userId}` : `staff:${context.userId}`;
+    const result = await applyLifecycleTransition({
+      leadId: lead.id,
+      fromLifecycle: lead.lifecycle,
+      toLifecycle: data.toLifecycle,
+      actor,
+      evidence: {
+        basis: data.evidence.basis,
+        evidenceRef: data.evidence.evidenceRef,
+        note: data.evidence.note,
+        assertedBy: context.userId,
+      },
+      summary: `${isOwner ? "Owner" : "Staff"} moved lifecycle to ${data.toLifecycle}`,
+    });
+
+    if (!result.ok) {
+      return {
+        ok: false as const,
+        reason: result.reason,
+        applied: false as const,
+        code: result.code,
+      };
+    }
+    if (!result.applied) {
+      return { ok: true as const, reason: null as string | null, applied: false as const };
+    }
+    return { ok: true as const, reason: null as string | null, applied: true as const };
   });
 
 export const resumeAgentFn = createServerFn({ method: "POST" })
