@@ -1,0 +1,16 @@
+{
+  "capturedAt": "2026-08-28T00:10:00Z",
+  "derivedFrom": "docs/schema/production-export.json",
+  "leadInboxTables": [
+    "leads",
+    "lead_events",
+    "message_threads",
+    "messages",
+    "message_jobs",
+    "agent_runs",
+    "escalations",
+    "ringcentral_subscriptions",
+    "integration_health_snapshots"
+  ],
+  "note": "Curated index into production-export.json for static tests. Full columns, defaults, constraints, indexes, FKs, RLS, policies, triggers, and function definitions live in the export file."
+}
