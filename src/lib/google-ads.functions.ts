@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { requireCapability } from "@/server/authz/require-capability.server";
+import { diagnoseNextStep } from "@/lib/google-ads-diagnose";
 
 /**
  * Google Ads server functions.
@@ -15,17 +16,33 @@ export const getAdsStatus = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     await requireCapability(context, "integrations.manage");
-    const { adsSecretStatus, adsConfigError } = await import("@/server/google-ads/env.server");
-    const { adsWriteFreezeActive, ADS_WRITE_FREEZE_UNTIL, adsSearch } = await import(
-      "@/server/google-ads/client.server"
+    const { adsSecretStatus, adsConfigError, normalizeCustomerId, readAdsSecret } = await import(
+      "@/server/google-ads/env.server"
     );
+    const {
+      adsWriteFreezeActive,
+      ADS_WRITE_FREEZE_UNTIL,
+      adsSearch,
+      AdsRequestError,
+      listAccessibleCustomerMasks,
+    } = await import("@/server/google-ads/client.server");
 
     const secrets = adsSecretStatus();
     const configError = adsConfigError();
+    const shapeWarnings = secrets
+      .filter((s) => s.shape && !s.shape.ok)
+      .map((s) => `${s.name}: ${s.shape?.warning}`);
 
     let reachable = false;
     let accountName: string | null = null;
     let detail: string | null = configError;
+    let errorClass: string = configError ? "missing_secrets" : "unknown";
+    let googleCode: string | null = null;
+    let accessibleMasks: string[] = [];
+    let configuredCustomerInAccessible: boolean | null = null;
+    let configuredLoginInAccessible: boolean | null = null;
+    let directAccessOk: boolean | null = null;
+    let nextStep: string | null = null;
 
     if (!configError) {
       try {
@@ -34,9 +51,64 @@ export const getAdsStatus = createServerFn({ method: "GET" })
         }>("SELECT customer.descriptive_name, customer.currency_code FROM customer LIMIT 1");
         reachable = true;
         accountName = rows[0]?.customer?.descriptiveName ?? null;
+        errorClass = "ok";
       } catch (error) {
-        detail = error instanceof Error ? error.message : "Unknown Google Ads error";
+        if (error instanceof AdsRequestError) {
+          detail = error.parsed.message;
+          errorClass = error.parsed.errorClass;
+          googleCode = error.parsed.googleCode;
+        } else {
+          const message = error instanceof Error ? error.message : "Unknown Google Ads error";
+          detail = message;
+          errorClass = message.includes("OAuth token refresh failed")
+            ? "oauth_refresh_failed"
+            : "unknown";
+        }
       }
+
+      try {
+        const accessible = await listAccessibleCustomerMasks();
+        if (accessible.ok) {
+          accessibleMasks = accessible.masks;
+          const configured = normalizeCustomerId(readAdsSecret("GOOGLE_ADS_CUSTOMER_ID") ?? "");
+          const login = normalizeCustomerId(readAdsSecret("GOOGLE_ADS_LOGIN_CUSTOMER_ID") ?? "");
+          configuredCustomerInAccessible = configured
+            ? accessible.digits.includes(configured)
+            : null;
+          configuredLoginInAccessible = login ? accessible.digits.includes(login) : null;
+        } else if (!detail) {
+          detail = accessible.error;
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : null;
+        if (message && message.includes("OAuth token refresh failed")) {
+          errorClass = "oauth_refresh_failed";
+          detail = message;
+        }
+      }
+
+      if (errorClass === "user_permission_denied" && readAdsSecret("GOOGLE_ADS_LOGIN_CUSTOMER_ID")) {
+        try {
+          await adsSearch(
+            "SELECT customer.descriptive_name FROM customer LIMIT 1",
+            { omitLoginCustomerId: true },
+          );
+          directAccessOk = true;
+        } catch {
+          directAccessOk = false;
+        }
+      }
+
+      nextStep = diagnoseNextStep({
+        errorClass,
+        shapeWarnings,
+        configuredCustomerInAccessible,
+        configuredLoginInAccessible,
+        directAccessOk,
+        hasLoginCustomerId: Boolean(readAdsSecret("GOOGLE_ADS_LOGIN_CUSTOMER_ID")),
+      });
+    } else {
+      nextStep = "Enter the five required Google Ads secrets in Lovable Cloud. Do not paste a Gemini API key into GOOGLE_ADS_DEVELOPER_TOKEN.";
     }
 
     return {
@@ -45,6 +117,14 @@ export const getAdsStatus = createServerFn({ method: "GET" })
       reachable,
       accountName,
       detail,
+      errorClass,
+      googleCode,
+      shapeWarnings,
+      accessibleMasks,
+      configuredCustomerInAccessible,
+      configuredLoginInAccessible,
+      directAccessOk,
+      nextStep,
       writeFreezeActive: adsWriteFreezeActive(),
       writeFreezeUntil: new Date(ADS_WRITE_FREEZE_UNTIL).toISOString(),
     };
