@@ -16,6 +16,7 @@ import {
   displayPhone,
   resolveThreadSync,
 } from "@/lib/lead-inbox-thread-sync";
+import { displayDeliveryState, matchExistingLeadForNewSms } from "@/lib/lead-inbox-first-sms";
 
 export const Route = createFileRoute("/_authenticated/leads")({
   head: () => ({
@@ -100,6 +101,7 @@ function LeadsPage() {
     onSuccess: (result) => {
       if (result.ok) setDraft("");
       void queryClient.invalidateQueries({ queryKey: ["lead-thread", selected] });
+      void queryClient.invalidateQueries({ queryKey: ["leads"] });
     },
   });
 
@@ -124,23 +126,27 @@ function LeadsPage() {
     onSuccess: (result) => {
       const startedName = newName;
       const startedPhone = newPhone;
-      if (result.ok && result.leadId) {
-        setNewPhone("");
-        setNewName("");
-        setNewText("");
-        setShowCompose(false);
-        void queryClient.invalidateQueries({ queryKey: ["leads"] });
+      void queryClient.invalidateQueries({ queryKey: ["leads"] });
+      if (result.leadId) {
         setSelectedRow({
           id: result.leadId,
           name: startedName || null,
           phone_e164: startedPhone || null,
         });
-
+        void queryClient.invalidateQueries({ queryKey: ["lead-thread", result.leadId] });
+      }
+      if (result.ok && result.leadId) {
+        setNewPhone("");
+        setNewName("");
+        setNewText("");
+        setShowCompose(false);
       }
     },
   });
 
   const rows = leads.data ?? [];
+  const existingForNewSms = matchExistingLeadForNewSms(newPhone, rows, Date.now());
+  const blockDuplicateFirstSms = Boolean(existingForNewSms?.blocksFirstSms);
 
   return (
     <Shell>
@@ -194,16 +200,48 @@ function LeadsPage() {
           <div className="mt-3 flex items-center gap-2">
             <button
               onClick={() => startSms.mutate()}
-              disabled={newPhone.trim().length === 0 || newText.trim().length === 0 || startSms.isPending}
+              disabled={
+                newPhone.trim().length === 0 ||
+                newText.trim().length === 0 ||
+                startSms.isPending ||
+                blockDuplicateFirstSms
+              }
               className="rounded bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-40"
             >
               {startSms.isPending ? "Sending…" : "Send new SMS"}
             </button>
+            {existingForNewSms && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedRow({
+                    id: existingForNewSms.lead.id,
+                    name: existingForNewSms.lead.name ?? newName ?? null,
+                    phone_e164: existingForNewSms.lead.phone_e164 ?? newPhone ?? null,
+                  });
+                  setShowCompose(false);
+                }}
+                className="rounded border border-border px-3 py-1.5 text-xs font-medium transition-colors hover:bg-secondary"
+              >
+                Open existing thread
+              </button>
+            )}
             {startSms.data && !startSms.data.ok && (
               <span className="text-xs text-destructive">{startSms.data.reason}</span>
             )}
-            {startSms.isError && <span className="text-xs text-destructive">Start SMS failed.</span>}
+            {startSms.isError && (
+              <span className="text-xs text-destructive">Start SMS failed.</span>
+            )}
           </div>
+          {existingForNewSms && (
+            <p
+              className={`mt-2 text-xs ${blockDuplicateFirstSms ? "text-destructive" : "text-muted-foreground"}`}
+            >
+              {blockDuplicateFirstSms
+                ? `This number already got an outbound SMS${existingForNewSms.sentAt ? ` at ${fmt(existingForNewSms.sentAt)}` : ""}. Open the existing thread instead of sending a second first-contact text.`
+                : `This number already has a lead (${existingForNewSms.lead.name ?? "Unnamed"}). Prefer the existing thread.`}
+            </p>
+          )}
         </Panel>
       )}
 
@@ -277,8 +315,30 @@ function LeadsPage() {
                           {lead.consent_status}
                         </Tag>
                       </Td>
-                      <Td className="whitespace-nowrap text-xs text-muted-foreground">
-                        {fmt(lead.last_message_at)}
+                      <Td className="text-xs text-muted-foreground">
+                        {lead.last_preview_at || lead.last_message_at ? (
+                          <div className="space-y-0.5">
+                            {lead.last_preview_direction ? (
+                              <Tag
+                                tone={
+                                  lead.last_preview_direction === "outbound" ? "primary" : "info"
+                                }
+                              >
+                                {lead.last_preview_direction}
+                              </Tag>
+                            ) : null}
+                            <div className="whitespace-nowrap">
+                              {fmt(lead.last_preview_at ?? lead.last_message_at)}
+                            </div>
+                            {lead.last_preview_body ? (
+                              <div className="max-w-[14rem] truncate text-[11px] text-foreground/80">
+                                {lead.last_preview_body}
+                              </div>
+                            ) : null}
+                          </div>
+                        ) : (
+                          "Not entered"
+                        )}
                       </Td>
                     </tr>
                   );
@@ -353,7 +413,7 @@ function LeadsPage() {
                     >
                       <div className="label-caps mb-1 flex gap-2">
                         <span>{m.direction}</span>
-                        <span>{m.delivery_state}</span>
+                        <span>{displayDeliveryState(m)}</span>
                         <span>{fmt(m.created_at)}</span>
                       </div>
                       <p className="text-sm whitespace-pre-wrap text-foreground">{m.body}</p>

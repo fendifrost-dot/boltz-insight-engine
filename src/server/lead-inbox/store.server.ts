@@ -199,11 +199,16 @@ export async function recordOutboundMessage(args: {
   }
 
   const now = new Date().toISOString();
-  await supabaseAdmin
+  const { error: leadStampError } = await supabaseAdmin
     .from("leads")
     .update({ last_outbound_at: now, last_message_at: now })
     .eq("id", args.leadId);
-  await supabaseAdmin.from("message_threads").update({ last_message_at: now }).eq("id", args.threadId);
+  if (leadStampError) throw leadStampError;
+  const { error: threadStampError } = await supabaseAdmin
+    .from("message_threads")
+    .update({ last_message_at: now })
+    .eq("id", args.threadId);
+  if (threadStampError) throw threadStampError;
 
   return data;
 }

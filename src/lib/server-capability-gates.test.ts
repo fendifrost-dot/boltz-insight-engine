@@ -141,3 +141,28 @@ test("staff can transition lifecycle with cases.transition", async () => {
   );
   assert.equal(allowed, true);
 });
+
+test("startOwnerSms refuses a second first-contact send when an outbound already exists", () => {
+  const block = handlerBlock("startOwnerSms");
+  const guardIdx = block.indexOf("recentOutboundBlocksFirstSms");
+  const sendIdx = block.indexOf("sendOutbound(");
+  assert.ok(guardIdx >= 0, "missing 24h first-SMS outbound guard");
+  assert.ok(sendIdx >= 0, "expected sendOutbound");
+  assert.ok(guardIdx < sendIdx, "24h outbound guard must run before sendOutbound");
+  assert.match(block, /\.eq\("direction", "outbound"\)/);
+  assert.match(block, /outbound_sent/);
+  assert.match(block, /firstSmsGuard\.block/);
+});
+
+test("sendOwnerMessage does not apply the first-SMS 24h guard so in-thread follow-ups still send", () => {
+  const block = handlerBlock("sendOwnerMessage");
+  assert.doesNotMatch(block, /recentOutboundBlocksFirstSms/);
+});
+
+test("listLeads overlays recent messages so owner_outbound is visible without opening a thread", () => {
+  const block = handlerBlock("listLeads");
+  assert.match(block, /from\("messages"\)/);
+  assert.match(block, /buildLeadListRows/);
+  assert.match(block, /mergeLeadListSources/);
+  assert.match(block, /order\("created_at"/);
+});
