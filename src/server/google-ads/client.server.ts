@@ -80,7 +80,7 @@ export async function adsSearch<T = Record<string, unknown>>(query: string): Pro
   if (configError) throw new Error(configError);
 
   const token = await getAccessToken();
-  const customerPath = normalizeCustomerId(customerId);
+  const customerPath = adsCustomerId();
   const url = `${API_BASE}/customers/${customerPath}/googleAds:searchStream`;
   console.log(`[google-ads] searchStream -> ${url}`);
   const response = await fetch(url, {
@@ -88,8 +88,8 @@ export async function adsSearch<T = Record<string, unknown>>(query: string): Pro
     headers: adsHeaders(token),
     body: JSON.stringify({ query }),
   });
-  const text = await res.text();
-  if (!res.ok) throw new Error(`Google Ads query failed (${res.status}): ${redact(text)}`);
+  const text = await response.text();
+  if (!response.ok) throw new Error(`Google Ads query failed (${response.status}): ${redact(text)}`);
 
   const payload = JSON.parse(text) as unknown;
   const chunks = Array.isArray(payload) ? payload : [payload];
