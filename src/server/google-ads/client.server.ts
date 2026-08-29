@@ -80,8 +80,10 @@ export async function adsSearch<T = Record<string, unknown>>(query: string): Pro
   if (configError) throw new Error(configError);
 
   const token = await getAccessToken();
-  const customerId = adsCustomerId();
-  const res = await fetch(`${API_BASE}/customers/${customerId}/googleAds:searchStream`, {
+  const customerPath = normalizeCustomerId(customerId);
+  const url = `${API_BASE}/customers/${customerPath}/googleAds:searchStream`;
+  console.log(`[google-ads] searchStream -> ${url}`);
+  const response = await fetch(url, {
     method: "POST",
     headers: adsHeaders(token),
     body: JSON.stringify({ query }),
