@@ -55,12 +55,12 @@ export type LifecycleEvidenceBasis = (typeof LIFECYCLE_EVIDENCE_BASIS)[number];
 
 export type LifecycleEvidence = {
   basis: LifecycleEvidenceBasis;
-  evidenceRef?: string;
-  note?: string;
-  agentRunId?: string;
-  inboundMessageId?: string;
-  assertedBy?: string;
-  at?: string;
+  evidenceRef?: string | undefined;
+  note?: string | undefined;
+  agentRunId?: string | undefined;
+  inboundMessageId?: string | undefined;
+  assertedBy?: string | undefined;
+  at?: string | undefined;
 };
 
 export type TransitionActorKind = "grok" | "staff" | "owner" | "system";
