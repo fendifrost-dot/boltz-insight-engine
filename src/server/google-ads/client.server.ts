@@ -1,10 +1,15 @@
 // Server-only Google Ads API client (REST). Never import from client code.
 import {
   adsConfigError,
+  maskCustomerIdDigits,
   normalizeCustomerId,
   readAdsSecret,
   requireAdsSecret,
 } from "./env.server";
+import { AdsRequestError, parseAdsError, redact } from "./errors.server";
+
+export { AdsRequestError, parseAdsError } from "./errors.server";
+export type { AdsErrorClass, ParsedAdsError } from "./errors.server";
 
 // Versioned REST base. Sunset versions return a bare HTML 404; as of Aug 2026
 // supported versions are v22+. Bump when Google sunsets this one.
@@ -52,14 +57,16 @@ async function getAccessToken(): Promise<string> {
   return cachedToken.value;
 }
 
-function adsHeaders(token: string): Record<string, string> {
+function adsHeaders(token: string, opts?: { omitLoginCustomerId?: boolean }): Record<string, string> {
   const headers: Record<string, string> = {
     Authorization: `Bearer ${token}`,
     "developer-token": requireAdsSecret("GOOGLE_ADS_DEVELOPER_TOKEN"),
     "Content-Type": "application/json",
   };
-  const login = readAdsSecret("GOOGLE_ADS_LOGIN_CUSTOMER_ID");
-  if (login) headers["login-customer-id"] = normalizeCustomerId(login);
+  if (!opts?.omitLoginCustomerId) {
+    const login = readAdsSecret("GOOGLE_ADS_LOGIN_CUSTOMER_ID");
+    if (login) headers["login-customer-id"] = normalizeCustomerId(login);
+  }
   return headers;
 }
 
@@ -67,26 +74,22 @@ export function adsCustomerId(): string {
   return normalizeCustomerId(requireAdsSecret("GOOGLE_ADS_CUSTOMER_ID"));
 }
 
-/** Strip anything that looks like a token out of provider error text. */
-function redact(text: string): string {
-  return text
-    .replace(/(ya29|1\/\/)[A-Za-z0-9._\-]+/g, "[redacted-token]")
-    .slice(0, 800);
-}
-
 /** Run a GAQL query via searchStream and return flattened result rows. */
-export async function adsSearch<T = Record<string, unknown>>(query: string): Promise<T[]> {
+export async function adsSearch<T = Record<string, unknown>>(
+  query: string,
+  opts?: { omitLoginCustomerId?: boolean },
+): Promise<T[]> {
   const configError = adsConfigError();
   if (configError) throw new Error(configError);
 
   const token = await getAccessToken();
   const response = await fetch(`${API_BASE}/customers/${adsCustomerId()}/googleAds:searchStream`, {
     method: "POST",
-    headers: adsHeaders(token),
+    headers: adsHeaders(token, opts),
     body: JSON.stringify({ query }),
   });
   const text = await response.text();
-  if (!response.ok) throw new Error(`Google Ads query failed (${response.status}): ${redact(text)}`);
+  if (!response.ok) throw new AdsRequestError(parseAdsError(response.status, text));
 
   const payload = JSON.parse(text) as unknown;
   const chunks = Array.isArray(payload) ? payload : [payload];
@@ -96,6 +99,34 @@ export async function adsSearch<T = Record<string, unknown>>(query: string): Pro
     if (results) rows.push(...results);
   }
   return rows;
+}
+
+/** Masked customer IDs the OAuth user can access. Read-only; no Ads mutations. */
+export async function listAccessibleCustomerMasks(): Promise<{
+  ok: boolean;
+  masks: string[];
+  digits: string[];
+  error: string | null;
+}> {
+  const token = await getAccessToken();
+  const response = await fetch(`${API_BASE}/customers:listAccessibleCustomers`, {
+    method: "GET",
+    headers: adsHeaders(token, { omitLoginCustomerId: true }),
+  });
+  const text = await response.text();
+  if (!response.ok) {
+    return { ok: false, masks: [], digits: [], error: redact(text) };
+  }
+  const payload = JSON.parse(text) as { resourceNames?: string[] };
+  const digits = (payload.resourceNames ?? [])
+    .map((name) => name.replace(/^customers\//, "").replace(/[^0-9]/g, ""))
+    .filter((id) => id.length > 0);
+  return {
+    ok: true,
+    masks: digits.map(maskCustomerIdDigits),
+    digits,
+    error: null,
+  };
 }
 
 /**

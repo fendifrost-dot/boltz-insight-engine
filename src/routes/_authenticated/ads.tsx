@@ -64,6 +64,27 @@ function AdsPage() {
                 {s.detail}
               </p>
             )}
+            {!s.reachable && s.nextStep && (
+              <div className="space-y-2 rounded-md border border-border px-3 py-2 text-sm">
+                <p>
+                  <span className="text-muted-foreground">Error class · </span>
+                  <span className="font-mono text-xs">{s.errorClass}</span>
+                  {s.googleCode ? (
+                    <span className="font-mono text-xs text-muted-foreground"> · {s.googleCode}</span>
+                  ) : null}
+                </p>
+                {s.nextStep && <p>{s.nextStep}</p>}
+                {s.accessibleMasks.length > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    OAuth user can access: {s.accessibleMasks.join(", ")}
+                    {s.configuredCustomerInAccessible === false && " · configured customer not in list"}
+                    {s.configuredLoginInAccessible === false && " · configured login-customer-id not in list"}
+                    {s.directAccessOk === true && " · direct access without login-customer-id succeeded"}
+                    {s.directAccessOk === false && " · direct access without login-customer-id also failed"}
+                  </p>
+                )}
+              </div>
+            )}
             <TableWrap>
               <thead>
                 <tr>
@@ -85,7 +106,12 @@ function AdsPage() {
                         <Tag tone="warning">Missing</Tag>
                       )}
                     </Td>
-                    <Td className="text-xs text-muted-foreground">{sec.masked ?? "—"}</Td>
+                    <Td className="text-xs text-muted-foreground">
+                      {sec.masked ?? "—"}
+                      {sec.shape && !sec.shape.ok && (
+                        <span className="mt-1 block text-destructive">{sec.shape.warning}</span>
+                      )}
+                    </Td>
                   </tr>
                 ))}
               </tbody>
