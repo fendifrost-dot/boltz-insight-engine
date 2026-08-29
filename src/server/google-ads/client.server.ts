@@ -6,9 +6,9 @@ import {
   requireAdsSecret,
 } from "./env.server";
 
-// Versioned REST base. Older versions are sunset and return a bare 404;
-// bump here when Google sunsets the current one.
-const API_VERSION = "v19";
+// Versioned REST base. Sunset versions return a bare HTML 404; as of Aug 2026
+// supported versions are v22+. Bump when Google sunsets this one.
+const API_VERSION = "v22";
 const API_BASE = `https://googleads.googleapis.com/${API_VERSION}`;
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 
