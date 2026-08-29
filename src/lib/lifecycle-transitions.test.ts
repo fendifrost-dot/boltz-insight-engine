@@ -268,10 +268,10 @@ test("buildLifecycleEvidenceMetadata records audit fields", () => {
     },
     "2026-08-28T00:00:00.000Z",
   );
-  assert.equal(metadata.basis, "agent_decision");
-  assert.equal(metadata.agent_run_id, "run-1");
-  assert.equal(metadata.inbound_message_id, "msg-1");
-  assert.equal(metadata.at, "2026-08-28T00:00:00.000Z");
+  assert.equal(metadata["basis"], "agent_decision");
+  assert.equal(metadata["agent_run_id"], "run-1");
+  assert.equal(metadata["inbound_message_id"], "msg-1");
+  assert.equal(metadata["at"], "2026-08-28T00:00:00.000Z");
 });
 
 test("validateLifecycleEvidence rejects agent_decision basis for staff actor", () => {

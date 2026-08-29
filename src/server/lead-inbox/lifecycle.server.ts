@@ -54,7 +54,13 @@ export async function applyLifecycleTransition(args: {
   }
 
   const evidenceMetadata = buildLifecycleEvidenceMetadata(args.evidence, args.nowIso);
-  const { data, error } = await supabaseAdmin.rpc("apply_lead_lifecycle_transition", {
+  // Custom DB function; generated types don't include it, so call through a
+  // loosely typed rpc wrapper.
+  const rpc = supabaseAdmin.rpc as unknown as (
+    fn: string,
+    args: Record<string, unknown>,
+  ) => Promise<{ data: unknown; error: { message: string } | null }>;
+  const { data, error } = await rpc("apply_lead_lifecycle_transition", {
     _lead_id: args.leadId,
     _expected_from: args.fromLifecycle,
     _to: args.toLifecycle,
@@ -64,7 +70,7 @@ export async function applyLifecycleTransition(args: {
     _metadata: {
       ...evidenceMetadata,
       proposed_to: args.toLifecycle,
-    } as never,
+    },
   });
 
   if (error) {

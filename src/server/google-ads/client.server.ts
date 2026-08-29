@@ -6,7 +6,9 @@ import {
   requireAdsSecret,
 } from "./env.server";
 
-const API_VERSION = "v18";
+// Versioned REST base. Sunset versions return a bare HTML 404; as of Aug 2026
+// supported versions are v22+. Bump when Google sunsets this one.
+const API_VERSION = "v22";
 const API_BASE = `https://googleads.googleapis.com/${API_VERSION}`;
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 
@@ -78,14 +80,13 @@ export async function adsSearch<T = Record<string, unknown>>(query: string): Pro
   if (configError) throw new Error(configError);
 
   const token = await getAccessToken();
-  const customerId = adsCustomerId();
-  const res = await fetch(`${API_BASE}/customers/${customerId}/googleAds:searchStream`, {
+  const response = await fetch(`${API_BASE}/customers/${adsCustomerId()}/googleAds:searchStream`, {
     method: "POST",
     headers: adsHeaders(token),
     body: JSON.stringify({ query }),
   });
-  const text = await res.text();
-  if (!res.ok) throw new Error(`Google Ads query failed (${res.status}): ${redact(text)}`);
+  const text = await response.text();
+  if (!response.ok) throw new Error(`Google Ads query failed (${response.status}): ${redact(text)}`);
 
   const payload = JSON.parse(text) as unknown;
   const chunks = Array.isArray(payload) ? payload : [payload];
