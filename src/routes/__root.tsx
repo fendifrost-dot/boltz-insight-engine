@@ -8,6 +8,11 @@ import {
   Scripts,
 } from "@tanstack/react-router";
 import { useEffect, type ReactNode } from "react";
+import {
+  ensureSupabaseBrowserConfig,
+  getSupabaseConfigError,
+} from "../integrations/supabase/client";
+import { startOwnerSessionKeepalive } from "../lib/owner-session.browser";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
@@ -129,6 +134,20 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+
+  useEffect(() => {
+    let stop: (() => void) | undefined;
+    let cancelled = false;
+    void (async () => {
+      await ensureSupabaseBrowserConfig();
+      if (cancelled || getSupabaseConfigError()) return;
+      stop = startOwnerSessionKeepalive();
+    })();
+    return () => {
+      cancelled = true;
+      stop?.();
+    };
+  }, []);
 
   return (
     <QueryClientProvider client={queryClient}>

@@ -5,8 +5,10 @@ import {
   getSupabaseConfigError,
   supabase,
 } from "@/integrations/supabase/client";
+import { readOwnerSessionPersist, setOwnerSessionPersist } from "@/lib/owner-session.storage";
 
 export const Route = createFileRoute("/auth")({
+  ssr: false,
   head: () => ({
     meta: [
       { title: "Sign in — Boltz SEO/GEO Ops" },
@@ -29,6 +31,7 @@ function AuthPage() {
   const navigate = useNavigate();
   const [configError, setConfigError] = useState<string | null>(null);
   const [email, setEmail] = useState("");
+  const [staySignedIn, setStaySignedIn] = useState(true);
   const [sent, setSent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -43,6 +46,7 @@ function AuthPage() {
       if (cancelled) return;
       setConfigError(err);
       if (err) return;
+      setStaySignedIn(readOwnerSessionPersist());
 
       supabase.auth.getSession().then(({ data }) => {
         if (data.session) navigate({ to: "/", replace: true });
@@ -69,9 +73,13 @@ function AuthPage() {
     }
     setBusy(true);
     setError(null);
+    setOwnerSessionPersist(staySignedIn);
     const { error: err } = await supabase.auth.signInWithOtp({
       email: email.trim(),
-      options: { emailRedirectTo: window.location.origin },
+      options: {
+        emailRedirectTo: window.location.origin,
+        shouldCreateUser: false,
+      },
     });
     setBusy(false);
     if (err) setError(err.message);
@@ -109,6 +117,23 @@ function AuthPage() {
               className="w-full rounded-md border border-input bg-surface-2 px-3 py-2 text-sm text-foreground outline-none focus:border-ring"
               placeholder="owner@example.com"
             />
+            <label className="flex items-start gap-2 pt-1" htmlFor="stay-signed-in">
+              <input
+                id="stay-signed-in"
+                type="checkbox"
+                checked={staySignedIn}
+                onChange={(e) => {
+                  const on = e.target.checked;
+                  setStaySignedIn(on);
+                  setOwnerSessionPersist(on);
+                }}
+                className="mt-0.5 h-4 w-4 shrink-0 rounded border-input accent-primary"
+              />
+              <span className="text-xs leading-relaxed text-muted-foreground">
+                Stay signed in on this shop computer. Survives Chrome restart and crash. Uncheck
+                for this browser session only. Sign out to end the session.
+              </span>
+            </label>
             <button
               type="submit"
               disabled={busy}
