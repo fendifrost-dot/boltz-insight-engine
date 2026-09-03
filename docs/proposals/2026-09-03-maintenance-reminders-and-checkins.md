@@ -6,6 +6,8 @@ Nothing in this pull request texts a customer. There is no monthly job turned on
 
 Shop this is for: Boltz Automotive, 707 W. 119th St., Chicago, IL 60628, shop line (708) 575-4555. Live app today: [boltz-insight-engine.lovable.app](https://boltz-insight-engine.lovable.app).
 
+**Note on unrelated errors:** the previously mentioned “lead-watch” error is unrelated to this proposal and is not addressed by (or in scope for) this PR. This PR only contains design/writeup + inert, off-by-default scaffolding.
+
 ---
 
 ## 1. What you would get, in plain language
@@ -26,7 +28,13 @@ A few days after paid work, a short “how’s the car holding up?” text. If t
 
 **A single smart link that posts a review to both Google and Yelp does not exist**, and building a “only ask happy people” review funnel would violate both platforms’ rules. Yelp’s own business guidance is “don’t ask for reviews.” Google allows a genuine ask but forbids screening customers first and only sending the happy ones to the public form.
 
-**Recommended V1:** check-in only. No Yelp link. No automatic Google review ask. Unhappy replies go to you. If you later want Google reviews, we can add a **separate, equal ask to everyone** who had recent work — not a happiness filter. Details in [section 9](#9-check-ins-and-reviews--honest-policy-answer).
+**Recommended V1 (owner-approved compliance posture):**
+
+- **Yelp stays excluded** (no automated Yelp solicitation).
+- **Google review requests can be sent to everyone in the eligible recent-work cohort equally** (no sentiment gate / no “only happy customers” logic).
+- Still ensure **unhappy / still-broken customers never receive the automated Google review request** by suppressing/cancelling the queued review ask once the thread is escalated to human control (details in [section 9](#9-check-ins-and-reviews--honest-policy-answer)).
+
+Unhappy replies still go to you on the Escalations screen; the review request is suppressed for those threads.
 
 ---
 
@@ -310,24 +318,34 @@ We do not yet store Boltz’s Place ID in this app. That would be a one-time loo
 - Routing unhappy people to a human: **good, and we should do that.**
 - Only sending a review link after a positive reply: **that is selective solicitation / gating.** Google forbids it. Yelp forbids it. The FTC has also treated gating as a problem when it hides negative experiences.
 
-**We will not build that funnel.**
+**We will not build that funnel.** (No sentiment-gated review solicitation: not “only positive replies get the link”.)
+
+With your owner-approved decision, the **Google** review request is **cohort-based**: send to the eligible **recent-work cohort** **equally** (same eligibility cohort for everyone), while keeping **review gating prohibited** and **Yelp excluded**.
+
+Unhappy / still-broken replies continue to route to human escalation, and the queued/scheduled Google review request is suppressed when the thread is escalated to human control (so unhappy customers do not receive an automated review ask).
 
 ### Compliant check-in we recommend
 
-One short text, from “Boltz Automotive” / “we,” with the name and vehicle:
+**A) Check-in (always; no review link inside this text)** — one short question, from “Boltz Automotive” / “we,” with the name and vehicle:
 
 > Hey Tony Williams — thanks for choosing Boltz. How’s your 2002 Hyundai Sonata holding up? If you need anything else on it, text us here.
 
+**B) Separate Google review request (cohort-based; no sentiment gate)** — send a second short text only to the **same eligibility cohort** (recent-work group) and **to everyone in that cohort equally** (no “only happy replies” logic). Use a direct Place ID URL:
+
+`https://search.google.com/local/writereview?placeid=YOUR_PLACE_ID`
+
+To ensure negative / still-broken replies do **not** receive the automated review request, the system must **suppress/cancel the queued/scheduled Google review request** if the thread has been escalated to **human control** (which is how unhappy replies are routed today).
+
 Then:
 
-| Their reply | What happens |
+| Their reply to the check-in | What happens |
 | --- | --- |
-| Positive / “it’s fine” | Human or a single optional “glad to hear it.” **No review link in V1.** |
-| Negative / still broken / unsafe | Escalation, thread → human, **no review ask. Ever.** |
-| “I need brakes” / other work | Stay in the existing Lead Inbox agent or human. One conversation, not a campaign. |
-| STOP | Opt out. Queue cancelled. |
+| Positive / “it’s fine” | Conversation continues normally; the cohort-based Google review request still sends (unless some other reason flipped the thread to human). |
+| Negative / still broken / unsafe | Escalation; thread → human; the scheduled/suppressed Google review request is skipped (no automated review ask). |
+| “I need brakes” / other work | Stay in the existing Lead Inbox agent or human; the cohort-based Google review request still sends unless the thread is escalated to human control. |
+| STOP | Opt out; queue cancelled (including any pending Google review request). |
 
-If you later want Google reviews, the compliant add-on is a **separate equal ask** to the whole recent-work group (consent permitting), same link for everyone, no happiness filter — and still no Yelp. That would also require lifting the Context Lock line “Do not solicit reviews.” Default until you say so: **do not auto-ask.**
+This keeps review solicitation **equal** and **Google-only**, with no sentiment gate, while protecting unhappy replies by tying the review-request send to “thread is still in auto mode.”
 
 ---
 
@@ -359,7 +377,7 @@ Nothing below is in this PR except the written plan and inert sketches.
 | **V1b — Dated queue you can edit** | Each due person gets a scheduled date and reason. Cancel / move / hold. One-text-per-day and bundling visible. | No |
 | **V1c — Gated sender** | Daily drain, send-time checks, STOP language, health alarm. Flag off until you flip it. First live week: you approve each day’s list. | Only after you flip the send flag |
 | **V1d — 14-day bump** | Second wave only if silent. | Same flag |
-| **V2 — Check-in** | 3-day post-pay text, sentiment → escalation, no review link. Same send window and daily cap. | Separate check-in flag |
+| **V2 — Check-in + Google review request** | 3-day post-pay check-in text; sentiment → escalation for unhappy / still-broken; additionally send a separate cohort-based Google review request with **no sentiment gate**, suppressed when the thread escalates to human control. Same send window and daily cap. | Separate check-in flag + review-request behavior gated off until approved |
 | **Later** | Tire/alignment/filters; appointment-calendar skip; optional **equal** Google ask (never Yelp); Catalog-based categories; fleet list editor. | Only if you ask |
 
 **V1 should include:** oil, brakes, battery, transmission fluid; Square API sync; human review for unclassified lines; due + queue tables; admin screen; send-time consent/hours/human-mode; duplicate constraints; health alarm. **V1 should wait on:** Yelp, gated review funnel, Google Calendar triggers, automatic consent from Square, Saturday appointment offers, mileage, and auto-asking for reviews.
@@ -377,7 +395,7 @@ Each item has a recommended default. Reply with changes and we will lock them be
 | 3 | V1 services = oil, brakes, battery, trans fluid only? | **Yes.** |
 | 4 | Check-in delay after paid? | **3 days**, then next 9–5 Mon–Sat window. |
 | 5 | If a check-in and a maintenance text land on the same day? | **Check-in that day; maintenance the next legal day.** |
-| 6 | Review links in V1? | **None.** No Yelp ever via SMS. Google only later, as an equal ask, if you unfreeze Context Lock. |
+| 6 | May we send **Google** review requests in V1 to everyone in the eligible recent-work cohort equally (no sentiment gate / no “only happy replies” logic), while keeping **Yelp excluded** and ensuring unhappy / still-broken replies do not receive the automated review request? | **Yes (Google-only).** Yelp excluded. No review gating. Review request is cohort-based and suppressed when the thread is escalated to human control. |
 | 7 | How do historical Square customers become `opted_in`? | **You mark them** (the app already supports “existing business relationship” as a written basis). We do not auto-opt-in from an invoice. |
 | 8 | Where does the shop calendar live today (Google, Square Appointments, book, something else)? | **V1: you cancel people on the queue.** Tell us the calendar and we can skip them automatically later. |
 | 9 | Offer Saturday appointment blocks in the text? | **No.** Texts may go Sat 9–5; offers stay weekday 9–11 / 11–1 / 1–3 / 2–4. |
