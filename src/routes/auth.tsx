@@ -18,10 +18,13 @@ import {
 import {
   applyBrowserSessionTokens,
   resolveAuthorizedOpsUser,
-  tryAutoLoginShopAgent,
   urlHasAuthCallback,
 } from "@/lib/owner-session.browser";
-import { readOwnerSessionPersist, setOwnerSessionPersist } from "@/lib/owner-session.storage";
+import {
+  hasManualSignOut,
+  readOwnerSessionPersist,
+  setOwnerSessionPersist,
+} from "@/lib/owner-session.storage";
 
 export const Route = createFileRoute("/auth")({
   ssr: false,
@@ -109,17 +112,25 @@ function AuthPage() {
         return;
       }
 
-      setAutoSigningIn(true);
-      const recovered = await tryAutoLoginShopAgent();
-      if (cancelled) return;
-      if (recovered) {
-        const recoveredUser = await resolveAuthorizedOpsUser();
-        if (recoveredUser) {
-          navigate({ to: "/", replace: true });
-          return;
+      // Use the same useServerFn path as the stored-login button. Calling the
+      // server fn from owner-session.browser.ts can no-op in production, which
+      // left Grok sitting on /auth after an overnight cookie wipe.
+      if (readOwnerSessionPersist() && !hasManualSignOut()) {
+        setAutoSigningIn(true);
+        const result = await shopAgentFn({});
+        if (cancelled) return;
+        if (result.ok) {
+          const applied = await applyBrowserSessionTokens(result.session);
+          if (applied) {
+            const recoveredUser = await resolveAuthorizedOpsUser();
+            if (recoveredUser) {
+              navigate({ to: "/", replace: true });
+              return;
+            }
+          }
         }
+        setAutoSigningIn(false);
       }
-      setAutoSigningIn(false);
 
       const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
         if (
@@ -137,7 +148,7 @@ function AuthPage() {
       cancelled = true;
       unsubscribe?.();
     };
-  }, [navigate]);
+  }, [navigate, shopAgentFn]);
 
   useEffect(() => {
     let cancelled = false;

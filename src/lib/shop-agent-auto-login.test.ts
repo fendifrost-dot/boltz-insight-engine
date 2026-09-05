@@ -65,6 +65,8 @@ test("session restore and auth page call silent shop-agent login", () => {
   assert.match(browser, /markManualSignOut/);
   assert.match(browser, /writeRememberCookie/);
   const auth = readFileSync(join(here, "../routes/auth.tsx"), "utf8");
-  assert.match(auth, /tryAutoLoginShopAgent/);
+  assert.match(auth, /shopAgentFn/);
+  assert.match(auth, /hasManualSignOut/);
   assert.match(auth, /Signing Grok \/ shop agent back in/);
+  assert.doesNotMatch(auth, /tryAutoLoginShopAgent/);
 });
