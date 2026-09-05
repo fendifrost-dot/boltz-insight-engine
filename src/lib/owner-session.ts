@@ -19,6 +19,67 @@
 export const OWNER_SESSION_PERSIST_KEY = "boltz-owner-session:persist";
 export const OWNER_SESSION_ACTIVE_KEY = "boltz-owner-session:active";
 
+/**
+ * First-party cookie mirror of the refresh token GoTrue already issued. This
+ * is not a new long-lived secret and not an httpOnly server cookie — it only
+ * survives the localStorage eviction Chrome performs between sessions.
+ */
+export const OWNER_REFRESH_COOKIE = "boltz_owner_rt";
+export const OWNER_SESSION_MAX_AGE_SECONDS = 60 * 24 * 60 * 60;
+
+export function extractRefreshToken(json: string | null | undefined): string | null {
+  if (!json) return null;
+  try {
+    const parsed = JSON.parse(json) as Record<string, unknown>;
+    const direct = parsed["refresh_token"];
+    if (typeof direct === "string" && direct) return direct;
+    const nested = parsed["currentSession"] ?? parsed["session"];
+    if (nested && typeof nested === "object") {
+      const token = (nested as Record<string, unknown>)["refresh_token"];
+      if (typeof token === "string" && token) return token;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+export function buildRememberCookie(token: string, opts: { secure: boolean }): string {
+  const parts = [
+    `${OWNER_REFRESH_COOKIE}=${encodeURIComponent(token)}`,
+    "Path=/",
+    `Max-Age=${OWNER_SESSION_MAX_AGE_SECONDS}`,
+    "SameSite=Lax",
+  ];
+  if (opts.secure) parts.push("Secure");
+  return parts.join("; ");
+}
+
+export function buildClearedRememberCookie(opts: { secure: boolean }): string {
+  const parts = [`${OWNER_REFRESH_COOKIE}=`, "Path=/", "Max-Age=0", "SameSite=Lax"];
+  if (opts.secure) parts.push("Secure");
+  return parts.join("; ");
+}
+
+export function parseRememberCookie(cookieHeader: string | null | undefined): string | null {
+  if (!cookieHeader) return null;
+  for (const chunk of cookieHeader.split(";")) {
+    const idx = chunk.indexOf("=");
+    if (idx === -1) continue;
+    const name = chunk.slice(0, idx).trim();
+    if (name !== OWNER_REFRESH_COOKIE) continue;
+    const raw = chunk.slice(idx + 1).trim();
+    if (!raw) return null;
+    try {
+      return decodeURIComponent(raw) || null;
+    } catch {
+      return raw;
+    }
+  }
+  return null;
+}
+
+
 export type MaybeAsyncStorage = {
   getItem: (key: string) => string | null | Promise<string | null>;
   setItem: (key: string, value: string) => void | Promise<void>;
@@ -74,6 +135,7 @@ export type AuthResolveDecision =
   | { action: "allow" }
   | { action: "refresh" }
   | { action: "allow-stale" }
+  | { action: "restore-cookie" }
   | { action: "redirect-auth" };
 
 export function nextAuthResolveStep(input: {
@@ -83,10 +145,16 @@ export function nextAuthResolveStep(input: {
   expiresAtSeconds?: number | undefined;
   nowMs: number;
   alreadyRefreshed?: boolean;
+  hasRememberToken?: boolean;
+  alreadyRestored?: boolean;
 }): AuthResolveDecision {
   if (input.hasUser) return { action: "allow" };
 
-  if (!input.hasSession) return { action: "redirect-auth" };
+  if (!input.hasSession) {
+    if (input.hasRememberToken && !input.alreadyRestored) return { action: "restore-cookie" };
+    return { action: "redirect-auth" };
+  }
+
 
   if (sessionNeedsRefresh(input.expiresAtSeconds, input.nowMs) && !input.alreadyRefreshed) {
     return { action: "refresh" };
@@ -153,6 +221,7 @@ export function ownerAuthAfterLaunch(input: {
   hasAuthCallback: boolean;
   hasPersistedSession: boolean;
   accessTokenExpired: boolean;
+  hasRememberCookie?: boolean;
 }): OwnerAuthLaunchOutcome {
   if (
     shouldDiscardEphemeralSession({
@@ -165,6 +234,11 @@ export function ownerAuthAfterLaunch(input: {
   }
 
   if (!input.hasPersistedSession) {
+    // Chrome dropped localStorage but the first-party remember cookie still
+    // carries the refresh token GoTrue issued — refresh instead of evicting.
+    if (input.persistEnabled && input.hasRememberCookie) {
+      return { outcome: "refresh-then-allow" };
+    }
     return { outcome: "redirect-auth", reason: "unauthenticated" };
   }
 
@@ -177,9 +251,14 @@ export function wrapOwnerSessionStorage(
   deps: {
     local: Pick<Storage, "getItem" | "setItem" | "removeItem">;
     session: Pick<Storage, "getItem" | "setItem" | "removeItem">;
+    persistEnabled?: () => boolean;
+    onPersistSession?: (value: string) => void;
+    onClearSession?: () => void;
   },
 ): MaybeAsyncStorage | undefined {
   if (!base) return undefined;
+
+  const persistOn = () => (deps.persistEnabled ? deps.persistEnabled() : true);
 
   return {
     getItem: async (key: string) => {
@@ -193,11 +272,15 @@ export function wrapOwnerSessionStorage(
       // Always write localStorage so a magic-link tab can read the PKCE verifier.
       deps.local.setItem(key, value);
       await base.setItem(key, value);
+      if (persistOn()) deps.onPersistSession?.(value);
+      else deps.onClearSession?.();
     },
     removeItem: async (key: string) => {
       deps.local.removeItem(key);
       deps.session.removeItem(key);
       await base.removeItem(key);
+      deps.onClearSession?.();
     },
   };
+
 }
