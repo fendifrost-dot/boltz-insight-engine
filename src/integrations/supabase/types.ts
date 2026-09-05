@@ -629,6 +629,7 @@ export type Database = {
         Returns: boolean
       }
       is_staff: { Args: { _user_id: string }; Returns: boolean }
+      read_agent_auth_secret: { Args: { secret_name: string }; Returns: string }
     }
     Enums: {
       agent_action: "send" | "escalate" | "no_reply"
