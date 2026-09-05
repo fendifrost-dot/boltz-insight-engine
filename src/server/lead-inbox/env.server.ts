@@ -10,7 +10,9 @@ export type SecretName =
   | "XAI_API_KEY"
   | "XAI_MODEL"
   | "CRON_SECRET"
-  | "PUBLIC_APP_URL";
+  | "PUBLIC_APP_URL"
+  | "AGENT_AUTH_EMAIL"
+  | "AGENT_AUTH_PASSWORD";
 
 export const SECRET_NAMES: SecretName[] = [
   "RINGCENTRAL_CLIENT_ID",
@@ -23,6 +25,8 @@ export const SECRET_NAMES: SecretName[] = [
   "XAI_MODEL",
   "CRON_SECRET",
   "PUBLIC_APP_URL",
+  "AGENT_AUTH_EMAIL",
+  "AGENT_AUTH_PASSWORD",
 ];
 
 export function readSecret(name: SecretName): string | undefined {
