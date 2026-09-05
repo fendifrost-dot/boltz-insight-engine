@@ -253,7 +253,7 @@ export const getIntegrationHealth = createServerFn({ method: "GET" })
       }
 
       return {
-        secrets: secretStatus(),
+        secrets,
         circuit: await agentCircuitState(),
         capability,
         snapshots: snapshotsRes.data ?? [],
