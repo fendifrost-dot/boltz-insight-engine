@@ -23,7 +23,7 @@ function clientIp(): string {
 /** Presence-only: never reveals the stored email or password. */
 export const storedAgentLoginAvailable = createServerFn({ method: "GET" }).handler(async () => {
   const { storedAgentConfigured } = await import("@/server/agent-auth.server");
-  return { available: storedAgentConfigured() };
+  return { available: await storedAgentConfigured() };
 });
 
 export const storedAgentSignIn = createServerFn({ method: "POST" }).handler(async () => {
