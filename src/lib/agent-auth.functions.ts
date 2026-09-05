@@ -52,10 +52,46 @@ export const storedAgentSignIn = createServerFn({ method: "POST" }).handler(asyn
   }
 
   attempts.delete(ip);
+  const { writeHttpOnlyRememberCookie } = await import("@/server/remember-cookie.server");
+  writeHttpOnlyRememberCookie(result.refreshToken);
   return {
     ok: true as const,
     accessToken: result.accessToken,
     refreshToken: result.refreshToken,
     expiresAt: result.expiresAt,
   };
+});
+
+/** Server-side restore: reads the HttpOnly remember cookie (invisible to JS). */
+export const restorePersistentShopSession = createServerFn({ method: "GET" }).handler(async () => {
+  const { restorePersistentShopSessionFromRequest } = await import(
+    "@/server/remember-cookie.server"
+  );
+  const result = await restorePersistentShopSessionFromRequest();
+  if (!result.ok) return { ok: false as const, error: result.error };
+  return {
+    ok: true as const,
+    accessToken: result.tokens.accessToken,
+    refreshToken: result.tokens.refreshToken,
+    expiresAt: result.tokens.expiresAt,
+  };
+});
+
+/** Mirrors a rotated refresh token into the HttpOnly cookie. Writes only. */
+export const persistRememberToken = createServerFn({ method: "POST" })
+  .inputValidator((data: { refresh_token: string }) => {
+    const token = typeof data?.refresh_token === "string" ? data.refresh_token.trim() : "";
+    if (!token) throw new Error("refresh_token is required");
+    return { refresh_token: token };
+  })
+  .handler(async ({ data }) => {
+    const { writeHttpOnlyRememberCookie } = await import("@/server/remember-cookie.server");
+    writeHttpOnlyRememberCookie(data.refresh_token);
+    return { ok: true as const };
+  });
+
+export const clearRememberToken = createServerFn({ method: "POST" }).handler(async () => {
+  const { clearHttpOnlyRememberCookie } = await import("@/server/remember-cookie.server");
+  clearHttpOnlyRememberCookie();
+  return { ok: true as const };
 });
