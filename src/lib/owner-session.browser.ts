@@ -192,7 +192,11 @@ export function startOwnerSessionKeepalive(): () => void {
     if (document.visibilityState && document.visibilityState !== "visible") return;
     void (async () => {
       const restored = await restoreOwnerSessionIfNeeded();
-      if (!restored) return;
+      if (!restored) {
+        // Session is gone — try the silent stored shop-agent restore.
+        await trySilentAgentRestore();
+        return;
+      }
       const { data: sessionData } = await supabase.auth.getSession();
       if (!sessionData.session) return;
       markOwnerSessionActive();
@@ -202,12 +206,14 @@ export function startOwnerSessionKeepalive(): () => void {
     })();
   };
 
+  const interval = window.setInterval(refreshIfNeeded, 4 * 60 * 1000);
   document.addEventListener("visibilitychange", refreshIfNeeded);
   window.addEventListener("focus", refreshIfNeeded);
   void restoreOwnerSessionIfNeeded();
 
   return () => {
     data.subscription.unsubscribe();
+    window.clearInterval(interval);
     document.removeEventListener("visibilitychange", refreshIfNeeded);
     window.removeEventListener("focus", refreshIfNeeded);
   };
