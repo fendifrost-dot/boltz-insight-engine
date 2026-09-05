@@ -31,7 +31,9 @@ export function setOwnerSessionPersist(enabled: boolean): void {
   } catch {
     /* storage blocked */
   }
+  if (!enabled) clearRememberCookie();
 }
+
 
 export function markOwnerSessionActive(): void {
   if (!canUseBrowserStorage()) return;
