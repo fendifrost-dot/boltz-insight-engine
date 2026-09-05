@@ -7,6 +7,7 @@ import {
   supabase,
 } from "@/integrations/supabase/client";
 import { readOwnerSessionPersist, setOwnerSessionPersist } from "@/lib/owner-session.storage";
+import { trySilentAgentRestore } from "@/lib/owner-session.browser";
 import { storedAgentLoginAvailable, storedAgentSignIn } from "@/lib/agent-auth.functions";
 
 export const Route = createFileRoute("/auth")({
