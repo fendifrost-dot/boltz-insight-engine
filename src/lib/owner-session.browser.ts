@@ -101,7 +101,9 @@ async function restoreOwnerSessionInner(): Promise<boolean> {
     markOwnerSessionActive();
     return true;
   }
-  return false;
+  // No session (e.g. Chrome dropped it overnight) — try the silent stored
+  // shop-agent restore so hitting / doesn't bounce to /auth forever.
+  return trySilentAgentRestore();
 }
 
 async function refreshOwnerSession(

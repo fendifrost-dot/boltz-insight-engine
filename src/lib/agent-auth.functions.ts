@@ -40,7 +40,7 @@ export const storedAgentSignIn = createServerFn({ method: "POST" }).handler(asyn
 
   // A missing configuration is not a failed attempt — don't burn rate-limiter
   // budget for callers that probe while AGENT_AUTH secrets are absent.
-  if (!storedAgentConfigured()) {
+  if (!(await storedAgentConfigured())) {
     return { ok: false as const, error: "Stored shop-agent login is not configured." };
   }
 
