@@ -55,6 +55,35 @@ export function hasOwnerSessionActiveMarker(): boolean {
   }
 }
 
+const AGENT_AUTOLOGIN_SUPPRESS_KEY = "boltz-agent-autologin-suppressed";
+
+export function suppressAgentAutoLogin(): void {
+  if (!canUseBrowserStorage()) return;
+  try {
+    window.sessionStorage.setItem(AGENT_AUTOLOGIN_SUPPRESS_KEY, "1");
+  } catch {
+    /* storage blocked */
+  }
+}
+
+export function clearAgentAutoLoginSuppress(): void {
+  if (!canUseBrowserStorage()) return;
+  try {
+    window.sessionStorage.removeItem(AGENT_AUTOLOGIN_SUPPRESS_KEY);
+  } catch {
+    /* storage blocked */
+  }
+}
+
+export function agentAutoLoginSuppressed(): boolean {
+  if (!canUseBrowserStorage()) return false;
+  try {
+    return window.sessionStorage.getItem(AGENT_AUTOLOGIN_SUPPRESS_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
 export function ownerAuthStorage(
   base: MaybeAsyncStorage | undefined,
 ): MaybeAsyncStorage | undefined {

@@ -7,6 +7,7 @@ import {
   supabase,
 } from "@/integrations/supabase/client";
 import { readOwnerSessionPersist, setOwnerSessionPersist } from "@/lib/owner-session.storage";
+import { trySilentAgentRestore } from "@/lib/owner-session.browser";
 import { storedAgentLoginAvailable, storedAgentSignIn } from "@/lib/agent-auth.functions";
 
 export const Route = createFileRoute("/auth")({
@@ -43,6 +44,7 @@ function AuthPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [storedAvailable, setStoredAvailable] = useState(false);
+  const [restoring, setRestoring] = useState(false);
 
   const checkStored = useServerFn(storedAgentLoginAvailable);
   const storedSignIn = useServerFn(storedAgentSignIn);
@@ -65,8 +67,18 @@ function AuthPage() {
         })
         .catch(() => {});
 
-      supabase.auth.getSession().then(({ data }) => {
-        if (data.session) navigate({ to: "/", replace: true });
+      supabase.auth.getSession().then(async ({ data }) => {
+        if (data.session) {
+          navigate({ to: "/", replace: true });
+          return;
+        }
+        // No session — try the silent stored shop-agent restore (Chrome drop
+        // recovery). Honors Stay-signed-in and the sign-out suppression flag.
+        if (!cancelled) setRestoring(true);
+        const restored = await trySilentAgentRestore();
+        if (cancelled) return;
+        setRestoring(false);
+        if (restored) navigate({ to: "/", replace: true });
       });
       const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
         if (session && (event === "SIGNED_IN" || event === "INITIAL_SESSION")) {
@@ -175,6 +187,12 @@ function AuthPage() {
         </p>
 
         {configError && <p className="mt-6 text-sm text-destructive">{configError}</p>}
+
+        {restoring && !configError && (
+          <p className="mt-5 text-xs text-muted-foreground">
+            Signing Grok / shop agent back in…
+          </p>
+        )}
 
         {!configError && (
           <>

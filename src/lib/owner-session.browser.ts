@@ -7,11 +7,14 @@ import {
   urlHasAuthCallback,
 } from "./owner-session";
 import {
+  agentAutoLoginSuppressed,
   clearOwnerSessionActiveMarker,
   hasOwnerSessionActiveMarker,
   markOwnerSessionActive,
   readOwnerSessionPersist,
+  suppressAgentAutoLogin,
 } from "./owner-session.storage";
+import { storedAgentSignIn } from "./agent-auth.functions";
 
 export {
   ownerAuthStorage,
@@ -21,6 +24,45 @@ export {
 export { urlHasAuthCallback } from "./owner-session";
 
 let restoreInflight: Promise<boolean> | null = null;
+let agentRestoreInflight: Promise<boolean> | null = null;
+
+/**
+ * Silent shop-agent recovery: when the browser session is gone but the stored
+ * shop-agent secrets are configured, re-sign in server-side (password never
+ * leaves the server) and apply the returned tokens. Skipped when Stay signed
+ * in is off or when this tab's human clicked Sign out (sessionStorage flag —
+ * cleared by a Chrome restart, so the shop computer recovers after a crash).
+ */
+export async function trySilentAgentRestore(): Promise<boolean> {
+  if (!agentRestoreInflight) {
+    agentRestoreInflight = trySilentAgentRestoreInner().finally(() => {
+      agentRestoreInflight = null;
+    });
+  }
+  return agentRestoreInflight;
+}
+
+async function trySilentAgentRestoreInner(): Promise<boolean> {
+  if (!readOwnerSessionPersist()) return false;
+  if (agentAutoLoginSuppressed()) return false;
+
+  const { data } = await supabase.auth.getSession();
+  if (data.session) return true;
+
+  try {
+    const res = await storedAgentSignIn();
+    if (!res?.ok) return false;
+    const { error } = await supabase.auth.setSession({
+      access_token: res.accessToken,
+      refresh_token: res.refreshToken,
+    });
+    if (error) return false;
+    markOwnerSessionActive();
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export async function restoreOwnerSessionIfNeeded(): Promise<boolean> {
   if (!restoreInflight) {
@@ -114,12 +156,23 @@ export async function resolveOwnerUser() {
 }
 
 export async function signOutOwnerSession(): Promise<void> {
+  // A human click on Sign out suppresses silent agent auto-login for this tab
+  // only (sessionStorage), so the shop computer still recovers after a Chrome
+  // restart clears it.
+  suppressAgentAutoLogin();
   clearOwnerSessionActiveMarker();
   try {
     await supabase.auth.signOut({ scope: "local" });
   } finally {
     clearOwnerSessionActiveMarker();
   }
+}
+
+export async function resolveOwnerUserWithAgentRestore() {
+  const user = await resolveOwnerUser();
+  if (user) return user;
+  const restored = await trySilentAgentRestore();
+  return restored ? resolveOwnerUser() : null;
 }
 
 export function startOwnerSessionKeepalive(): () => void {
@@ -138,7 +191,11 @@ export function startOwnerSessionKeepalive(): () => void {
     if (document.visibilityState && document.visibilityState !== "visible") return;
     void (async () => {
       const restored = await restoreOwnerSessionIfNeeded();
-      if (!restored) return;
+      if (!restored) {
+        // Session is gone — try the silent stored shop-agent restore.
+        await trySilentAgentRestore();
+        return;
+      }
       const { data: sessionData } = await supabase.auth.getSession();
       if (!sessionData.session) return;
       markOwnerSessionActive();
@@ -148,12 +205,14 @@ export function startOwnerSessionKeepalive(): () => void {
     })();
   };
 
+  const interval = window.setInterval(refreshIfNeeded, 4 * 60 * 1000);
   document.addEventListener("visibilitychange", refreshIfNeeded);
   window.addEventListener("focus", refreshIfNeeded);
   void restoreOwnerSessionIfNeeded();
 
   return () => {
     data.subscription.unsubscribe();
+    window.clearInterval(interval);
     document.removeEventListener("visibilitychange", refreshIfNeeded);
     window.removeEventListener("focus", refreshIfNeeded);
   };
