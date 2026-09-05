@@ -128,7 +128,7 @@ function AuthPage() {
           if (applied) {
             const recoveredUser = await resolveAuthorizedOpsUser();
             if (recoveredUser) {
-              navigate({ to: "/", replace: true });
+              navigate({ to: "/leads", replace: true });
               return;
             }
           }
@@ -140,7 +140,7 @@ function AuthPage() {
           if (applied) {
             const recoveredUser = await resolveAuthorizedOpsUser();
             if (recoveredUser) {
-              navigate({ to: "/", replace: true });
+              navigate({ to: "/leads", replace: true });
               return;
             }
           }
