@@ -27,7 +27,7 @@ Optional later: copy the same two names into Lovable Cloud secrets if you want e
 
 - **`agents@boltzautoinc.com` exists** in Supabase Auth, email confirmed, **staff only** (not owner).
 - **Use stored shop-agent login** appears when Vault (`AGENT_AUTH_EMAIL` / `AGENT_AUTH_PASSWORD`) **or** Lovable env secrets are present. The password is not typed. Env wins if both exist.
-- After Chrome quit, `/leads` restores from the **HttpOnly** `boltz_owner_rt` cookie on the server (JS cannot read HttpOnly). If that cookie is gone, Vault shop-agent login is the fallback.
+- After Chrome quit, `/leads` restores from the **HttpOnly** `boltz_owner_rt` cookie on the **server** (JS `document.cookie` cannot read HttpOnly — that was the shop Chrome failure). If the cookie is gone or the refresh token was already rotated, Vault shop-agent login is the fallback. `/auth` uses `useServerFn` for both cookie restore and stored login; raw `createServerFn` imports can no-op in the published app.
 
 ## How agents sign in
 

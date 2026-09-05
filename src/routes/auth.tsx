@@ -1,7 +1,11 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useState } from "react";
-import { getAgentAuthStatus, signInShopAgent } from "@/lib/agent-auth.functions";
+import {
+  getAgentAuthStatus,
+  restorePersistentShopSession,
+  signInShopAgent,
+} from "@/lib/agent-auth.functions";
 import { publicSignInErrorMessage, RECOMMENDED_AGENT_EMAIL } from "@/lib/agent-auth";
 import {
   evaluateLoginRateLimit,
@@ -82,6 +86,7 @@ function AuthPage() {
   const navigate = useNavigate();
   const agentStatusFn = useServerFn(getAgentAuthStatus);
   const shopAgentFn = useServerFn(signInShopAgent);
+  const restoreFn = useServerFn(restorePersistentShopSession);
   const [configError, setConfigError] = useState<string | null>(null);
   const [tab, setTab] = useState<AuthTab>("agent");
   const [email, setEmail] = useState("");
@@ -112,11 +117,22 @@ function AuthPage() {
         return;
       }
 
-      // Use the same useServerFn path as the stored-login button. Calling the
-      // server fn from owner-session.browser.ts can no-op in production, which
-      // left Grok sitting on /auth after an overnight cookie wipe.
+      // useServerFn is required in production (raw createServerFn imports can
+      // no-op). Prefer the HttpOnly remember cookie, then Vault/env login.
       if (readOwnerSessionPersist() && !hasManualSignOut()) {
         setAutoSigningIn(true);
+        const cookieRestored = await restoreFn({});
+        if (cancelled) return;
+        if (cookieRestored.ok) {
+          const applied = await applyBrowserSessionTokens(cookieRestored.session);
+          if (applied) {
+            const recoveredUser = await resolveAuthorizedOpsUser();
+            if (recoveredUser) {
+              navigate({ to: "/", replace: true });
+              return;
+            }
+          }
+        }
         const result = await shopAgentFn({});
         if (cancelled) return;
         if (result.ok) {
@@ -148,7 +164,7 @@ function AuthPage() {
       cancelled = true;
       unsubscribe?.();
     };
-  }, [navigate, shopAgentFn]);
+  }, [navigate, restoreFn, shopAgentFn]);
 
   useEffect(() => {
     let cancelled = false;

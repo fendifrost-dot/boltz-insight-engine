@@ -79,6 +79,9 @@ test("persistent session restore reads the HttpOnly remember cookie on the serve
   assert.doesNotMatch(remember, /console\.(log|info|debug|error|warn)\(/);
   assert.match(fns, /restorePersistentShopSession/);
   assert.match(route, /restorePersistentShopSession/);
+  const auth = readFileSync(join(here, "../routes/auth.tsx"), "utf8");
+  assert.match(auth, /useServerFn\(restorePersistentShopSession\)/);
+  assert.match(auth, /useServerFn\(signInShopAgent\)/);
 });
 
 test("shop-agent nav hides owner-only banking and settings surfaces", () => {
