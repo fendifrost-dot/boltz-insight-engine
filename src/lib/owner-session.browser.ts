@@ -87,6 +87,30 @@ function currentUrlHasAuthCallback(): boolean {
   return urlHasAuthCallback(window.location.search, window.location.hash);
 }
 
+/**
+ * Cookie restore: Chrome can drop localStorage between browser sessions, so
+ * the refresh token GoTrue already issued is mirrored into a first-party
+ * cookie. Exchange it for a fresh session and rewrite the cookie with the
+ * rotated refresh token.
+ */
+async function tryRememberCookieRestore(): Promise<boolean> {
+  if (!readOwnerSessionPersist()) return false;
+  const token = readRememberCookie();
+  if (!token) return false;
+  try {
+    const { data, error } = await supabase.auth.refreshSession({ refresh_token: token });
+    if (error || !data.session) {
+      clearRememberCookie();
+      return false;
+    }
+    writeRememberCookie(data.session.refresh_token);
+    markOwnerSessionActive();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function restoreOwnerSessionInner(): Promise<boolean> {
   if (
     shouldDiscardEphemeralSession({
@@ -96,6 +120,7 @@ async function restoreOwnerSessionInner(): Promise<boolean> {
     })
   ) {
     clearOwnerSessionActiveMarker();
+    clearRememberCookie();
     await supabase.auth.signOut({ scope: "local" });
     return false;
   }
@@ -103,12 +128,16 @@ async function restoreOwnerSessionInner(): Promise<boolean> {
   const { data } = await supabase.auth.getSession();
   if (data.session) {
     markOwnerSessionActive();
+    writeRememberCookie(data.session.refresh_token);
     return true;
   }
-  // No session (e.g. Chrome dropped it overnight) — try the silent stored
-  // shop-agent restore so hitting / doesn't bounce to /auth forever.
+
+  // No session (e.g. Chrome dropped localStorage overnight). Cookie restore
+  // first; the silent stored shop-agent login stays as the fallback.
+  if (await tryRememberCookieRestore()) return true;
   return trySilentAgentRestore();
 }
+
 
 async function refreshOwnerSession(
   alreadyHasUser: { id?: string } | null | undefined,
