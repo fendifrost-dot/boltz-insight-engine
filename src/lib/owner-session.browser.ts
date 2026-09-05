@@ -231,12 +231,17 @@ export function startOwnerSessionKeepalive(): () => void {
 
   const { data } = supabase.auth.onAuthStateChange((event, session) => {
     if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED" || event === "INITIAL_SESSION") {
-      if (session) markOwnerSessionActive();
+      if (session) {
+        markOwnerSessionActive();
+        writeRememberCookie(session.refresh_token);
+      }
     }
     if (event === "SIGNED_OUT") {
       clearOwnerSessionActiveMarker();
+      clearRememberCookie();
     }
   });
+
 
   const refreshIfNeeded = () => {
     if (document.visibilityState && document.visibilityState !== "visible") return;
