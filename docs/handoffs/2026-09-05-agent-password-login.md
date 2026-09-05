@@ -38,6 +38,9 @@ or Grok changes are involved.
 ## Notes
 
 - Stored-agent login is IP rate limited: 5 failures per 15 minutes, then exponential backoff.
+- Silent auto-login (Grok Bot / shop-computer recovery after Chrome drops the session) requires
+  both `AGENT_AUTH_EMAIL` and `AGENT_AUTH_PASSWORD` to be set; it runs only when Stay signed in is
+  on and is suppressed per-tab after a manual Sign out until Chrome restarts.
 - Sign-in errors are generic on purpose; provider text is never echoed.
 - SMS sending still requires a staff JWT (`communications.send`). No cookie-less public send API
   was added.

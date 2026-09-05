@@ -44,6 +44,7 @@ function AuthPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [storedAvailable, setStoredAvailable] = useState(false);
+  const [restoring, setRestoring] = useState(false);
 
   const checkStored = useServerFn(storedAgentLoginAvailable);
   const storedSignIn = useServerFn(storedAgentSignIn);
@@ -66,8 +67,18 @@ function AuthPage() {
         })
         .catch(() => {});
 
-      supabase.auth.getSession().then(({ data }) => {
-        if (data.session) navigate({ to: "/", replace: true });
+      supabase.auth.getSession().then(async ({ data }) => {
+        if (data.session) {
+          navigate({ to: "/", replace: true });
+          return;
+        }
+        // No session — try the silent stored shop-agent restore (Chrome drop
+        // recovery). Honors Stay-signed-in and the sign-out suppression flag.
+        if (!cancelled) setRestoring(true);
+        const restored = await trySilentAgentRestore();
+        if (cancelled) return;
+        setRestoring(false);
+        if (restored) navigate({ to: "/", replace: true });
       });
       const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
         if (session && (event === "SIGNED_IN" || event === "INITIAL_SESSION")) {
