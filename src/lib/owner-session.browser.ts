@@ -205,6 +205,7 @@ export async function signOutOwnerSession(): Promise<void> {
   // restart clears it.
   suppressAgentAutoLogin();
   clearRememberCookie();
+  void clearRememberToken({}).catch(() => {});
   clearOwnerSessionActiveMarker();
   try {
     await supabase.auth.signOut({ scope: "local" });
@@ -229,10 +230,12 @@ export function startOwnerSessionKeepalive(): () => void {
       if (session) markOwnerSessionActive();
       if (session?.refresh_token && readOwnerSessionPersist()) {
         writeRememberCookie(session.refresh_token);
+        persistRememberTokenServerSide(session.refresh_token);
       }
     }
     if (event === "SIGNED_OUT") {
       clearRememberCookie();
+      void clearRememberToken({}).catch(() => {});
       clearOwnerSessionActiveMarker();
     }
   });
@@ -251,6 +254,7 @@ export function startOwnerSessionKeepalive(): () => void {
       markOwnerSessionActive();
       if (sessionData.session.refresh_token && readOwnerSessionPersist()) {
         writeRememberCookie(sessionData.session.refresh_token);
+        persistRememberTokenServerSide(sessionData.session.refresh_token);
       }
       if (sessionNeedsRefresh(sessionData.session.expires_at, Date.now())) {
         await supabase.auth.refreshSession();
