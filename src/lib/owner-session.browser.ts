@@ -153,6 +153,7 @@ async function refreshOwnerSession(
 export async function resolveOwnerUser() {
   await restoreOwnerSessionIfNeeded();
   let alreadyRefreshed = false;
+  let alreadyRestored = false;
 
   for (let i = 0; i < 4; i++) {
     const { data: sessionData } = await supabase.auth.getSession();
@@ -179,10 +180,17 @@ export async function resolveOwnerUser() {
       expiresAtSeconds: session?.expires_at,
       nowMs: Date.now(),
       alreadyRefreshed,
+      hasRememberToken: Boolean(readRememberCookie()),
+      alreadyRestored,
     });
 
     if (decision.action === "allow" && userData.user) return userData.user;
     if (decision.action === "allow-stale" && session?.user) return session.user;
+    if (decision.action === "restore-cookie") {
+      alreadyRestored = true;
+      if (await tryRememberCookieRestore()) continue;
+      return null;
+    }
     if (decision.action === "refresh") {
       alreadyRefreshed = true;
       const result = await refreshOwnerSession(session?.user);
@@ -201,10 +209,12 @@ export async function signOutOwnerSession(): Promise<void> {
   // restart clears it.
   suppressAgentAutoLogin();
   clearOwnerSessionActiveMarker();
+  clearRememberCookie();
   try {
     await supabase.auth.signOut({ scope: "local" });
   } finally {
     clearOwnerSessionActiveMarker();
+    clearRememberCookie();
   }
 }
 
@@ -214,6 +224,7 @@ export async function resolveOwnerUserWithAgentRestore() {
   const restored = await trySilentAgentRestore();
   return restored ? resolveOwnerUser() : null;
 }
+
 
 export function startOwnerSessionKeepalive(): () => void {
   if (typeof window === "undefined" || typeof document === "undefined") return () => {};
