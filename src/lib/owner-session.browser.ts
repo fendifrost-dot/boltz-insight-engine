@@ -51,7 +51,7 @@ async function trySilentAgentRestoreInner(): Promise<boolean> {
   if (data.session) return true;
 
   try {
-    const res = await storedAgentSignIn({ data: undefined });
+    const res = await storedAgentSignIn();
     if (!res?.ok) return false;
     const { error } = await supabase.auth.setSession({
       access_token: res.accessToken,
