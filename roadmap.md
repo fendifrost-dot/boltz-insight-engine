@@ -1,6 +1,8 @@
 # Roadmap
 
-- [x] Vault fallback for stored-agent credentials (env → vault, cached) + availability check + silent restore on session loss
-- [~] Agent account setup: user exists (staff, confirmed) — verify vault secrets exist and match the auth password
-- [ ] Set AGENT_AUTH_EMAIL / AGENT_AUTH_PASSWORD as needed so silent restore works
-- [ ] End-to-end verify silent auto-login on /auth
+- [x] Vault fallback for stored-agent credentials (env → vault, cached) + async availability check
+- [x] Silent restore now also fires from session recovery when no session exists
+- [x] Agent account: already existed (confirmed, staff-only) — not recreated
+- [x] Vault credentials verified working via end-to-end silent auto-login on /auth
+- [x] Integration Health AGENT_AUTH_* presence now vault-aware (no false "Missing")
+- [ ] Republish so the fix reaches the live app
