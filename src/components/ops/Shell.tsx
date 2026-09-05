@@ -1,8 +1,30 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import { signOutOwnerSession } from "@/lib/owner-session.browser";
 import { cn } from "@/lib/utils";
+
+/** Owner-only screens (capability: integrations.manage). */
+const OWNER_ONLY = new Set(["/integration-health", "/ads"]);
+
+function useIsOwner(): boolean | null {
+  const [isOwner, setIsOwner] = useState<boolean | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data: userData } = await supabase.auth.getUser();
+      const id = userData.user?.id;
+      if (!id) return;
+      const { data, error } = await supabase.rpc("has_role", { _user_id: id, _role: "owner" });
+      if (!cancelled && !error) setIsOwner(data === true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  return isOwner;
+}
 
 
 const NAV: { to: string; label: string; group: string }[] = [
@@ -28,6 +50,8 @@ const GROUPS = ["Operate", "Leads", "Research"];
 export function Shell({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const isOwner = useIsOwner();
+  const visibleNav = NAV.filter((n) => !OWNER_ONLY.has(n.to) || isOwner === true);
 
   async function signOut() {
     await queryClient.cancelQueries();
@@ -43,13 +67,15 @@ export function Shell({ children }: { children: ReactNode }) {
 
           <div className="font-mono text-xs tracking-[0.18em] text-primary">BOLTZ</div>
           <div className="text-sm font-semibold text-sidebar-foreground">SEO / GEO Ops</div>
-          <div className="label-caps mt-1">Internal tooling · V1</div>
+          <div className="label-caps mt-1">
+            {isOwner === null ? "Internal tooling · V1" : isOwner ? "Owner" : "Shop agent"}
+          </div>
         </div>
         <nav className="flex gap-1 overflow-x-auto px-2 pb-3 whitespace-nowrap lg:block lg:space-y-4 lg:overflow-x-visible lg:whitespace-normal">
           {GROUPS.map((group) => (
             <div key={group} className="flex gap-1 lg:block lg:space-y-0.5">
               <div className="label-caps hidden px-2 pt-2 pb-1 lg:block">{group}</div>
-              {NAV.filter((n) => n.group === group).map((item) => (
+              {visibleNav.filter((n) => n.group === group).map((item) => (
 
                 <Link
                   key={item.to}
