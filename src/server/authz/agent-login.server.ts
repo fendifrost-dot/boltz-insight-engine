@@ -148,6 +148,8 @@ export async function signInWithStoredAgentCredentials(): Promise<StoredAgentSig
     }
 
     noteSuccess(`stored:${ip}`);
+    const { writeHttpOnlyRememberCookie } = await import("./remember-cookie.server");
+    writeHttpOnlyRememberCookie(tokens.refresh_token);
     return { ok: true, session: tokens };
   } catch {
     noteFailure(`stored:${ip}`, nowMs);

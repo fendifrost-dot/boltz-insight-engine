@@ -270,6 +270,7 @@ test("remember cookie carries the existing refresh token with 60-day Lax attribu
   assert.match(cookie, /^boltz_owner_rt=rt-live-123/);
   assert.match(cookie, /Path=\//);
   assert.match(cookie, /Max-Age=5184000/);
+  assert.match(cookie, /Expires=/);
   assert.match(cookie, /SameSite=Lax/);
   assert.match(cookie, /Secure/);
   assert.doesNotMatch(buildRememberCookie(token, { secure: false }), /Secure/);
@@ -366,6 +367,7 @@ test("authenticated gate never signs out on a failed staff probe", () => {
   const route = readFileSync(join(here, "../routes/_authenticated/route.tsx"), "utf8");
   const browser = readFileSync(join(here, "owner-session.browser.ts"), "utf8");
   assert.match(route, /resolveAuthorizedOpsUser/);
+  assert.match(route, /restorePersistentShopSession/);
   assert.doesNotMatch(route, /signOut/);
   assert.match(browser, /tryRememberCookieRestore/);
   assert.match(browser, /A failed or false staff probe must never sign out/);

@@ -23,6 +23,12 @@ Tonight’s unblock does **not** require creating `agents@` first. Owner can kee
 
 Optional later: copy the same two names into Lovable Cloud secrets if you want env to override Vault. Confirm presence-only on `/integration-health` (owner). After bootstrap, Grok / shop computers auto-sign back in if Chrome drops the session. No magic link click required.
 
+## Stored-login button and `agents@`
+
+- **`agents@boltzautoinc.com` exists** in Supabase Auth, email confirmed, **staff only** (not owner).
+- **Use stored shop-agent login** appears when Vault (`AGENT_AUTH_EMAIL` / `AGENT_AUTH_PASSWORD`) **or** Lovable env secrets are present. The password is not typed. Env wins if both exist.
+- After Chrome quit, `/leads` restores from the **HttpOnly** `boltz_owner_rt` cookie on the server (JS cannot read HttpOnly). If that cookie is gone, Vault shop-agent login is the fallback.
+
 ## How agents sign in
 
 1. Open https://boltz-insight-engine.lovable.app/auth

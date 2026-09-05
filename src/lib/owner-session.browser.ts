@@ -60,6 +60,7 @@ async function tryRememberCookieRestore(): Promise<boolean> {
       return false;
     }
     writeRememberCookie(data.session.refresh_token);
+    void persistHttpOnlyRememberToken(data.session.refresh_token);
     markOwnerSessionActive();
     return true;
   } catch {
@@ -85,6 +86,7 @@ async function restoreOwnerSessionInner(): Promise<boolean> {
   if (data.session) {
     markOwnerSessionActive();
     writeRememberCookie(data.session.refresh_token);
+    void persistHttpOnlyRememberToken(data.session.refresh_token);
     return true;
   }
 
@@ -189,7 +191,27 @@ export async function applyBrowserSessionTokens(tokens: {
   if (error) return false;
   markOwnerSessionActive();
   writeRememberCookie(tokens.refresh_token);
+  void persistHttpOnlyRememberToken(tokens.refresh_token);
   return true;
+}
+
+async function persistHttpOnlyRememberToken(token: string | null | undefined): Promise<void> {
+  if (!token) return;
+  try {
+    const { persistRememberToken } = await import("@/lib/agent-auth.functions");
+    await persistRememberToken({ data: { refresh_token: token } });
+  } catch {
+    /* server fn unavailable */
+  }
+}
+
+async function clearHttpOnlyRememberToken(): Promise<void> {
+  try {
+    const { clearRememberToken } = await import("@/lib/agent-auth.functions");
+    await clearRememberToken({});
+  } catch {
+    /* server fn unavailable */
+  }
 }
 
 let autoLoginInflight: Promise<boolean> | null = null;
@@ -248,11 +270,13 @@ export async function signOutOwnerSession(): Promise<void> {
   markManualSignOut();
   clearOwnerSessionActiveMarker();
   clearRememberCookie();
+  await clearHttpOnlyRememberToken();
   try {
     await supabase.auth.signOut({ scope: "local" });
   } finally {
     clearOwnerSessionActiveMarker();
     clearRememberCookie();
+    await clearHttpOnlyRememberToken();
   }
 }
 
@@ -264,11 +288,13 @@ export function startOwnerSessionKeepalive(): () => void {
       if (session) {
         markOwnerSessionActive();
         writeRememberCookie(session.refresh_token);
+        void persistHttpOnlyRememberToken(session.refresh_token);
       }
     }
     if (event === "SIGNED_OUT") {
       clearOwnerSessionActiveMarker();
       clearRememberCookie();
+      void clearHttpOnlyRememberToken();
     }
   });
 

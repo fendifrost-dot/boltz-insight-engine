@@ -68,6 +68,19 @@ test("env example documents agent secrets without values", () => {
   assert.doesNotMatch(env, /AGENT_AUTH_PASSWORD=.+/);
 });
 
+test("persistent session restore reads the HttpOnly remember cookie on the server", () => {
+  const remember = readFileSync(join(here, "../server/authz/remember-cookie.server.ts"), "utf8");
+  const fns = readFileSync(join(here, "agent-auth.functions.ts"), "utf8");
+  const route = readFileSync(join(here, "../routes/_authenticated/route.tsx"), "utf8");
+  assert.match(remember, /httpOnly:\s*true/);
+  assert.match(remember, /getCookie/);
+  assert.match(remember, /refreshSession/);
+  assert.match(remember, /signInWithStoredAgentCredentials/);
+  assert.doesNotMatch(remember, /console\.(log|info|debug|error|warn)\(/);
+  assert.match(fns, /restorePersistentShopSession/);
+  assert.match(route, /restorePersistentShopSession/);
+});
+
 test("shop-agent nav hides owner-only banking and settings surfaces", () => {
   const shell = readFileSync(join(here, "../components/ops/Shell.tsx"), "utf8");
   assert.match(shell, /ownerOnly: true/);

@@ -11,8 +11,9 @@
  * Stay signed in (default) keeps the existing localStorage session and
  * refreshes the access token after process death. Chrome can still drop
  * localStorage overnight, so the same GoTrue refresh token is mirrored into a
- * first-party `boltz_owner_rt` cookie (60 days, Lax, Secure on https). That is
- * not a new long-lived secret and not an httpOnly server cookie. Opting out
+ * first-party `boltz_owner_rt` cookie (60 days, Lax, Secure, HttpOnly via the
+ * server). Client `document.cookie` cannot read HttpOnly, so `/leads` restores
+ * through a server function that reads the Cookie header. Opting out
  * still stores the PKCE verifier in localStorage (magic link opens in another
  * tab) but discards the session and cookie on the next browser open. Sign-out
  * always clears local state and the remember cookie. This does not open public
@@ -47,11 +48,16 @@ export function extractRefreshToken(json: string | null | undefined): string | n
   }
 }
 
-export function buildRememberCookie(token: string, opts: { secure: boolean }): string {
+export function rememberCookieExpiresUtc(nowMs = Date.now()): string {
+  return new Date(nowMs + OWNER_SESSION_MAX_AGE_SECONDS * 1000).toUTCString();
+}
+
+export function buildRememberCookie(token: string, opts: { secure: boolean; nowMs?: number }): string {
   const parts = [
     `${OWNER_REFRESH_COOKIE}=${encodeURIComponent(token)}`,
     "Path=/",
     `Max-Age=${OWNER_SESSION_MAX_AGE_SECONDS}`,
+    `Expires=${rememberCookieExpiresUtc(opts.nowMs)}`,
     "SameSite=Lax",
   ];
   if (opts.secure) parts.push("Secure");

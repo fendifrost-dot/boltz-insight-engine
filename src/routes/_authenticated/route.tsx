@@ -4,7 +4,12 @@ import {
   getSupabaseConfigError,
   supabase,
 } from "@/integrations/supabase/client";
-import { resolveAuthorizedOpsUser, urlHasAuthCallback } from "@/lib/owner-session.browser";
+import { restorePersistentShopSession } from "@/lib/agent-auth.functions";
+import {
+  applyBrowserSessionTokens,
+  resolveAuthorizedOpsUser,
+  urlHasAuthCallback,
+} from "@/lib/owner-session.browser";
 
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
@@ -18,8 +23,20 @@ export const Route = createFileRoute("/_authenticated")({
       await supabase.auth.getSession();
     }
     const user = await resolveAuthorizedOpsUser();
-    if (!user) throw redirect({ to: "/auth" });
-    return { user };
+    if (user) return { user };
+
+    // Chrome quit drops localStorage. The remember cookie is HttpOnly, so
+    // document.cookie cannot restore it — the server reads the Cookie header
+    // (or Vault shop-agent login) and returns tokens.
+    const restored = await restorePersistentShopSession({});
+    if (restored.ok) {
+      const applied = await applyBrowserSessionTokens(restored.session);
+      if (applied) {
+        const recovered = await resolveAuthorizedOpsUser();
+        if (recovered) return { user: recovered };
+      }
+    }
+    throw redirect({ to: "/auth" });
   },
   component: () => <Outlet />,
 });
