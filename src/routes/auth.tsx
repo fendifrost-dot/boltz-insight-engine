@@ -188,6 +188,12 @@ function AuthPage() {
 
         {configError && <p className="mt-6 text-sm text-destructive">{configError}</p>}
 
+        {restoring && !configError && (
+          <p className="mt-5 text-xs text-muted-foreground">
+            Signing Grok / shop agent back in…
+          </p>
+        )}
+
         {!configError && (
           <>
             <div className="mt-5 grid grid-cols-2 gap-1 rounded-md border border-border p-1">
