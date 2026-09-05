@@ -1,5 +1,6 @@
 import {
   OWNER_SESSION_ACTIVE_KEY,
+  OWNER_SESSION_MANUAL_SIGNOUT_KEY,
   persistPreferenceEnabled,
   wrapOwnerSessionStorage,
   writePersistPreference,
@@ -50,6 +51,33 @@ export function hasOwnerSessionActiveMarker(): boolean {
   if (!canUseBrowserStorage()) return false;
   try {
     return window.sessionStorage.getItem(OWNER_SESSION_ACTIVE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function markManualSignOut(): void {
+  if (!canUseBrowserStorage()) return;
+  try {
+    window.sessionStorage.setItem(OWNER_SESSION_MANUAL_SIGNOUT_KEY, "1");
+  } catch {
+    /* storage blocked */
+  }
+}
+
+export function clearManualSignOut(): void {
+  if (!canUseBrowserStorage()) return;
+  try {
+    window.sessionStorage.removeItem(OWNER_SESSION_MANUAL_SIGNOUT_KEY);
+  } catch {
+    /* storage blocked */
+  }
+}
+
+export function hasManualSignOut(): boolean {
+  if (!canUseBrowserStorage()) return false;
+  try {
+    return window.sessionStorage.getItem(OWNER_SESSION_MANUAL_SIGNOUT_KEY) === "1";
   } catch {
     return false;
   }

@@ -14,6 +14,7 @@ Tonight’s unblock does **not** require creating `agents@` first. Owner can kee
 - Stay signed in stays **on by default** for both paths. The auth gate no longer treats a transient error as logout (that was still dumping people to `/auth` after Chrome restart).
 - Dedicated shop-agent account should be **staff**, not owner. Integration Health and Google Ads stay hidden for staff. Staff can send SMS; they cannot confirm Paid / manage integrations.
 - Optional one-click **Use stored shop-agent login** appears only after Lovable secrets are set. The password never goes to the browser, never goes into git, and is never returned by the API.
+- **Grok auto-login:** if `AGENT_AUTH_EMAIL` + `AGENT_AUTH_PASSWORD` are set and Stay signed in is on, a dropped session is restored silently (auth page + keepalive). Explicit **Sign out** in that tab stays signed out until Chrome restart. Inbound Grok SMS replies already run on the server without a browser cookie.
 - Automated inbound Grok replies already send from the server (cron / webhook) without a browser cookie. Manual first-touch SMS still uses the signed-in staff session. A public cookie-less send API was not added because the live app URL is public.
 
 ## One-time setup (Fendi)
@@ -44,6 +45,7 @@ ON CONFLICT (user_id, role) DO NOTHING;
 | `AGENT_AUTH_PASSWORD` | the password from step 1 |
 
 4. Confirm on `/integration-health` (owner login) that both secrets show **Configured**. Values are never displayed.
+5. After those secrets are set, Grok / shop computers auto-sign back in if Chrome drops the session. No magic link click required.
 
 ## How agents sign in
 

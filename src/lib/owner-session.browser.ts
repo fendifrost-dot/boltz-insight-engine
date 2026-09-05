@@ -6,9 +6,13 @@ import {
   shouldDiscardEphemeralSession,
   urlHasAuthCallback,
 } from "./owner-session";
+import { shouldAutoLoginShopAgent } from "./shop-agent-auto-login";
 import {
+  clearManualSignOut,
   clearOwnerSessionActiveMarker,
+  hasManualSignOut,
   hasOwnerSessionActiveMarker,
+  markManualSignOut,
   markOwnerSessionActive,
   readOwnerSessionPersist,
 } from "./owner-session.storage";
@@ -46,7 +50,7 @@ async function restoreOwnerSessionInner(): Promise<boolean> {
   ) {
     clearOwnerSessionActiveMarker();
     await supabase.auth.signOut({ scope: "local" });
-    return false;
+    return tryAutoLoginShopAgent();
   }
 
   const { data } = await supabase.auth.getSession();
@@ -54,7 +58,7 @@ async function restoreOwnerSessionInner(): Promise<boolean> {
     markOwnerSessionActive();
     return true;
   }
-  return false;
+  return tryAutoLoginShopAgent();
 }
 
 async function refreshOwnerSession(
@@ -147,7 +151,60 @@ export async function applyBrowserSessionTokens(tokens: {
   return true;
 }
 
+let autoLoginInflight: Promise<boolean> | null = null;
+let secretsConfiguredCache: boolean | null = null;
+
+async function storedAgentSecretsConfigured(): Promise<boolean> {
+  if (secretsConfiguredCache !== null) return secretsConfiguredCache;
+  try {
+    const { getAgentAuthStatus } = await import("@/lib/agent-auth.functions");
+    const status = await getAgentAuthStatus({});
+    secretsConfiguredCache = Boolean(status?.configured);
+  } catch {
+    secretsConfiguredCache = false;
+  }
+  return secretsConfiguredCache;
+}
+
+/**
+ * Silent Grok / shop-agent re-login using Lovable secrets.
+ * Skips after an explicit Sign out in this tab (sessionStorage).
+ * Chrome restart clears that flag so the shop computer recovers.
+ */
+export async function tryAutoLoginShopAgent(): Promise<boolean> {
+  if (!autoLoginInflight) {
+    autoLoginInflight = tryAutoLoginShopAgentInner().finally(() => {
+      autoLoginInflight = null;
+    });
+  }
+  return autoLoginInflight;
+}
+
+async function tryAutoLoginShopAgentInner(): Promise<boolean> {
+  const persistEnabled = readOwnerSessionPersist();
+  const { data } = await supabase.auth.getSession();
+  const secretsConfigured = await storedAgentSecretsConfigured();
+  if (
+    !shouldAutoLoginShopAgent({
+      persistEnabled,
+      hasSession: Boolean(data.session),
+      secretsConfigured,
+      manualSignOut: hasManualSignOut(),
+    })
+  ) {
+    return Boolean(data.session);
+  }
+
+  const { signInShopAgent } = await import("@/lib/agent-auth.functions");
+  const result = await signInShopAgent({});
+  if (!result.ok) return false;
+  const applied = await applyBrowserSessionTokens(result.session);
+  if (applied) clearManualSignOut();
+  return applied;
+}
+
 export async function signOutOwnerSession(): Promise<void> {
+  markManualSignOut();
   clearOwnerSessionActiveMarker();
   try {
     await supabase.auth.signOut({ scope: "local" });
@@ -184,11 +241,13 @@ export function startOwnerSessionKeepalive(): () => void {
 
   document.addEventListener("visibilitychange", refreshIfNeeded);
   window.addEventListener("focus", refreshIfNeeded);
+  const interval = window.setInterval(refreshIfNeeded, 4 * 60_000);
   void restoreOwnerSessionIfNeeded();
 
   return () => {
     data.subscription.unsubscribe();
     document.removeEventListener("visibilitychange", refreshIfNeeded);
     window.removeEventListener("focus", refreshIfNeeded);
+    window.clearInterval(interval);
   };
 }

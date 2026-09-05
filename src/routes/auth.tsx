@@ -18,6 +18,7 @@ import {
 import {
   applyBrowserSessionTokens,
   resolveAuthorizedOpsUser,
+  tryAutoLoginShopAgent,
   urlHasAuthCallback,
 } from "@/lib/owner-session.browser";
 import { readOwnerSessionPersist, setOwnerSessionPersist } from "@/lib/owner-session.storage";
@@ -87,6 +88,7 @@ function AuthPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [storedLoginConfigured, setStoredLoginConfigured] = useState(false);
+  const [autoSigningIn, setAutoSigningIn] = useState(false);
 
   useEffect(() => {
     let unsubscribe: (() => void) | undefined;
@@ -106,6 +108,18 @@ function AuthPage() {
         navigate({ to: "/", replace: true });
         return;
       }
+
+      setAutoSigningIn(true);
+      const recovered = await tryAutoLoginShopAgent();
+      if (cancelled) return;
+      if (recovered) {
+        const recoveredUser = await resolveAuthorizedOpsUser();
+        if (recoveredUser) {
+          navigate({ to: "/", replace: true });
+          return;
+        }
+      }
+      setAutoSigningIn(false);
 
       const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
         if (
@@ -257,6 +271,9 @@ function AuthPage() {
         </p>
 
         {configError && <p className="mt-6 text-sm text-destructive">{configError}</p>}
+        {!configError && autoSigningIn && (
+          <p className="mt-4 text-xs text-muted-foreground">Signing Grok / shop agent back in…</p>
+        )}
 
         {!configError && (
           <div className="mt-5 grid grid-cols-2 gap-1 rounded-md border border-border p-1">

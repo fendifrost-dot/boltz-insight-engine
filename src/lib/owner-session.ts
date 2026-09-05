@@ -18,6 +18,7 @@
 
 export const OWNER_SESSION_PERSIST_KEY = "boltz-owner-session:persist";
 export const OWNER_SESSION_ACTIVE_KEY = "boltz-owner-session:active";
+export const OWNER_SESSION_MANUAL_SIGNOUT_KEY = "boltz-owner-session:manual-signout";
 
 export type MaybeAsyncStorage = {
   getItem: (key: string) => string | null | Promise<string | null>;
