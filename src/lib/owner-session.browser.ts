@@ -8,7 +8,6 @@ import {
 } from "./owner-session";
 import {
   agentAutoLoginSuppressed,
-  clearAgentAutoLoginSuppress,
   clearOwnerSessionActiveMarker,
   hasOwnerSessionActiveMarker,
   markOwnerSessionActive,
