@@ -9,10 +9,13 @@ import {
 import {
   agentAutoLoginSuppressed,
   clearOwnerSessionActiveMarker,
+  clearRememberCookie,
   hasOwnerSessionActiveMarker,
   markOwnerSessionActive,
   readOwnerSessionPersist,
+  readRememberCookie,
   suppressAgentAutoLogin,
+  writeRememberCookie,
 } from "./owner-session.storage";
 import { storedAgentLoginAvailable, storedAgentSignIn } from "./agent-auth.functions";
 
@@ -91,6 +94,7 @@ async function restoreOwnerSessionInner(): Promise<boolean> {
       hasAuthCallback: currentUrlHasAuthCallback(),
     })
   ) {
+    clearRememberCookie();
     clearOwnerSessionActiveMarker();
     await supabase.auth.signOut({ scope: "local" });
     return false;
@@ -99,9 +103,24 @@ async function restoreOwnerSessionInner(): Promise<boolean> {
   const { data } = await supabase.auth.getSession();
   if (data.session) {
     markOwnerSessionActive();
+    if (data.session.refresh_token && readOwnerSessionPersist()) {
+      writeRememberCookie(data.session.refresh_token);
+    }
     return true;
   }
-  return false;
+
+  if (!readOwnerSessionPersist()) return false;
+  const token = readRememberCookie();
+  if (!token) return false;
+
+  const { data: restored, error } = await supabase.auth.refreshSession({ refresh_token: token });
+  if (error || !restored.session) {
+    clearRememberCookie();
+    return false;
+  }
+  markOwnerSessionActive();
+  if (restored.session.refresh_token) writeRememberCookie(restored.session.refresh_token);
+  return true;
 }
 
 async function refreshOwnerSession(
@@ -118,6 +137,7 @@ async function refreshOwnerSession(
 export async function resolveOwnerUser() {
   await restoreOwnerSessionIfNeeded();
   let alreadyRefreshed = false;
+  let alreadyRestored = true;
 
   for (let i = 0; i < 4; i++) {
     const { data: sessionData } = await supabase.auth.getSession();
@@ -141,13 +161,21 @@ export async function resolveOwnerUser() {
       hasSession: Boolean(session),
       hasUser: Boolean(userData.user),
       getUserError: error,
+      hasRememberToken: Boolean(readOwnerSessionPersist() && readRememberCookie()),
       expiresAtSeconds: session?.expires_at,
       nowMs: Date.now(),
       alreadyRefreshed,
+      alreadyRestored,
     });
 
     if (decision.action === "allow" && userData.user) return userData.user;
     if (decision.action === "allow-stale" && session?.user) return session.user;
+    if (decision.action === "restore-cookie") {
+      alreadyRestored = true;
+      const ok = await restoreOwnerSessionIfNeeded();
+      if (!ok) return null;
+      continue;
+    }
     if (decision.action === "refresh") {
       alreadyRefreshed = true;
       const result = await refreshOwnerSession(session?.user);
@@ -165,10 +193,12 @@ export async function signOutOwnerSession(): Promise<void> {
   // only (sessionStorage), so the shop computer still recovers after a Chrome
   // restart clears it.
   suppressAgentAutoLogin();
+  clearRememberCookie();
   clearOwnerSessionActiveMarker();
   try {
     await supabase.auth.signOut({ scope: "local" });
   } finally {
+    clearRememberCookie();
     clearOwnerSessionActiveMarker();
   }
 }
@@ -186,8 +216,12 @@ export function startOwnerSessionKeepalive(): () => void {
   const { data } = supabase.auth.onAuthStateChange((event, session) => {
     if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED" || event === "INITIAL_SESSION") {
       if (session) markOwnerSessionActive();
+      if (session?.refresh_token && readOwnerSessionPersist()) {
+        writeRememberCookie(session.refresh_token);
+      }
     }
     if (event === "SIGNED_OUT") {
+      clearRememberCookie();
       clearOwnerSessionActiveMarker();
     }
   });
@@ -204,6 +238,9 @@ export function startOwnerSessionKeepalive(): () => void {
       const { data: sessionData } = await supabase.auth.getSession();
       if (!sessionData.session) return;
       markOwnerSessionActive();
+      if (sessionData.session.refresh_token && readOwnerSessionPersist()) {
+        writeRememberCookie(sessionData.session.refresh_token);
+      }
       if (sessionNeedsRefresh(sessionData.session.expires_at, Date.now())) {
         await supabase.auth.refreshSession();
       }

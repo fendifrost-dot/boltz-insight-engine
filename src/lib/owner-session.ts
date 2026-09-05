@@ -8,16 +8,20 @@
  * `/_authenticated` called `getUser()` on every load, treating an expired JWT
  * (or a transient fetch after Chrome sleep/crash) as signed-out.
  *
- * Stay signed in (default) keeps the existing localStorage session and
- * refreshes the access token after process death. Opting out still stores the
- * PKCE verifier in localStorage (magic link opens in another tab) but discards
- * the session on the next browser open. Sign-out always clears local state.
- * This does not open public signup and does not copy refresh tokens into
- * document.cookie.
+ * Stay signed in (default) keeps the Supabase session in localStorage AND a
+ * first-party 60-day refresh-token cookie. Production logs (auth.sessions)
+ * show the server session stays valid (`not_after` is null) while Chrome
+ * loses the localStorage copy overnight — a new session is created every
+ * morning. The cookie is the same refresh token GoTrue already issued; it is
+ * not an extra long-lived secret. Opting out still stores the PKCE verifier
+ * in localStorage (magic link opens in another tab) but discards the session
+ * on the next browser open. Sign-out clears local state and the cookie.
  */
 
 export const OWNER_SESSION_PERSIST_KEY = "boltz-owner-session:persist";
 export const OWNER_SESSION_ACTIVE_KEY = "boltz-owner-session:active";
+export const OWNER_REFRESH_COOKIE = "boltz_owner_rt";
+export const OWNER_SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 60; // 60 days
 
 export type MaybeAsyncStorage = {
   getItem: (key: string) => string | null | Promise<string | null>;
@@ -43,6 +47,57 @@ export function writePersistPreference(
   enabled: boolean,
 ): void {
   storage.setItem(OWNER_SESSION_PERSIST_KEY, enabled ? "1" : "0");
+}
+
+export function extractRefreshToken(value: string): string | null {
+  try {
+    const parsed = JSON.parse(value) as {
+      refresh_token?: unknown;
+      currentSession?: { refresh_token?: unknown };
+    };
+    const token = parsed.refresh_token ?? parsed.currentSession?.refresh_token;
+    return typeof token === "string" && token.length > 0 ? token : null;
+  } catch {
+    return null;
+  }
+}
+
+export function buildRememberCookie(
+  token: string,
+  opts: { secure: boolean; maxAgeSeconds?: number },
+): string {
+  const maxAge = opts.maxAgeSeconds ?? OWNER_SESSION_MAX_AGE_SECONDS;
+  const parts = [
+    `${OWNER_REFRESH_COOKIE}=${encodeURIComponent(token)}`,
+    "Path=/",
+    `Max-Age=${maxAge}`,
+    "SameSite=Lax",
+  ];
+  if (opts.secure) parts.push("Secure");
+  return parts.join("; ");
+}
+
+export function buildClearedRememberCookie(opts: { secure: boolean }): string {
+  const parts = [`${OWNER_REFRESH_COOKIE}=`, "Path=/", "Max-Age=0", "SameSite=Lax"];
+  if (opts.secure) parts.push("Secure");
+  return parts.join("; ");
+}
+
+export function parseRememberCookie(cookieHeader: string): string | null {
+  const parts = cookieHeader.split(";");
+  for (const part of parts) {
+    const trimmed = part.trim();
+    if (!trimmed.startsWith(`${OWNER_REFRESH_COOKIE}=`)) continue;
+    const raw = trimmed.slice(OWNER_REFRESH_COOKIE.length + 1);
+    if (!raw) return null;
+    try {
+      const token = decodeURIComponent(raw);
+      return token.length > 0 ? token : null;
+    } catch {
+      return null;
+    }
+  }
+  return null;
 }
 
 export function sessionNeedsRefresh(
@@ -73,6 +128,7 @@ export function isTransientAuthError(
 export type AuthResolveDecision =
   | { action: "allow" }
   | { action: "refresh" }
+  | { action: "restore-cookie" }
   | { action: "allow-stale" }
   | { action: "redirect-auth" };
 
@@ -80,13 +136,18 @@ export function nextAuthResolveStep(input: {
   hasSession: boolean;
   hasUser: boolean;
   getUserError?: { message?: string | undefined; status?: number | undefined } | null;
+  hasRememberToken?: boolean;
   expiresAtSeconds?: number | undefined;
   nowMs: number;
   alreadyRefreshed?: boolean;
+  alreadyRestored?: boolean;
 }): AuthResolveDecision {
   if (input.hasUser) return { action: "allow" };
 
-  if (!input.hasSession) return { action: "redirect-auth" };
+  if (!input.hasSession) {
+    if (input.hasRememberToken && !input.alreadyRestored) return { action: "restore-cookie" };
+    return { action: "redirect-auth" };
+  }
 
   if (sessionNeedsRefresh(input.expiresAtSeconds, input.nowMs) && !input.alreadyRefreshed) {
     return { action: "refresh" };
@@ -128,17 +189,20 @@ export function simulatedBrowserRestart(input: {
   persistEnabled: boolean;
   hasPersistedSession: boolean;
   accessTokenExpired?: boolean;
+  hasRememberCookie?: boolean;
 }): {
   hasActiveMarker: boolean;
   hasPersistedSession: boolean;
   persistEnabled: boolean;
   accessTokenExpired: boolean;
+  hasRememberCookie: boolean;
 } {
   return {
     persistEnabled: input.persistEnabled,
     hasPersistedSession: input.hasPersistedSession,
     hasActiveMarker: false,
     accessTokenExpired: input.accessTokenExpired ?? false,
+    hasRememberCookie: input.hasRememberCookie ?? false,
   };
 }
 
@@ -153,6 +217,7 @@ export function ownerAuthAfterLaunch(input: {
   hasAuthCallback: boolean;
   hasPersistedSession: boolean;
   accessTokenExpired: boolean;
+  hasRememberCookie?: boolean;
 }): OwnerAuthLaunchOutcome {
   if (
     shouldDiscardEphemeralSession({
@@ -165,6 +230,9 @@ export function ownerAuthAfterLaunch(input: {
   }
 
   if (!input.hasPersistedSession) {
+    if (input.persistEnabled && input.hasRememberCookie) {
+      return { outcome: "refresh-then-allow" };
+    }
     return { outcome: "redirect-auth", reason: "unauthenticated" };
   }
 
@@ -175,8 +243,11 @@ export function ownerAuthAfterLaunch(input: {
 export function wrapOwnerSessionStorage(
   base: MaybeAsyncStorage | undefined,
   deps: {
+    persistEnabled?: () => boolean;
     local: Pick<Storage, "getItem" | "setItem" | "removeItem">;
     session: Pick<Storage, "getItem" | "setItem" | "removeItem">;
+    onPersistSession?: (value: string) => void;
+    onClearSession?: () => void;
   },
 ): MaybeAsyncStorage | undefined {
   if (!base) return undefined;
@@ -193,10 +264,13 @@ export function wrapOwnerSessionStorage(
       // Always write localStorage so a magic-link tab can read the PKCE verifier.
       deps.local.setItem(key, value);
       await base.setItem(key, value);
+      if (deps.persistEnabled?.() !== false) deps.onPersistSession?.(value);
+      else deps.onClearSession?.();
     },
     removeItem: async (key: string) => {
       deps.local.removeItem(key);
       deps.session.removeItem(key);
+      deps.onClearSession?.();
       await base.removeItem(key);
     },
   };

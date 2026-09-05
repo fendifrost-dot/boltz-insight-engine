@@ -4,7 +4,7 @@ import {
   getSupabaseConfigError,
   supabase,
 } from "@/integrations/supabase/client";
-import { resolveOwnerUser, urlHasAuthCallback } from "@/lib/owner-session.browser";
+import { resolveOwnerUserWithAgentRestore, urlHasAuthCallback } from "@/lib/owner-session.browser";
 
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
@@ -19,16 +19,10 @@ export const Route = createFileRoute("/_authenticated")({
       await supabase.auth.getSession();
     }
 
-    const user = await resolveOwnerUser();
-    // Only an absent user evicts. Transient errors must not sign anyone out.
+    const user = await resolveOwnerUserWithAgentRestore();
+    // Only an absent user evicts. A failed staff probe must not wipe the
+    // persisted refresh token (that forced a daily magic link).
     if (!user) throw redirect({ to: "/auth" });
-
-    const { data: isStaff, error } = await supabase.rpc("is_staff", { _user_id: user.id });
-    if (!error && isStaff === false) {
-      await supabase.auth.signOut({ scope: "local" });
-      throw redirect({ to: "/auth" });
-    }
-
     return { user };
   },
   component: () => <Outlet />,

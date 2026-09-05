@@ -4,10 +4,16 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  OWNER_REFRESH_COOKIE,
+  OWNER_SESSION_MAX_AGE_SECONDS,
   OWNER_SESSION_PERSIST_KEY,
+  buildClearedRememberCookie,
+  buildRememberCookie,
+  extractRefreshToken,
   isTransientAuthError,
   nextAuthResolveStep,
   ownerAuthAfterLaunch,
+  parseRememberCookie,
   persistPreferenceEnabled,
   sessionNeedsRefresh,
   shouldDiscardEphemeralSession,
@@ -106,6 +112,31 @@ test("stay-signed-in off expires after a simulated browser restart", () => {
     hasAuthCallback: false,
   });
   assert.deepEqual(decision, { outcome: "redirect-auth", reason: "ephemeral-expired" });
+});
+
+test("cold Chrome open with empty localStorage still recovers from the remember cookie", () => {
+  const restarted = simulatedBrowserRestart({
+    persistEnabled: true,
+    hasPersistedSession: false,
+    hasRememberCookie: true,
+  });
+  assert.equal(restarted.hasActiveMarker, false);
+  assert.deepEqual(
+    ownerAuthAfterLaunch({
+      ...restarted,
+      hasAuthCallback: false,
+    }),
+    { outcome: "refresh-then-allow" },
+  );
+  assert.deepEqual(
+    nextAuthResolveStep({
+      hasSession: false,
+      hasUser: false,
+      hasRememberToken: true,
+      nowMs: 0,
+    }),
+    { action: "restore-cookie" },
+  );
 });
 
 test("unauthenticated users still hit /auth", () => {
@@ -214,20 +245,59 @@ test("resolve step allows a cached session through a transient getUser failure",
   );
 });
 
-test("storage wrap always persists the PKCE/session payload in localStorage", async () => {
+test("remember-me cookie is first-party, Lax, and long-lived", () => {
+  const cookie = buildRememberCookie("rt/value+1", {
+    secure: true,
+    maxAgeSeconds: OWNER_SESSION_MAX_AGE_SECONDS,
+  });
+  assert.match(cookie, new RegExp(`^${OWNER_REFRESH_COOKIE}=`));
+  assert.match(cookie, /Max-Age=5184000/);
+  assert.match(cookie, /SameSite=Lax/);
+  assert.match(cookie, /Secure/);
+  assert.match(cookie, /Path=\//);
+  assert.equal(parseRememberCookie(cookie), "rt/value+1");
+  assert.equal(parseRememberCookie(`${OWNER_REFRESH_COOKIE}=; Path=/`), null);
+
+  const cleared = buildClearedRememberCookie({ secure: true });
+  assert.match(cleared, /Max-Age=0/);
+  assert.equal(parseRememberCookie(`other=1; ${OWNER_REFRESH_COOKIE}=abc-token`), "abc-token");
+});
+
+test("extractRefreshToken reads supabase session JSON shapes", () => {
+  assert.equal(extractRefreshToken("{not json"), null);
+  assert.equal(extractRefreshToken(JSON.stringify({ access_token: "a" })), null);
+  assert.equal(
+    extractRefreshToken(JSON.stringify({ refresh_token: "rt-1", access_token: "a" })),
+    "rt-1",
+  );
+  assert.equal(
+    extractRefreshToken(JSON.stringify({ currentSession: { refresh_token: "rt-2" } })),
+    "rt-2",
+  );
+});
+
+test("storage wrap writes localStorage and a cookie when stay-signed-in is on", async () => {
   const local = memoryStore();
   const session = memoryStore();
   const base = memoryStore();
-  const wrapped = wrapOwnerSessionStorage(base, { local, session });
+  const events: string[] = [];
+  const wrapped = wrapOwnerSessionStorage(base, {
+    persistEnabled: () => true,
+    local,
+    session,
+    onPersistSession: (value) => events.push(`persist:${extractRefreshToken(value)}`),
+    onClearSession: () => events.push("clear"),
+  });
   assert.ok(wrapped);
   const payload = JSON.stringify({ refresh_token: "rt-live", access_token: "a" });
   await wrapped.setItem("sb-auth", payload);
   assert.equal(local.getItem("sb-auth"), payload);
   assert.equal(base.getItem("sb-auth"), payload);
+  assert.deepEqual(events, ["persist:rt-live"]);
 
   await wrapped.removeItem("sb-auth");
   assert.equal(local.getItem("sb-auth"), null);
-  assert.equal(session.getItem("sb-auth"), null);
+  assert.ok(events.includes("clear"));
 });
 
 test("storage wrap falls back across stores so a leftover session can recover", async () => {
@@ -249,9 +319,10 @@ test("magic-link callback query/hash is detected before the auth gate", () => {
 
 test("authenticated route recovers the owner instead of treating getUser failure as logout", () => {
   const route = readFileSync(join(here, "../routes/_authenticated/route.tsx"), "utf8");
-  assert.match(route, /resolveOwnerUser/);
+  assert.match(route, /resolveOwnerUserWithAgentRestore/);
   assert.match(route, /throw redirect\(\{ to: "\/auth" \}\)/);
   assert.doesNotMatch(route, /supabase\.auth\.getUser\(\)/);
+  assert.doesNotMatch(route, /signOut/);
 });
 
 test("auth page defaults stay-signed-in on and does not open public signup", () => {
