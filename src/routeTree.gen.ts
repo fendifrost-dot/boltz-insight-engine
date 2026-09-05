@@ -27,6 +27,7 @@ import { Route as AuthenticatedModulesRouteImport } from './routes/_authenticate
 import { Route as AuthenticatedProvenanceRouteImport } from './routes/_authenticated/provenance'
 import { Route as AuthenticatedQueriesRouteImport } from './routes/_authenticated/queries'
 import { Route as ApiPublicSupabaseConfigRouteImport } from './routes/api/public/supabase-config'
+import { Route as ApiPublicSyncVaultAgentRouteImport } from './routes/api/public/sync-vault-agent'
 import { Route as ApiPublicCronProcessJobsRouteImport } from './routes/api/public/cron/process-jobs'
 import { Route as ApiPublicCronReconcileMessagesRouteImport } from './routes/api/public/cron/reconcile-messages'
 import { Route as ApiPublicCronRenewSubscriptionsRouteImport } from './routes/api/public/cron/renew-subscriptions'
@@ -127,6 +128,11 @@ const ApiPublicSupabaseConfigRoute = ApiPublicSupabaseConfigRouteImport.update({
   path: '/api/public/supabase-config',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicSyncVaultAgentRoute = ApiPublicSyncVaultAgentRouteImport.update({
+  id: '/api/public/sync-vault-agent',
+  path: '/api/public/sync-vault-agent',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicCronProcessJobsRoute =
   ApiPublicCronProcessJobsRouteImport.update({
     id: '/api/public/cron/process-jobs',
@@ -170,6 +176,7 @@ export interface FileRoutesByFullPath {
   '/provenance': typeof AuthenticatedProvenanceRoute
   '/queries': typeof AuthenticatedQueriesRoute
   '/api/public/supabase-config': typeof ApiPublicSupabaseConfigRoute
+  '/api/public/sync-vault-agent': typeof ApiPublicSyncVaultAgentRoute
   '/api/public/cron/process-jobs': typeof ApiPublicCronProcessJobsRoute
   '/api/public/cron/reconcile-messages': typeof ApiPublicCronReconcileMessagesRoute
   '/api/public/cron/renew-subscriptions': typeof ApiPublicCronRenewSubscriptionsRoute
@@ -193,6 +200,7 @@ export interface FileRoutesByTo {
   '/queries': typeof AuthenticatedQueriesRoute
   '/': typeof AuthenticatedIndexRoute
   '/api/public/supabase-config': typeof ApiPublicSupabaseConfigRoute
+  '/api/public/sync-vault-agent': typeof ApiPublicSyncVaultAgentRoute
   '/api/public/cron/process-jobs': typeof ApiPublicCronProcessJobsRoute
   '/api/public/cron/reconcile-messages': typeof ApiPublicCronReconcileMessagesRoute
   '/api/public/cron/renew-subscriptions': typeof ApiPublicCronRenewSubscriptionsRoute
@@ -218,6 +226,7 @@ export interface FileRoutesById {
   '/_authenticated/queries': typeof AuthenticatedQueriesRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
   '/api/public/supabase-config': typeof ApiPublicSupabaseConfigRoute
+  '/api/public/sync-vault-agent': typeof ApiPublicSyncVaultAgentRoute
   '/api/public/cron/process-jobs': typeof ApiPublicCronProcessJobsRoute
   '/api/public/cron/reconcile-messages': typeof ApiPublicCronReconcileMessagesRoute
   '/api/public/cron/renew-subscriptions': typeof ApiPublicCronRenewSubscriptionsRoute
@@ -243,6 +252,7 @@ export interface FileRouteTypes {
     | '/provenance'
     | '/queries'
     | '/api/public/supabase-config'
+    | '/api/public/sync-vault-agent'
     | '/api/public/cron/process-jobs'
     | '/api/public/cron/reconcile-messages'
     | '/api/public/cron/renew-subscriptions'
@@ -266,6 +276,7 @@ export interface FileRouteTypes {
     | '/queries'
     | '/'
     | '/api/public/supabase-config'
+    | '/api/public/sync-vault-agent'
     | '/api/public/cron/process-jobs'
     | '/api/public/cron/reconcile-messages'
     | '/api/public/cron/renew-subscriptions'
@@ -290,6 +301,7 @@ export interface FileRouteTypes {
     | '/_authenticated/queries'
     | '/_authenticated/'
     | '/api/public/supabase-config'
+    | '/api/public/sync-vault-agent'
     | '/api/public/cron/process-jobs'
     | '/api/public/cron/reconcile-messages'
     | '/api/public/cron/renew-subscriptions'
@@ -300,6 +312,7 @@ export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
   ApiPublicSupabaseConfigRoute: typeof ApiPublicSupabaseConfigRoute
+  ApiPublicSyncVaultAgentRoute: typeof ApiPublicSyncVaultAgentRoute
   ApiPublicCronProcessJobsRoute: typeof ApiPublicCronProcessJobsRoute
   ApiPublicCronReconcileMessagesRoute: typeof ApiPublicCronReconcileMessagesRoute
   ApiPublicCronRenewSubscriptionsRoute: typeof ApiPublicCronRenewSubscriptionsRoute
@@ -434,6 +447,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicSupabaseConfigRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/sync-vault-agent': {
+      id: '/api/public/sync-vault-agent'
+      path: '/api/public/sync-vault-agent'
+      fullPath: '/api/public/sync-vault-agent'
+      preLoaderRoute: typeof ApiPublicSyncVaultAgentRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/cron/process-jobs': {
       id: '/api/public/cron/process-jobs'
       path: '/api/public/cron/process-jobs'
@@ -508,6 +528,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
   ApiPublicSupabaseConfigRoute: ApiPublicSupabaseConfigRoute,
+  ApiPublicSyncVaultAgentRoute: ApiPublicSyncVaultAgentRoute,
   ApiPublicCronProcessJobsRoute: ApiPublicCronProcessJobsRoute,
   ApiPublicCronReconcileMessagesRoute: ApiPublicCronReconcileMessagesRoute,
   ApiPublicCronRenewSubscriptionsRoute: ApiPublicCronRenewSubscriptionsRoute,
