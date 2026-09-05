@@ -14,7 +14,7 @@ import {
   readOwnerSessionPersist,
   suppressAgentAutoLogin,
 } from "./owner-session.storage";
-import { storedAgentSignIn } from "./agent-auth.functions";
+import { storedAgentLoginAvailable, storedAgentSignIn } from "./agent-auth.functions";
 
 export {
   ownerAuthStorage,
@@ -50,7 +50,12 @@ async function trySilentAgentRestoreInner(): Promise<boolean> {
   if (data.session) return true;
 
   try {
-    const res = await storedAgentSignIn();
+    // Skip the sign-in call entirely when the AGENT_AUTH secrets are missing —
+    // otherwise every /auth visit and keepalive tick burns a rate-limiter hit.
+    const availability = await storedAgentLoginAvailable();
+    if (!availability?.available) return false;
+
+    const res = await storedAgentSignIn({});
     if (!res?.ok) return false;
     const { error } = await supabase.auth.setSession({
       access_token: res.accessToken,
