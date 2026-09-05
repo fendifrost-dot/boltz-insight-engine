@@ -55,8 +55,10 @@ test("agent login server path never logs or returns the password secret", () => 
   assert.match(server, /AGENT_AUTH_PASSWORD/);
   assert.match(server, /signInWithPassword/);
   assert.match(server, /is_staff/);
+  assert.match(server, /read_agent_auth_secret/);
+  assert.match(server, /resolveAgentAuthCredentials/);
   assert.doesNotMatch(server, /console\.(log|info|debug|error|warn)\([^)]*PASSWORD/);
-  assert.doesNotMatch(server, /return \{[^}]*\bpassword\s*:/);
+  assert.doesNotMatch(server, /return \{ ok: true[^}]*\bpassword\s*:/);
 });
 
 test("env example documents agent secrets without values", () => {

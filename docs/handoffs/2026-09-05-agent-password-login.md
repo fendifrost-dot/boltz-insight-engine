@@ -13,39 +13,15 @@ Tonight’s unblock does **not** require creating `agents@` first. Owner can kee
 - `/auth` has two tabs: **Shop agent** (email + password) and **Owner magic link**.
 - Stay signed in stays **on by default** for both paths. The auth gate no longer treats a transient error as logout (that was still dumping people to `/auth` after Chrome restart).
 - Dedicated shop-agent account should be **staff**, not owner. Integration Health and Google Ads stay hidden for staff. Staff can send SMS; they cannot confirm Paid / manage integrations.
-- Optional one-click **Use stored shop-agent login** appears only after Lovable secrets are set. The password never goes to the browser, never goes into git, and is never returned by the API.
-- **Grok auto-login:** if `AGENT_AUTH_EMAIL` + `AGENT_AUTH_PASSWORD` are set and Stay signed in is on, a dropped session is restored silently (auth page + keepalive). Explicit **Sign out** in that tab stays signed out until Chrome restart. Inbound Grok SMS replies already run on the server without a browser cookie.
+- Optional one-click **Use stored shop-agent login** appears after Lovable env secrets **or** the Vault bootstrap (`read_agent_auth_secret`) is present. The password never goes to the browser, never goes into git, and is never returned by the API.
+- **Grok auto-login:** if those credentials exist and Stay signed in is on, a dropped session is restored silently (auth page, `/` gate, and keepalive). Explicit **Sign out** in that tab stays signed out until Chrome restart. Inbound Grok SMS replies already run on the server without a browser cookie.
 - Automated inbound Grok replies already send from the server (cron / webhook) without a browser cookie. Manual first-touch SMS still uses the signed-in staff session. A public cookie-less send API was not added because the live app URL is public.
 
-## One-time setup (Fendi)
+## Production bootstrap (2026-09-05 morning)
 
-Do this in Supabase / Lovable Cloud. Do not paste the password into chat or the repo.
+`agents@boltzautoinc.com` is created as **staff** by migration `20260905141100_provision_shop_agent_vault_login.sql`. The password is generated in-database and stored only in Supabase Vault (`AGENT_AUTH_EMAIL` / `AGENT_AUTH_PASSWORD`). Env secrets still win if later set in Lovable Cloud. Do not paste the password into chat.
 
-1. **Create the Auth user** in Lovable Cloud → Supabase → Authentication → Users → Add user.
-   - Email: `agents@boltzautoinc.com` (same domain as the owner account `info@boltzautoinc.com`).
-   - Password: generate a long random password. Store it only in Lovable secrets.
-   - Confirm / auto-confirm the user so they can sign in immediately.
-   - Do **not** use the owner mailbox `info@boltzautoinc.com` for this.
-
-2. **Grant staff only** (never `owner`) in the SQL editor, after the user exists:
-
-```sql
-INSERT INTO public.user_roles (user_id, role)
-SELECT id, 'staff'
-FROM auth.users
-WHERE email = 'agents@boltzautoinc.com'
-ON CONFLICT (user_id, role) DO NOTHING;
-```
-
-3. **Lovable secrets** (Project → Cloud → Secrets). Names must match exactly:
-
-| Secret | Value |
-| --- | --- |
-| `AGENT_AUTH_EMAIL` | `agents@boltzautoinc.com` |
-| `AGENT_AUTH_PASSWORD` | the password from step 1 |
-
-4. Confirm on `/integration-health` (owner login) that both secrets show **Configured**. Values are never displayed.
-5. After those secrets are set, Grok / shop computers auto-sign back in if Chrome drops the session. No magic link click required.
+Optional later: copy the same two names into Lovable Cloud secrets if you want env to override Vault. Confirm presence-only on `/integration-health` (owner). After bootstrap, Grok / shop computers auto-sign back in if Chrome drops the session. No magic link click required.
 
 ## How agents sign in
 

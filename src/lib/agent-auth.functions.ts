@@ -3,8 +3,8 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { checkCapability } from "@/server/authz/require-capability.server";
 
 export const getAgentAuthStatus = createServerFn({ method: "GET" }).handler(async () => {
-  const { agentAuthSecretsConfigured } = await import("@/server/authz/agent-login.server");
-  return { configured: agentAuthSecretsConfigured() };
+  const { resolveAgentAuthCredentials } = await import("@/server/authz/agent-login.server");
+  return { configured: Boolean(await resolveAgentAuthCredentials()) };
 });
 
 export const signInShopAgent = createServerFn({ method: "POST" }).handler(async () => {

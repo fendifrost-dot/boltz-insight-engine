@@ -48,6 +48,7 @@ const migrationFiles = [
   "20260826001500_c6b8bc61-c333-4d63-ad2d-ed758784bc3e.sql",
   "20260827230000_lock_role_probe_to_caller.sql",
   "20260828013000_apply_lead_lifecycle_transition.sql",
+  "20260905141100_provision_shop_agent_vault_login.sql",
 ];
 
 test("baseline is lead-inbox foundation only (no auth duplication)", () => {
@@ -137,6 +138,22 @@ test("migration chain is ordered with baseline before grants migration", () => {
   assert.deepEqual(migrationFiles.slice().sort(), migrationFiles);
   assert.ok(migrationFiles[0]?.startsWith("20260825155900"));
   assert.ok(migrationFiles[1]?.startsWith("20260825165448"));
+});
+
+test("shop-agent vault login RPC is service-role only and never selects the password", () => {
+  const sql = readFileSync(
+    join(repoRoot, "supabase/migrations/20260905141100_provision_shop_agent_vault_login.sql"),
+    "utf8",
+  );
+  assert.match(sql, /create or replace function public\.read_agent_auth_secret/i);
+  assert.match(sql, /set search_path = public/i);
+  assert.match(sql, /grant execute on function public\.read_agent_auth_secret[\s\S]*to service_role/i);
+  assert.match(sql, /revoke all on function public\.read_agent_auth_secret[\s\S]*from public, anon, authenticated/i);
+  assert.match(sql, /agents@boltzautoinc\.com/);
+  assert.match(sql, /'staff'/);
+  assert.doesNotMatch(sql, /insert into public\.user_roles[\s\S]*'owner'/i);
+  assert.doesNotMatch(sql, /AGENT_AUTH_PASSWORD=.+/);
+  assert.doesNotMatch(sql, /raise notice/i);
 });
 
 test("lifecycle transition RPC migration is service-role only with pinned search_path", () => {

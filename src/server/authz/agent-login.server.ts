@@ -30,6 +30,40 @@ export function agentAuthSecretsConfigured(): boolean {
   );
 }
 
+type AgentAuthCredentials = { email: string; password: string };
+
+let vaultCredentialsCache: AgentAuthCredentials | null | undefined;
+
+async function readVaultAgentSecret(name: "AGENT_AUTH_EMAIL" | "AGENT_AUTH_PASSWORD"): Promise<string | undefined> {
+  try {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data, error } = await supabaseAdmin.rpc("read_agent_auth_secret", {
+      secret_name: name,
+    });
+    if (error || typeof data !== "string") return undefined;
+    const trimmed = data.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Env secrets win. Vault is the production bootstrap so auto-login works before Lovable env is filled. */
+export async function resolveAgentAuthCredentials(): Promise<AgentAuthCredentials | null> {
+  const envEmail = readAgentSecret(AGENT_AUTH_EMAIL_SECRET);
+  const envPassword = readAgentSecret(AGENT_AUTH_PASSWORD_SECRET);
+  if (envEmail && envPassword) return { email: envEmail, password: envPassword };
+
+  if (vaultCredentialsCache !== undefined) return vaultCredentialsCache;
+
+  const [email, password] = await Promise.all([
+    readVaultAgentSecret("AGENT_AUTH_EMAIL"),
+    readVaultAgentSecret("AGENT_AUTH_PASSWORD"),
+  ]);
+  vaultCredentialsCache = email && password ? { email, password } : null;
+  return vaultCredentialsCache;
+}
+
 function clientIp(): string {
   try {
     const request = getRequest();
@@ -85,15 +119,15 @@ export async function signInWithStoredAgentCredentials(): Promise<StoredAgentSig
     };
   }
 
-  const email = readAgentSecret(AGENT_AUTH_EMAIL_SECRET);
-  const password = readAgentSecret(AGENT_AUTH_PASSWORD_SECRET);
-  if (!email || !password) {
+  const credentials = await resolveAgentAuthCredentials();
+  if (!credentials) {
     return {
       ok: false,
       reason:
         "Shop agent login is not configured yet. Set AGENT_AUTH_EMAIL and AGENT_AUTH_PASSWORD in Lovable secrets.",
     };
   }
+  const { email, password } = credentials;
 
   try {
     const client = createAnonAuthClient();
