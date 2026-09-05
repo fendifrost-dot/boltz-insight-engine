@@ -17,7 +17,18 @@ import {
   suppressAgentAutoLogin,
   writeRememberCookie,
 } from "./owner-session.storage";
-import { storedAgentLoginAvailable, storedAgentSignIn } from "./agent-auth.functions";
+import {
+  clearRememberToken,
+  persistRememberToken,
+  storedAgentLoginAvailable,
+  storedAgentSignIn,
+} from "./agent-auth.functions";
+
+/** Mirror a rotated refresh token into the server-side HttpOnly cookie. */
+function persistRememberTokenServerSide(token: string | null | undefined): void {
+  if (!token || !readOwnerSessionPersist()) return;
+  void persistRememberToken({ data: { refresh_token: token } }).catch(() => {});
+}
 
 export {
   ownerAuthStorage,
