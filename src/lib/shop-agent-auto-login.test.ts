@@ -61,7 +61,9 @@ test("explicit Sign out in this tab blocks silent auto-login", () => {
 test("session restore and auth page call silent shop-agent login", () => {
   const browser = readFileSync(join(here, "owner-session.browser.ts"), "utf8");
   assert.match(browser, /tryAutoLoginShopAgent/);
+  assert.match(browser, /tryRememberCookieRestore/);
   assert.match(browser, /markManualSignOut/);
+  assert.match(browser, /writeRememberCookie/);
   const auth = readFileSync(join(here, "../routes/auth.tsx"), "utf8");
   assert.match(auth, /tryAutoLoginShopAgent/);
   assert.match(auth, /Signing Grok \/ shop agent back in/);

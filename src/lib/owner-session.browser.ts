@@ -10,11 +10,14 @@ import { shouldAutoLoginShopAgent } from "./shop-agent-auto-login";
 import {
   clearManualSignOut,
   clearOwnerSessionActiveMarker,
+  clearRememberCookie,
   hasManualSignOut,
   hasOwnerSessionActiveMarker,
   markManualSignOut,
   markOwnerSessionActive,
   readOwnerSessionPersist,
+  readRememberCookie,
+  writeRememberCookie,
 } from "./owner-session.storage";
 
 export {
@@ -40,6 +43,30 @@ function currentUrlHasAuthCallback(): boolean {
   return urlHasAuthCallback(window.location.search, window.location.hash);
 }
 
+/**
+ * Cookie restore: Chrome can drop localStorage between browser sessions, so
+ * the refresh token GoTrue already issued is mirrored into a first-party
+ * cookie. Exchange it for a fresh session and rewrite the cookie with the
+ * rotated refresh token.
+ */
+async function tryRememberCookieRestore(): Promise<boolean> {
+  if (!readOwnerSessionPersist()) return false;
+  const token = readRememberCookie();
+  if (!token) return false;
+  try {
+    const { data, error } = await supabase.auth.refreshSession({ refresh_token: token });
+    if (error || !data.session) {
+      clearRememberCookie();
+      return false;
+    }
+    writeRememberCookie(data.session.refresh_token);
+    markOwnerSessionActive();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function restoreOwnerSessionInner(): Promise<boolean> {
   if (
     shouldDiscardEphemeralSession({
@@ -49,6 +76,7 @@ async function restoreOwnerSessionInner(): Promise<boolean> {
     })
   ) {
     clearOwnerSessionActiveMarker();
+    clearRememberCookie();
     await supabase.auth.signOut({ scope: "local" });
     return tryAutoLoginShopAgent();
   }
@@ -56,8 +84,13 @@ async function restoreOwnerSessionInner(): Promise<boolean> {
   const { data } = await supabase.auth.getSession();
   if (data.session) {
     markOwnerSessionActive();
+    writeRememberCookie(data.session.refresh_token);
     return true;
   }
+
+  // No session (e.g. Chrome dropped localStorage overnight). Cookie restore
+  // first; the silent stored shop-agent login stays as the fallback.
+  if (await tryRememberCookieRestore()) return true;
   return tryAutoLoginShopAgent();
 }
 
@@ -75,6 +108,7 @@ async function refreshOwnerSession(
 export async function resolveOwnerUser() {
   await restoreOwnerSessionIfNeeded();
   let alreadyRefreshed = false;
+  let alreadyRestored = false;
 
   for (let i = 0; i < 4; i++) {
     const { data: sessionData } = await supabase.auth.getSession();
@@ -101,10 +135,17 @@ export async function resolveOwnerUser() {
       expiresAtSeconds: session?.expires_at,
       nowMs: Date.now(),
       alreadyRefreshed,
+      hasRememberToken: Boolean(readRememberCookie()),
+      alreadyRestored,
     });
 
     if (decision.action === "allow" && userData.user) return userData.user;
     if (decision.action === "allow-stale" && session?.user) return session.user;
+    if (decision.action === "restore-cookie") {
+      alreadyRestored = true;
+      if (await tryRememberCookieRestore()) continue;
+      return null;
+    }
     if (decision.action === "refresh") {
       alreadyRefreshed = true;
       const result = await refreshOwnerSession(session?.user);
@@ -119,8 +160,8 @@ export async function resolveOwnerUser() {
 
 /**
  * Ops routes require a staff or owner role. Explicit `false` is a denied
- * account; RPC/network errors do not evict a restored session (same idea as
- * stay-signed-in stale allow).
+ * account and redirects to /auth without signing out (signing out wiped the
+ * remember cookie). RPC/network errors keep the restored session.
  */
 export async function resolveAuthorizedOpsUser() {
   const user = await resolveOwnerUser();
@@ -128,10 +169,9 @@ export async function resolveAuthorizedOpsUser() {
   try {
     const { data, error } = await supabase.rpc("is_staff", { _user_id: user.id });
     if (error) return user;
-    if (data !== true) {
-      await signOutOwnerSession();
-      return null;
-    }
+    // A failed or false staff probe must never sign out — that wiped the
+    // refresh token / remember cookie on transient RPC misses.
+    if (data !== true) return null;
     return user;
   } catch {
     return user;
@@ -148,6 +188,7 @@ export async function applyBrowserSessionTokens(tokens: {
   });
   if (error) return false;
   markOwnerSessionActive();
+  writeRememberCookie(tokens.refresh_token);
   return true;
 }
 
@@ -206,10 +247,12 @@ async function tryAutoLoginShopAgentInner(): Promise<boolean> {
 export async function signOutOwnerSession(): Promise<void> {
   markManualSignOut();
   clearOwnerSessionActiveMarker();
+  clearRememberCookie();
   try {
     await supabase.auth.signOut({ scope: "local" });
   } finally {
     clearOwnerSessionActiveMarker();
+    clearRememberCookie();
   }
 }
 
@@ -218,10 +261,14 @@ export function startOwnerSessionKeepalive(): () => void {
 
   const { data } = supabase.auth.onAuthStateChange((event, session) => {
     if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED" || event === "INITIAL_SESSION") {
-      if (session) markOwnerSessionActive();
+      if (session) {
+        markOwnerSessionActive();
+        writeRememberCookie(session.refresh_token);
+      }
     }
     if (event === "SIGNED_OUT") {
       clearOwnerSessionActiveMarker();
+      clearRememberCookie();
     }
   });
 
