@@ -121,7 +121,7 @@ function AuthPage() {
       cancelled = true;
       unsubscribe?.();
     };
-  }, [navigate, checkStored]);
+  }, [navigate, checkStored, storedSignIn]);
 
   async function signInWithPassword(e: React.FormEvent) {
     e.preventDefault();
