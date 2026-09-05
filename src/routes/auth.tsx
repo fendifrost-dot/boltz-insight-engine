@@ -14,7 +14,11 @@ import {
   writeRememberCookie,
 } from "@/lib/owner-session.storage";
 import { resolveOwnerUserWithAgentRestore } from "@/lib/owner-session.browser";
-import { storedAgentLoginAvailable, storedAgentSignIn } from "@/lib/agent-auth.functions";
+import {
+  restorePersistentShopSession,
+  storedAgentLoginAvailable,
+  storedAgentSignIn,
+} from "@/lib/agent-auth.functions";
 
 export const Route = createFileRoute("/auth")({
   ssr: false,
@@ -54,6 +58,7 @@ function AuthPage() {
 
   const checkStored = useServerFn(storedAgentLoginAvailable);
   const storedSignIn = useServerFn(storedAgentSignIn);
+  const restoreSession = useServerFn(restorePersistentShopSession);
 
   useEffect(() => {
     let unsubscribe: (() => void) | undefined;
@@ -84,11 +89,25 @@ function AuthPage() {
             return;
           }
         }
-        // No usable session — run the silent stored shop-agent restore through
-        // the same server-fn call path the stored-login button uses.
+        // No usable session — restore from the HttpOnly remember cookie first,
+        // then fall back to the stored shop-agent login (same server-fn call
+        // path the stored-login button uses).
         if (!readOwnerSessionPersist() || agentAutoLoginSuppressed()) return;
         if (!cancelled) setRestoring(true);
         try {
+          const cookieRes = await restoreSession({});
+          if (cancelled) return;
+          if (cookieRes?.ok) {
+            const { error: err } = await supabase.auth.setSession({
+              access_token: cookieRes.accessToken,
+              refresh_token: cookieRes.refreshToken,
+            });
+            if (!err) {
+              markOwnerSessionActive();
+              navigate({ to: "/leads", replace: true });
+              return;
+            }
+          }
           const res = await storedSignIn({});
           if (cancelled) return;
           if (res?.ok) {
@@ -99,7 +118,7 @@ function AuthPage() {
             if (!err) {
               markOwnerSessionActive();
               writeRememberCookie(res.refreshToken);
-              navigate({ to: "/", replace: true });
+              navigate({ to: "/leads", replace: true });
               return;
             }
           }
@@ -121,7 +140,7 @@ function AuthPage() {
       cancelled = true;
       unsubscribe?.();
     };
-  }, [navigate, checkStored, storedSignIn]);
+  }, [navigate, checkStored, storedSignIn, restoreSession]);
 
   async function signInWithPassword(e: React.FormEvent) {
     e.preventDefault();
