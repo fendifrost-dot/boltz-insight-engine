@@ -75,16 +75,39 @@ function AuthPage() {
 
       supabase.auth.getSession().then(async ({ data }) => {
         if (data.session) {
-          navigate({ to: "/", replace: true });
-          return;
+          // An in-memory session can survive storage being cleared; only treat
+          // it as signed in when the owner/agent actually resolves.
+          const user = await resolveOwnerUserWithAgentRestore().catch(() => null);
+          if (cancelled) return;
+          if (user) {
+            navigate({ to: "/", replace: true });
+            return;
+          }
         }
-        // No session — try the silent stored shop-agent restore (Chrome drop
-        // recovery). Honors Stay-signed-in and the sign-out suppression flag.
+        // No usable session — run the silent stored shop-agent restore through
+        // the same server-fn call path the stored-login button uses.
+        if (!readOwnerSessionPersist() || agentAutoLoginSuppressed()) return;
         if (!cancelled) setRestoring(true);
-        const restored = await trySilentAgentRestore();
-        if (cancelled) return;
-        setRestoring(false);
-        if (restored) navigate({ to: "/", replace: true });
+        try {
+          const res = await storedSignIn({});
+          if (cancelled) return;
+          if (res?.ok) {
+            const { error: err } = await supabase.auth.setSession({
+              access_token: res.accessToken,
+              refresh_token: res.refreshToken,
+            });
+            if (!err) {
+              markOwnerSessionActive();
+              writeRememberCookie(res.refreshToken);
+              navigate({ to: "/", replace: true });
+              return;
+            }
+          }
+        } catch {
+          // fall through to the login form
+        } finally {
+          if (!cancelled) setRestoring(false);
+        }
       });
       const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
         if (session && (event === "SIGNED_IN" || event === "INITIAL_SESSION")) {
