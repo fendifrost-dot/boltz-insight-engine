@@ -1,5 +1,7 @@
 // Server-only stored shop-agent login. Credentials are read from process.env
-// and are never returned, logged, or echoed to the browser.
+// when set, otherwise from the Vault via public.read_agent_auth_secret
+// (service_role only). Values are cached in memory and are never returned,
+// logged, or echoed to the browser.
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
 
@@ -7,19 +9,65 @@ export type StoredAgentResult =
   | { ok: true; accessToken: string; refreshToken: string; expiresAt: number | null }
   | { ok: false; error: string };
 
+type StoredAgentCredentials = { email: string; password: string };
+
+// In-memory cache of resolved credentials (env or Vault). Values never leave
+// the server process.
+let cachedCredentials: StoredAgentCredentials | null = null;
+let resolving: Promise<StoredAgentCredentials | null> | null = null;
+
 function readEnv(name: string): string | undefined {
   const value = process.env[name];
   return value && value.trim().length > 0 ? value.trim() : undefined;
 }
 
-export function storedAgentConfigured(): boolean {
-  return Boolean(readEnv("AGENT_AUTH_EMAIL") && readEnv("AGENT_AUTH_PASSWORD"));
+async function readVaultSecret(name: string): Promise<string | undefined> {
+  const url = readEnv("SUPABASE_URL");
+  const serviceKey = readEnv("SUPABASE_SERVICE_ROLE_KEY");
+  if (!url || !serviceKey) return undefined;
+  const admin = createClient<Database>(url, serviceKey, {
+    auth: { storage: undefined, persistSession: false, autoRefreshToken: false },
+  });
+  const { data, error } = await admin.rpc("read_agent_auth_secret", { secret_name: name });
+  if (error || typeof data !== "string" || data.trim().length === 0) return undefined;
+  return data.trim();
+}
+
+/** Env first; otherwise the Vault for AGENT_AUTH_EMAIL and AGENT_AUTH_PASSWORD only. */
+async function resolveCredentials(): Promise<StoredAgentCredentials | null> {
+  if (cachedCredentials) return cachedCredentials;
+  if (resolving) return resolving;
+
+  resolving = (async () => {
+    const envEmail = readEnv("AGENT_AUTH_EMAIL");
+    const envPassword = readEnv("AGENT_AUTH_PASSWORD");
+    if (envEmail && envPassword) {
+      cachedCredentials = { email: envEmail, password: envPassword };
+      return cachedCredentials;
+    }
+    const vaultEmail = await readVaultSecret("AGENT_AUTH_EMAIL");
+    const vaultPassword = await readVaultSecret("AGENT_AUTH_PASSWORD");
+    if (vaultEmail && vaultPassword) {
+      cachedCredentials = { email: vaultEmail, password: vaultPassword };
+      return cachedCredentials;
+    }
+    return null;
+  })();
+
+  try {
+    return await resolving;
+  } finally {
+    resolving = null;
+  }
+}
+
+export async function storedAgentConfigured(): Promise<boolean> {
+  return (await resolveCredentials()) !== null;
 }
 
 export async function storedAgentSignInServer(): Promise<StoredAgentResult> {
-  const email = readEnv("AGENT_AUTH_EMAIL");
-  const password = readEnv("AGENT_AUTH_PASSWORD");
-  if (!email || !password) {
+  const credentials = await resolveCredentials();
+  if (!credentials) {
     return { ok: false, error: "Stored shop-agent login is not configured." };
   }
 
@@ -41,7 +89,10 @@ export async function storedAgentSignInServer(): Promise<StoredAgentResult> {
     },
   });
 
-  const { data, error } = await client.auth.signInWithPassword({ email, password });
+  const { data, error } = await client.auth.signInWithPassword({
+    email: credentials.email,
+    password: credentials.password,
+  });
   if (error || !data.session || !data.user) {
     // Never surface provider text — it can leak credential detail.
     return { ok: false, error: "Sign-in failed. Check the stored shop-agent credentials." };
