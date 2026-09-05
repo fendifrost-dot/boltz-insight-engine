@@ -4,8 +4,13 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  OWNER_SESSION_MAX_AGE_SECONDS,
   OWNER_SESSION_PERSIST_KEY,
+  buildClearedRememberCookie,
+  buildRememberCookie,
+  extractRefreshToken,
   isTransientAuthError,
+  parseRememberCookie,
   nextAuthResolveStep,
   ownerAuthAfterLaunch,
   persistPreferenceEnabled,
@@ -260,4 +265,108 @@ test("auth page defaults stay-signed-in on and does not open public signup", () 
   assert.match(auth, /useState\(true\)/);
   assert.match(auth, /shouldCreateUser: false/);
   assert.match(auth, /Stay signed in/);
+});
+
+test("remember cookie carries the existing refresh token with 60-day Lax attributes", () => {
+  const token = "rt-live-123";
+  const cookie = buildRememberCookie(token, { secure: true });
+  assert.match(cookie, /^boltz_owner_rt=rt-live-123/);
+  assert.match(cookie, /Path=\//);
+  assert.match(cookie, /Max-Age=5184000/);
+  assert.match(cookie, /SameSite=Lax/);
+  assert.match(cookie, /Secure/);
+  assert.doesNotMatch(buildRememberCookie(token, { secure: false }), /Secure/);
+  assert.equal(OWNER_SESSION_MAX_AGE_SECONDS, 5184000);
+  assert.equal(parseRememberCookie(`a=1; ${cookie.split(";")[0]}; b=2`), token);
+  assert.equal(parseRememberCookie("a=1"), null);
+  assert.match(buildClearedRememberCookie({ secure: true }), /Max-Age=0/);
+});
+
+test("extractRefreshToken reads the GoTrue session payload", () => {
+  assert.equal(extractRefreshToken(JSON.stringify({ refresh_token: "rt" })), "rt");
+  assert.equal(
+    extractRefreshToken(JSON.stringify({ currentSession: { refresh_token: "rt2" } })),
+    "rt2",
+  );
+  assert.equal(extractRefreshToken("not json"), null);
+  assert.equal(extractRefreshToken(null), null);
+});
+
+test("no session plus a remember cookie restores instead of redirecting to /auth", () => {
+  assert.deepEqual(
+    nextAuthResolveStep({
+      hasSession: false,
+      hasUser: false,
+      nowMs: 0,
+      hasRememberToken: true,
+    }),
+    { action: "restore-cookie" },
+  );
+  assert.deepEqual(
+    nextAuthResolveStep({
+      hasSession: false,
+      hasUser: false,
+      nowMs: 0,
+      hasRememberToken: true,
+      alreadyRestored: true,
+    }),
+    { action: "redirect-auth" },
+  );
+  assert.deepEqual(
+    nextAuthResolveStep({ hasSession: false, hasUser: false, nowMs: 0 }),
+    { action: "redirect-auth" },
+  );
+});
+
+test("browser restart with a remember cookie refreshes instead of evicting", () => {
+  assert.deepEqual(
+    ownerAuthAfterLaunch({
+      ...simulatedBrowserRestart({ persistEnabled: true, hasPersistedSession: false }),
+      hasAuthCallback: false,
+      hasRememberCookie: true,
+    }),
+    { outcome: "refresh-then-allow" },
+  );
+  assert.deepEqual(
+    ownerAuthAfterLaunch({
+      ...simulatedBrowserRestart({ persistEnabled: true, hasPersistedSession: false }),
+      hasAuthCallback: false,
+      hasRememberCookie: false,
+    }),
+    { outcome: "redirect-auth", reason: "unauthenticated" },
+  );
+});
+
+test("storage wrap mirrors the refresh token to the cookie only while persist is on", async () => {
+  const payload = JSON.stringify({ refresh_token: "rt-live" });
+  let persisted: string | null = null;
+  let cleared = 0;
+  let on = true;
+  const wrapped = wrapOwnerSessionStorage(memoryStore(), {
+    local: memoryStore(),
+    session: memoryStore(),
+    persistEnabled: () => on,
+    onPersistSession: (v) => {
+      persisted = v;
+    },
+    onClearSession: () => {
+      cleared += 1;
+    },
+  });
+  assert.ok(wrapped);
+  await wrapped.setItem("sb-auth", payload);
+  assert.equal(extractRefreshToken(persisted), "rt-live");
+
+  on = false;
+  await wrapped.setItem("sb-auth", payload);
+  assert.equal(cleared, 1);
+
+  await wrapped.removeItem("sb-auth");
+  assert.equal(cleared, 2);
+});
+
+test("authenticated gate never signs out on a failed staff probe", () => {
+  const route = readFileSync(join(here, "../routes/_authenticated/route.tsx"), "utf8");
+  assert.match(route, /resolveOwnerUserWithAgentRestore/);
+  assert.doesNotMatch(route, /signOut/);
 });
