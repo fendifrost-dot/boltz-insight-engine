@@ -135,6 +135,7 @@ export type AuthResolveDecision =
   | { action: "allow" }
   | { action: "refresh" }
   | { action: "allow-stale" }
+  | { action: "restore-cookie" }
   | { action: "redirect-auth" };
 
 export function nextAuthResolveStep(input: {
@@ -144,10 +145,16 @@ export function nextAuthResolveStep(input: {
   expiresAtSeconds?: number | undefined;
   nowMs: number;
   alreadyRefreshed?: boolean;
+  hasRememberToken?: boolean;
+  alreadyRestored?: boolean;
 }): AuthResolveDecision {
   if (input.hasUser) return { action: "allow" };
 
-  if (!input.hasSession) return { action: "redirect-auth" };
+  if (!input.hasSession) {
+    if (input.hasRememberToken && !input.alreadyRestored) return { action: "restore-cookie" };
+    return { action: "redirect-auth" };
+  }
+
 
   if (sessionNeedsRefresh(input.expiresAtSeconds, input.nowMs) && !input.alreadyRefreshed) {
     return { action: "refresh" };
