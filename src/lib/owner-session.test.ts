@@ -249,9 +249,14 @@ test("magic-link callback query/hash is detected before the auth gate", () => {
 
 test("authenticated route recovers the owner instead of treating getUser failure as logout", () => {
   const route = readFileSync(join(here, "../routes/_authenticated/route.tsx"), "utf8");
-  assert.match(route, /resolveOwnerUser/);
+  assert.match(route, /resolveAuthorizedOpsUser/);
   assert.match(route, /throw redirect\(\{ to: "\/auth" \}\)/);
   assert.doesNotMatch(route, /supabase\.auth\.getUser\(\)/);
+  assert.doesNotMatch(
+    route,
+    /catch \{[\s\S]*redirect\(\{ to: "\/auth" \}\)/,
+    "transient errors must not be collapsed into a logout redirect",
+  );
 });
 
 test("auth page defaults stay-signed-in on and does not open public signup", () => {
@@ -260,4 +265,9 @@ test("auth page defaults stay-signed-in on and does not open public signup", () 
   assert.match(auth, /useState\(true\)/);
   assert.match(auth, /shouldCreateUser: false/);
   assert.match(auth, /Stay signed in/);
+  assert.match(auth, /signInWithPassword/);
+  assert.match(auth, /Shop agent/);
+  assert.match(auth, /Send magic link/);
+  assert.doesNotMatch(auth, /AGENT_AUTH_PASSWORD/);
+  assert.doesNotMatch(auth, /process\.env/);
 });

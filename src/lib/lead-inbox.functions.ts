@@ -10,6 +10,8 @@ import { checkCapability, requireCapability, requireOwner } from "@/server/authz
  * Server-fn authorization audit (createServerFn handlers in this module):
  * - listLeads, getThread, listEscalations, updateEscalation, setThreadControl: authenticated client + RLS only.
  * - sendOwnerMessage, startOwnerSms: service-role outbound path → requireCapability("communications.send").
+ *   RingCentral send is already server-side; the browser only supplies a staff JWT. Cookie-less
+ *   public send is intentionally not added (live URL is public). Use the shop-agent password session.
  * - transitionLeadLifecycle: cases.transition; financial_status.confirm when touching Paid; owner vs staff actor.
  * - getIntegrationHealth, resumeAgentFn, ensureSubscription: secrets/provider/integration → integrations.manage (owner).
  */

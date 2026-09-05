@@ -113,6 +113,40 @@ export async function resolveOwnerUser() {
   return null;
 }
 
+/**
+ * Ops routes require a staff or owner role. Explicit `false` is a denied
+ * account; RPC/network errors do not evict a restored session (same idea as
+ * stay-signed-in stale allow).
+ */
+export async function resolveAuthorizedOpsUser() {
+  const user = await resolveOwnerUser();
+  if (!user) return null;
+  try {
+    const { data, error } = await supabase.rpc("is_staff", { _user_id: user.id });
+    if (error) return user;
+    if (data !== true) {
+      await signOutOwnerSession();
+      return null;
+    }
+    return user;
+  } catch {
+    return user;
+  }
+}
+
+export async function applyBrowserSessionTokens(tokens: {
+  access_token: string;
+  refresh_token: string;
+}): Promise<boolean> {
+  const { error } = await supabase.auth.setSession({
+    access_token: tokens.access_token,
+    refresh_token: tokens.refresh_token,
+  });
+  if (error) return false;
+  markOwnerSessionActive();
+  return true;
+}
+
 export async function signOutOwnerSession(): Promise<void> {
   clearOwnerSessionActiveMarker();
   try {
