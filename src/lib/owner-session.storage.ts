@@ -89,6 +89,51 @@ export function agentAutoLoginSuppressed(): boolean {
   }
 }
 
+function cookiesUsable(): boolean {
+  return canUseBrowserStorage() && typeof document.cookie === "string";
+}
+
+function secureCookies(): boolean {
+  if (typeof window === "undefined") return true;
+  return window.location.protocol === "https:";
+}
+
+export function readRememberCookie(): string | null {
+  if (!cookiesUsable()) return null;
+  try {
+    return parseRememberCookie(document.cookie);
+  } catch {
+    return null;
+  }
+}
+
+export function writeRememberCookie(token: string | null | undefined): void {
+  if (!cookiesUsable()) return;
+  if (!token) return;
+  if (!readOwnerSessionPersist()) {
+    clearRememberCookie();
+    return;
+  }
+  try {
+    document.cookie = buildRememberCookie(token, { secure: secureCookies() });
+  } catch {
+    /* cookies blocked */
+  }
+}
+
+export function writeRememberCookieFromSessionJson(value: string | null | undefined): void {
+  writeRememberCookie(extractRefreshToken(value));
+}
+
+export function clearRememberCookie(): void {
+  if (!cookiesUsable()) return;
+  try {
+    document.cookie = buildClearedRememberCookie({ secure: secureCookies() });
+  } catch {
+    /* cookies blocked */
+  }
+}
+
 export function ownerAuthStorage(
   base: MaybeAsyncStorage | undefined,
 ): MaybeAsyncStorage | undefined {
@@ -96,5 +141,9 @@ export function ownerAuthStorage(
   return wrapOwnerSessionStorage(base, {
     local: window.localStorage,
     session: window.sessionStorage,
+    persistEnabled: readOwnerSessionPersist,
+    onPersistSession: writeRememberCookieFromSessionJson,
+    onClearSession: clearRememberCookie,
   });
 }
+
