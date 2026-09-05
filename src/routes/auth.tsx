@@ -10,6 +10,7 @@ import { readOwnerSessionPersist, setOwnerSessionPersist } from "@/lib/owner-ses
 import { storedAgentLoginAvailable, storedAgentSignIn } from "@/lib/agent-auth.functions";
 
 export const Route = createFileRoute("/auth")({
+  ssr: false,
   head: () => ({
     meta: [
       { title: "Sign in — Boltz SEO/GEO Ops" },
