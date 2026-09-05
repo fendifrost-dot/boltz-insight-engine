@@ -210,6 +210,17 @@ export const getIntegrationHealth = createServerFn({ method: "GET" })
     try {
       const { secretStatus } = await import("@/server/lead-inbox/env.server");
       const { agentCircuitState } = await import("@/server/lead-inbox/jobs.server");
+      const { storedAgentSecretConfigured } = await import("@/server/agent-auth.server");
+
+      // AGENT_AUTH_* may live in the database vault rather than env — report
+      // the resolved presence so vault-configured secrets don't read "Missing".
+      const secrets = await Promise.all(
+        secretStatus().map(async (entry) =>
+          entry.name === "AGENT_AUTH_EMAIL" || entry.name === "AGENT_AUTH_PASSWORD"
+            ? { ...entry, configured: await storedAgentSecretConfigured(entry.name) }
+            : entry,
+        ),
+      );
 
       const [snapshotsRes, subsRes, jobsRes] = await Promise.all([
       context.supabase

@@ -39,6 +39,13 @@ async function resolveCredential(name: "AGENT_AUTH_EMAIL" | "AGENT_AUTH_PASSWORD
   return readEnv(name) ?? (await readVaultSecret(name));
 }
 
+/** Presence check for one stored credential (env first, vault fallback). Never returns the value. */
+export async function storedAgentSecretConfigured(
+  name: "AGENT_AUTH_EMAIL" | "AGENT_AUTH_PASSWORD",
+): Promise<boolean> {
+  return Boolean(await resolveCredential(name));
+}
+
 export async function storedAgentConfigured(): Promise<boolean> {
   const [email, password] = await Promise.all([
     resolveCredential("AGENT_AUTH_EMAIL"),
