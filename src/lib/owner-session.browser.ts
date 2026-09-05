@@ -157,12 +157,23 @@ export async function resolveOwnerUser() {
 }
 
 export async function signOutOwnerSession(): Promise<void> {
+  // A human click on Sign out suppresses silent agent auto-login for this tab
+  // only (sessionStorage), so the shop computer still recovers after a Chrome
+  // restart clears it.
+  suppressAgentAutoLogin();
   clearOwnerSessionActiveMarker();
   try {
     await supabase.auth.signOut({ scope: "local" });
   } finally {
     clearOwnerSessionActiveMarker();
   }
+}
+
+export async function resolveOwnerUserWithAgentRestore() {
+  const user = await resolveOwnerUser();
+  if (user) return user;
+  const restored = await trySilentAgentRestore();
+  return restored ? resolveOwnerUser() : null;
 }
 
 export function startOwnerSessionKeepalive(): () => void {
