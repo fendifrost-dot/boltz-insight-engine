@@ -2,6 +2,12 @@
 
 Shop SMS from Insight Engine needs a signed-in **staff** session. Magic-link-only login kept dropping Grok Bot / shop agents onto `/auth`, so first-touch SMS could not send. Owner magic link still works.
 
+## Status tonight (Rod / +1 773 727-2239)
+
+Password login is **live**. `info@boltzautoinc.com` already has a password and signed in at 8:37 PM CT. Shop SMS from Insight Engine then went out on the Rod / Takia Jordan Monte Carlo thread (first outbound 8:39 PM CT). Rod is in an active two-way text; latest inbound ~8:58 PM CT is waiting for ops — no reply is drafted here.
+
+Tonight’s unblock does **not** require creating `agents@` first. Owner can keep using **Shop agent** tab + `info@boltzautoinc.com` + password, Stay signed in on. Create the dedicated `agents@` staff user when you can so Grok Bot is not tied to the owner mailbox.
+
 ## What shipped
 
 - `/auth` has two tabs: **Shop agent** (email + password) and **Owner magic link**.
