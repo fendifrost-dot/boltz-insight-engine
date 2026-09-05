@@ -1,11 +1,12 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import type { ReactNode } from "react";
+import { getMyAccess } from "@/lib/agent-auth.functions";
 import { signOutOwnerSession } from "@/lib/owner-session.browser";
 import { cn } from "@/lib/utils";
 
-
-const NAV: { to: string; label: string; group: string }[] = [
+const NAV: { to: string; label: string; group: string; ownerOnly?: boolean }[] = [
   { to: "/", label: "Dashboard", group: "Operate" },
   { to: "/context", label: "Context Lock", group: "Operate" },
   { to: "/decisions", label: "Decision Queue", group: "Operate" },
@@ -13,8 +14,8 @@ const NAV: { to: string; label: string; group: string }[] = [
   { to: "/measurement", label: "Measurement", group: "Operate" },
   { to: "/leads", label: "Lead Inbox", group: "Leads" },
   { to: "/escalations", label: "Escalations", group: "Leads" },
-  { to: "/integration-health", label: "Integration Health", group: "Leads" },
-  { to: "/ads", label: "Google Ads", group: "Research" },
+  { to: "/integration-health", label: "Integration Health", group: "Leads", ownerOnly: true },
+  { to: "/ads", label: "Google Ads", group: "Research", ownerOnly: true },
   { to: "/queries", label: "Query Universe", group: "Research" },
   { to: "/ai-visibility", label: "AI Visibility", group: "Research" },
   { to: "/local-seo", label: "Google / Local SEO", group: "Research" },
@@ -28,6 +29,9 @@ const GROUPS = ["Operate", "Leads", "Research"];
 export function Shell({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const accessFn = useServerFn(getMyAccess);
+  const access = useQuery({ queryKey: ["my-access"], queryFn: () => accessFn({}) });
+  const isOwner = access.data?.isOwner === true;
 
   async function signOut() {
     await queryClient.cancelQueries();
@@ -43,13 +47,15 @@ export function Shell({ children }: { children: ReactNode }) {
 
           <div className="font-mono text-xs tracking-[0.18em] text-primary">BOLTZ</div>
           <div className="text-sm font-semibold text-sidebar-foreground">SEO / GEO Ops</div>
-          <div className="label-caps mt-1">Internal tooling · V1</div>
+          <div className="label-caps mt-1">
+            {isOwner ? "Owner" : "Shop agent"} · Internal tooling
+          </div>
         </div>
         <nav className="flex gap-1 overflow-x-auto px-2 pb-3 whitespace-nowrap lg:block lg:space-y-4 lg:overflow-x-visible lg:whitespace-normal">
           {GROUPS.map((group) => (
             <div key={group} className="flex gap-1 lg:block lg:space-y-0.5">
               <div className="label-caps hidden px-2 pt-2 pb-1 lg:block">{group}</div>
-              {NAV.filter((n) => n.group === group).map((item) => (
+              {NAV.filter((n) => n.group === group && (!n.ownerOnly || isOwner)).map((item) => (
 
                 <Link
                   key={item.to}
