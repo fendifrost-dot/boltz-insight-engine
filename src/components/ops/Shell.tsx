@@ -44,7 +44,6 @@ export function Shell({ children }: { children: ReactNode }) {
     <div className="min-h-screen bg-background lg:grid lg:grid-cols-[15rem_1fr]">
       <aside className="border-b border-sidebar-border bg-sidebar lg:sticky lg:top-0 lg:h-screen lg:overflow-y-auto lg:border-r lg:border-b-0">
         <div className="px-4 py-4">
-
           <div className="font-mono text-xs tracking-[0.18em] text-primary">BOLTZ</div>
           <div className="text-sm font-semibold text-sidebar-foreground">SEO / GEO Ops</div>
           <div className="label-caps mt-1">
@@ -56,7 +55,6 @@ export function Shell({ children }: { children: ReactNode }) {
             <div key={group} className="flex gap-1 lg:block lg:space-y-0.5">
               <div className="label-caps hidden px-2 pt-2 pb-1 lg:block">{group}</div>
               {NAV.filter((n) => n.group === group && (!n.ownerOnly || isOwner)).map((item) => (
-
                 <Link
                   key={item.to}
                   to={item.to}
@@ -84,7 +82,6 @@ export function Shell({ children }: { children: ReactNode }) {
         <div className="hidden px-4 pb-4 text-[11px] leading-relaxed text-muted-foreground lg:block">
           Public site stays on Durable. No production changes ship from here.
         </div>
-
       </aside>
       <main className="min-w-0 px-4 py-6 sm:px-6 lg:px-8">{children}</main>
     </div>

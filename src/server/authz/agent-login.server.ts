@@ -7,7 +7,11 @@ import {
   recordLoginSuccess,
   type LoginAttemptRecord,
 } from "@/lib/login-rate-limit";
-import { pickSessionTokens, publicSignInErrorMessage, type BrowserSessionTokens } from "@/lib/agent-auth";
+import {
+  pickSessionTokens,
+  publicSignInErrorMessage,
+  type BrowserSessionTokens,
+} from "@/lib/agent-auth";
 
 export const AGENT_AUTH_EMAIL_SECRET = "AGENT_AUTH_EMAIL";
 export const AGENT_AUTH_PASSWORD_SECRET = "AGENT_AUTH_PASSWORD";
@@ -21,7 +25,9 @@ function readAgentSecret(name: string): string | undefined {
 }
 
 export function agentAuthSecretsConfigured(): boolean {
-  return Boolean(readAgentSecret(AGENT_AUTH_EMAIL_SECRET) && readAgentSecret(AGENT_AUTH_PASSWORD_SECRET));
+  return Boolean(
+    readAgentSecret(AGENT_AUTH_EMAIL_SECRET) && readAgentSecret(AGENT_AUTH_PASSWORD_SECRET),
+  );
 }
 
 function clientIp(): string {
@@ -66,8 +72,7 @@ function createAnonAuthClient() {
 }
 
 export type StoredAgentSignInResult =
-  | { ok: true; session: BrowserSessionTokens }
-  | { ok: false; reason: string };
+  { ok: true; session: BrowserSessionTokens } | { ok: false; reason: string };
 
 export async function signInWithStoredAgentCredentials(): Promise<StoredAgentSignInResult> {
   const nowMs = Date.now();
@@ -85,7 +90,8 @@ export async function signInWithStoredAgentCredentials(): Promise<StoredAgentSig
   if (!email || !password) {
     return {
       ok: false,
-      reason: "Shop agent login is not configured yet. Set AGENT_AUTH_EMAIL and AGENT_AUTH_PASSWORD in Lovable secrets.",
+      reason:
+        "Shop agent login is not configured yet. Set AGENT_AUTH_EMAIL and AGENT_AUTH_PASSWORD in Lovable secrets.",
     };
   }
 
@@ -98,7 +104,9 @@ export async function signInWithStoredAgentCredentials(): Promise<StoredAgentSig
       return { ok: false, reason: publicSignInErrorMessage(error?.message) };
     }
 
-    const { data: staff, error: staffError } = await client.rpc("is_staff", { _user_id: data.user.id });
+    const { data: staff, error: staffError } = await client.rpc("is_staff", {
+      _user_id: data.user.id,
+    });
     if (staffError || staff !== true) {
       noteFailure(`stored:${ip}`, nowMs);
       await client.auth.signOut({ scope: "local" });

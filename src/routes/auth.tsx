@@ -29,7 +29,8 @@ export const Route = createFileRoute("/auth")({
       { title: "Sign in — Boltz SEO/GEO Ops" },
       {
         name: "description",
-        content: "Shop-agent password sign-in and owner magic link for Boltz Automotive internal ops.",
+        content:
+          "Shop-agent password sign-in and owner magic link for Boltz Automotive internal ops.",
       },
       { name: "robots", content: "noindex, nofollow" },
       { property: "og:title", content: "Sign in — Boltz SEO/GEO Ops" },
@@ -106,10 +107,6 @@ function AuthPage() {
         return;
       }
 
-      void agentStatusFn({}).then((status) => {
-        if (!cancelled) setStoredLoginConfigured(Boolean(status?.configured));
-      });
-
       const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
         if (
           session &&
@@ -126,8 +123,20 @@ function AuthPage() {
       cancelled = true;
       unsubscribe?.();
     };
-    // agentStatusFn is a stable server-fn wrapper; omit from deps to avoid remount loops.
   }, [navigate]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      await ensureSupabaseBrowserConfig();
+      if (cancelled || getSupabaseConfigError()) return;
+      const status = await agentStatusFn({});
+      if (!cancelled) setStoredLoginConfigured(Boolean(status?.configured));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [agentStatusFn]);
 
   function persistPreference() {
     setOwnerSessionPersist(staySignedIn);
@@ -137,14 +146,20 @@ function AuthPage() {
     const decision = evaluateLoginRateLimit(readRateRecord(), Date.now());
     writeRateRecord(decision.record);
     if (!decision.allowed) {
-      setError(`Too many sign-in attempts. Try again in ${formatRetryAfter(decision.retryAfterMs)}.`);
+      setError(
+        `Too many sign-in attempts. Try again in ${formatRetryAfter(decision.retryAfterMs)}.`,
+      );
       return false;
     }
     return true;
   }
 
   function noteFailure() {
-    const current = readRateRecord() ?? { failures: 0, windowStartMs: Date.now(), lockedUntilMs: 0 };
+    const current = readRateRecord() ?? {
+      failures: 0,
+      windowStartMs: Date.now(),
+      lockedUntilMs: 0,
+    };
     writeRateRecord(recordLoginFailure(current, Date.now()));
   }
 
