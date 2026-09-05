@@ -52,6 +52,8 @@ export const storedAgentSignIn = createServerFn({ method: "POST" }).handler(asyn
   }
 
   attempts.delete(ip);
+  const { writeHttpOnlyRememberCookie } = await import("@/server/remember-cookie.server");
+  writeHttpOnlyRememberCookie(result.refreshToken);
   return {
     ok: true as const,
     accessToken: result.accessToken,
