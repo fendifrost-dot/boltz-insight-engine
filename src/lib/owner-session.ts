@@ -221,6 +221,7 @@ export function ownerAuthAfterLaunch(input: {
   hasAuthCallback: boolean;
   hasPersistedSession: boolean;
   accessTokenExpired: boolean;
+  hasRememberCookie?: boolean;
 }): OwnerAuthLaunchOutcome {
   if (
     shouldDiscardEphemeralSession({
@@ -233,6 +234,11 @@ export function ownerAuthAfterLaunch(input: {
   }
 
   if (!input.hasPersistedSession) {
+    // Chrome dropped localStorage but the first-party remember cookie still
+    // carries the refresh token GoTrue issued — refresh instead of evicting.
+    if (input.persistEnabled && input.hasRememberCookie) {
+      return { outcome: "refresh-then-allow" };
+    }
     return { outcome: "redirect-auth", reason: "unauthenticated" };
   }
 
@@ -245,9 +251,14 @@ export function wrapOwnerSessionStorage(
   deps: {
     local: Pick<Storage, "getItem" | "setItem" | "removeItem">;
     session: Pick<Storage, "getItem" | "setItem" | "removeItem">;
+    persistEnabled?: () => boolean;
+    onPersistSession?: (value: string) => void;
+    onClearSession?: () => void;
   },
 ): MaybeAsyncStorage | undefined {
   if (!base) return undefined;
+
+  const persistOn = () => (deps.persistEnabled ? deps.persistEnabled() : true);
 
   return {
     getItem: async (key: string) => {
@@ -261,11 +272,15 @@ export function wrapOwnerSessionStorage(
       // Always write localStorage so a magic-link tab can read the PKCE verifier.
       deps.local.setItem(key, value);
       await base.setItem(key, value);
+      if (persistOn()) deps.onPersistSession?.(value);
+      else deps.onClearSession?.();
     },
     removeItem: async (key: string) => {
       deps.local.removeItem(key);
       deps.session.removeItem(key);
       await base.removeItem(key);
+      deps.onClearSession?.();
     },
   };
+
 }
