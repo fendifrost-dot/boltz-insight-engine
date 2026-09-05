@@ -134,8 +134,9 @@ export async function restorePersistentShopSessionFromRequest(): Promise<
   const { storedAgentSignInServer, storedAgentConfigured } = await import(
     "@/server/agent-auth.server"
   );
-  if (!storedAgentConfigured()) {
-    clearHttpOnlyRememberCookie();
+  if (!(await storedAgentConfigured())) {
+    // Credentials may live in Vault while env vars are empty — that is not a
+    // reason to wipe the remember cookie.
     return { ok: false, error: "No persisted session available." };
   }
 

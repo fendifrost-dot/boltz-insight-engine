@@ -23,7 +23,7 @@ function clientIp(): string {
 /** Presence-only: never reveals the stored email or password. */
 export const storedAgentLoginAvailable = createServerFn({ method: "GET" }).handler(async () => {
   const { storedAgentConfigured } = await import("@/server/agent-auth.server");
-  return { available: storedAgentConfigured() };
+  return { available: await storedAgentConfigured() };
 });
 
 export const storedAgentSignIn = createServerFn({ method: "POST" }).handler(async () => {
@@ -40,7 +40,7 @@ export const storedAgentSignIn = createServerFn({ method: "POST" }).handler(asyn
 
   // A missing configuration is not a failed attempt — don't burn rate-limiter
   // budget for callers that probe while AGENT_AUTH secrets are absent.
-  if (!storedAgentConfigured()) {
+  if (!(await storedAgentConfigured())) {
     return { ok: false as const, error: "Stored shop-agent login is not configured." };
   }
 
