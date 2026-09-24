@@ -167,9 +167,16 @@ as an expired constant that reads like protection.
 
 ## Open
 
-- **Monday cron trigger not wired** — but see the caveat below; a plain pg_cron
-  trigger would discard the report.
-- **Conversion-action restructuring** — needs owner approval (above).
+Scheduling is **resolved and needs no build**: the Monday agent pulls the endpoint
+itself (owner decision, 2026-09-24). No pg_cron job, no snapshot table, no new
+infrastructure. See the section below for why, and
+`docs/handoffs/2026-09-24-ads-weekly-monday-agent-brief.md` for how the agent
+should consume the response.
+
+Remaining items are both **owner decisions, not engineering work**:
+
+- **Conversion-action restructuring** — needs owner approval (above). Highest
+  leverage item on the Ads side.
 - **Expired write freeze** — needs a deliberate decision (above).
 
 ## Why a plain pg_cron trigger is not the right Monday wiring
