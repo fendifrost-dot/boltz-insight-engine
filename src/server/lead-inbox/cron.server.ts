@@ -15,7 +15,11 @@ export function authorizeCron(request: Request): Response | null {
   const secret = readSecret("CRON_SECRET");
   if (!secret) return new Response("Cron secret not configured", { status: 503 });
   const header = request.headers.get("authorization") ?? "";
-  const token = header.startsWith("Bearer ") ? header.slice(7) : "";
+  // readSecret trims the stored value, so the presented token must be trimmed
+  // too. Without this a secret carrying a stray newline (a shell export from a
+  // paste or file) can never match, and every cron call 401s with a value the
+  // operator has correctly copied.
+  const token = header.startsWith("Bearer ") ? header.slice(7).trim() : "";
   if (!token || !safeEqual(token, secret)) return new Response("Unauthorized", { status: 401 });
   return null;
 }
@@ -44,7 +48,9 @@ export async function renewSubscriptions(): Promise<{
     .limit(10);
   if (error) throw error;
 
-  const active = (rows ?? []).filter((r) => r.status === "Active" && r.delivery_address === address);
+  const active = (rows ?? []).filter(
+    (r) => r.status === "Active" && r.delivery_address === address,
+  );
   result.checked = active.length;
 
   for (const row of active) {
@@ -93,7 +99,9 @@ export async function renewSubscriptions(): Promise<{
     provider: "ringcentral",
     checkName: "subscription_renewal",
     ok: result.errors.length === 0,
-    detail: result.errors[0] ?? `checked ${result.checked}, renewed ${result.renewed}, created ${result.created}`,
+    detail:
+      result.errors[0] ??
+      `checked ${result.checked}, renewed ${result.renewed}, created ${result.created}`,
   });
 
   return result;
