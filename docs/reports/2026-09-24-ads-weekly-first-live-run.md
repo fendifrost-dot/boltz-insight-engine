@@ -12,34 +12,34 @@ Reconciliation against the UI is still outstanding — see "Open" below.
 
 ## Response
 
-| Field | Value |
-|---|---|
-| status | `200` |
-| `period` | `2026-09-16` → `2026-09-22`, `days=7`, `time_zone=America/Chicago` |
-| `account` | `BOLTZ AUTOMOTIVE`, customer id ending `6288` |
-| `search_terms` rows | 1062 |
-| `keywords` rows | 431 |
-| `truncated` | `false` |
-| `impressions` | 2,770 |
-| `clicks` | 126 |
-| `cost_micros` | 342,315,572 (**$342.32**) |
-| `conversions` | 28.99635 |
-| `conversions_value` | 23 |
-| secret scan | 0 hits |
+| Field               | Value                                                              |
+| ------------------- | ------------------------------------------------------------------ |
+| status              | `200`                                                              |
+| `period`            | `2026-09-16` → `2026-09-22`, `days=7`, `time_zone=America/Chicago` |
+| `account`           | `BOLTZ AUTOMOTIVE`, customer id ending `6288`                      |
+| `search_terms` rows | 1062                                                               |
+| `keywords` rows     | 431                                                                |
+| `truncated`         | `false`                                                            |
+| `impressions`       | 2,770                                                              |
+| `clicks`            | 126                                                                |
+| `cost_micros`       | 342,315,572 (**$342.32**)                                          |
+| `conversions`       | 28.99635                                                           |
+| `conversions_value` | 23                                                                 |
+| secret scan         | 0 hits                                                             |
 
 Campaign and ad-group names came back as real strings (e.g.
 `Leads-Search-1 #2` / `Ad group 1`), not blank and not numeric IDs.
 
 ## Derived ratios
 
-| Metric | Value |
-|---|---|
-| CTR | 4.55% |
-| Avg CPC | $2.72 |
-| Conversion rate | 23.0% |
-| Cost per conversion | $11.81 |
+| Metric                   | Value     |
+| ------------------------ | --------- |
+| CTR                      | 4.55%     |
+| Avg CPC                  | $2.72     |
+| Conversion rate          | 23.0%     |
+| Cost per conversion      | $11.81    |
 | **Value per conversion** | **$0.79** |
-| **Reported ROAS** | **6.7%** |
+| **Reported ROAS**        | **6.7%**  |
 
 ---
 
@@ -54,7 +54,7 @@ Campaign and ad-group names came back as real strings (e.g.
 3. **Account-time-zone date resolution is working, and demonstrably matters.**
    The run happened at ~00:36 UTC on 2026-09-24, which was still 2026-09-23 in
    America/Chicago. The endpoint correctly returned `end=2026-09-22` (yesterday
-   *in the account's zone*). A naive UTC implementation would have returned
+   _in the account's zone_). A naive UTC implementation would have returned
    `end=2026-09-23` and silently reported a different week than the Ads UI shows.
 4. **No truncation.** 1062 and 431 rows sit well under the 5000-row cap, so the
    totals are complete and safe to reconcile.
@@ -88,13 +88,13 @@ Run 2026-09-24 by Grok bot, signed in as `info@boltzautoinc.com`. UI view:
 Keywords → Search keywords, custom range Sep 16–22 2026, all campaigns, no filter
 chip, keyword status = All ("Show all keywords" on).
 
-| Metric | API | UI | Delta |
-|---|---|---|---|
-| impressions | 2,770 | 2,770 | **0** |
-| clicks | 126 | 126 | **0** |
-| cost | $342.32 | $342.32 | **0** |
-| conversions | 28.99635 | 29.00 | **0** (UI rounds to 2dp) |
-| conversions_value | 23 | 23.00 | **0** |
+| Metric            | API      | UI      | Delta                    |
+| ----------------- | -------- | ------- | ------------------------ |
+| impressions       | 2,770    | 2,770   | **0**                    |
+| clicks            | 126      | 126     | **0**                    |
+| cost              | $342.32  | $342.32 | **0**                    |
+| conversions       | 28.99635 | 29.00   | **0** (UI rounds to 2dp) |
+| conversions_value | 23       | 23.00   | **0**                    |
 
 Zero delta on all five. No Performance Max, AI Max, or URL-inclusion spend landed
 in this window, so the keyword-view-vs-account-total gap this report warned about
@@ -176,7 +176,7 @@ as an expired constant that reads like protection.
 
 The documented scheduling idiom for this repo is pg_cron + pg_net posting to the
 published URL (see `docs/RINGCENTRAL_HANDOFF.md`). That is correct for the three
-lead-inbox endpoints, because each one *does work* as a side effect — draining
+lead-inbox endpoints, because each one _does work_ as a side effect — draining
 jobs, reconciling messages, renewing subscriptions. The HTTP response is
 incidental.
 
