@@ -5,6 +5,7 @@ import { useState } from "react";
 import { EmptyState, PageHeader, Panel, Shell } from "@/components/ops/Shell";
 import { Tag, Td, Th, TableWrap } from "@/components/ops/Bits";
 import {
+  LEAD_SOURCE_FILTERS,
   getThread,
   listLeads,
   sendOwnerMessage,
@@ -38,6 +39,24 @@ function fmt(value: string | null | undefined): string {
 }
 
 type SelectedRow = { id: string; name: string | null; phone_e164: string | null };
+type SourceFilter = (typeof LEAD_SOURCE_FILTERS)[number];
+
+const SOURCE_LABEL: Record<SourceFilter, string> = {
+  all: "All sources",
+  meta: "Facebook + Instagram",
+  facebook: "Facebook",
+  instagram: "Instagram",
+};
+
+/** Latest Grok first-touch draft for a Meta lead, if one was recorded. */
+function firstTouchDraft(runs: { prompt_version: string; raw_decision: unknown }[]): string | null {
+  for (const run of runs) {
+    if (run.prompt_version !== "boltz-meta-first-touch-v1") continue;
+    const draft = (run.raw_decision as { draft_text?: unknown } | null)?.draft_text;
+    if (typeof draft === "string" && draft.trim()) return draft;
+  }
+  return null;
+}
 
 function LeadsPage() {
   const queryClient = useQueryClient();
@@ -47,6 +66,7 @@ function LeadsPage() {
   const [newPhone, setNewPhone] = useState("");
   const [newName, setNewName] = useState("");
   const [newText, setNewText] = useState("");
+  const [source, setSource] = useState<SourceFilter>("all");
 
   const selected = selectedRow?.id ?? null;
 
@@ -56,7 +76,10 @@ function LeadsPage() {
   const controlFn = useServerFn(setThreadControl);
   const startFn = useServerFn(startOwnerSms);
 
-  const leads = useQuery({ queryKey: ["leads"], queryFn: () => leadsFn({}) });
+  const leads = useQuery({
+    queryKey: ["leads", source],
+    queryFn: () => leadsFn({ data: { source } }),
+  });
   const thread = useQuery({
     queryKey: ["lead-thread", selected],
     queryFn: () => threadFn({ data: { leadId: selected as string } }),
@@ -208,7 +231,26 @@ function LeadsPage() {
       )}
 
       <div className="grid gap-4 xl:grid-cols-[1.1fr_1fr]">
-        <Panel title="Leads" meta={`${rows.length} records`}>
+        <Panel
+          title="Leads"
+          meta={
+            <span className="flex items-center gap-2">
+              <select
+                value={source}
+                onChange={(e) => setSource(e.target.value as SourceFilter)}
+                aria-label="Lead source"
+                className="rounded border border-border bg-input px-1.5 py-0.5 text-xs"
+              >
+                {LEAD_SOURCE_FILTERS.map((value) => (
+                  <option key={value} value={value}>
+                    {SOURCE_LABEL[value]}
+                  </option>
+                ))}
+              </select>
+              <span>{`${rows.length} records`}</span>
+            </span>
+          }
+        >
           {leads.isLoading ? (
             <p className="text-sm text-muted-foreground">Loading leads…</p>
           ) : leads.isError ? (
@@ -216,7 +258,11 @@ function LeadsPage() {
           ) : rows.length === 0 ? (
             <EmptyState
               label="No leads yet"
-              hint="Leads appear when RingCentral delivers an inbound SMS, or use New SMS to start outreach to a Durable lead."
+              hint={
+                source === "all"
+                  ? "Leads appear when RingCentral delivers an inbound SMS or a Facebook/Instagram Lead Ad form is submitted, or use New SMS to start outreach to a Durable lead."
+                  : `No ${SOURCE_LABEL[source]} Lead Ads leads yet.`
+              }
             />
 
           ) : (
@@ -258,8 +304,17 @@ function LeadsPage() {
                         >
                           <div className="font-medium text-foreground">{lead.name ?? "Unnamed"}</div>
                           <div className="font-mono text-xs text-muted-foreground">
-                            {lead.phone_e164 ?? "Not entered"}
+                            {lead.phone_e164 ?? lead.email ?? "Not entered"}
                           </div>
+                          {lead.meta_platforms.length > 0 && (
+                            <div className="mt-1 flex gap-1">
+                              {lead.meta_platforms.map((platform) => (
+                                <Tag key={platform} tone="info">
+                                  {platform === "instagram" ? "Instagram lead" : "Facebook lead"}
+                                </Tag>
+                              ))}
+                            </div>
+                          )}
                         </button>
                       </Td>
                       <Td>
@@ -320,6 +375,50 @@ function LeadsPage() {
                 </div>
               ) : (
             <div className="space-y-4">
+
+              {(thread.data?.metaSubmissions ?? []).length > 0 && (
+                <div className="rounded border border-border p-2">
+                  <div className="label-caps mb-1">Meta Lead Ads</div>
+                  <ul className="space-y-1 text-xs text-muted-foreground">
+                    {thread.data?.metaSubmissions.map((sub) => (
+                      <li key={sub.id}>
+                        <Tag tone="info">{sub.platform ?? "meta"}</Tag>{" "}
+                        <span className="font-mono">{sub.meta_lead_id}</span> · {fmt(sub.created_time)} ·{" "}
+                        {sub.ingestion_method}
+                        {sub.form_name ? ` · form ${sub.form_name}` : ""}
+                        {sub.campaign_name || sub.campaign_id
+                          ? ` · campaign ${sub.campaign_name ?? sub.campaign_id}`
+                          : ""}
+                        {sub.ad_name || sub.ad_id ? ` · ad ${sub.ad_name ?? sub.ad_id}` : ""}
+                        {sub.consent_version ? ` · consent ${sub.consent_version}` : " · no consent text on form"}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {(() => {
+                const draftText = firstTouchDraft(thread.data?.agentRuns ?? []);
+                const hasOutbound = (thread.data?.messages ?? []).some((m) => m.direction === "outbound");
+                if (!draftText || hasOutbound || !sync.canCompose) return null;
+                return (
+                  <div className="rounded border border-primary/40 p-2">
+                    <div className="label-caps mb-1">Grok first-touch draft (not sent)</div>
+                    <p className="text-sm whitespace-pre-wrap text-foreground">{draftText}</p>
+                    <button
+                      onClick={() => setDraft(draftText)}
+                      className="mt-2 rounded border border-border px-2 py-1 text-xs"
+                    >
+                      Use draft
+                    </button>
+                    {loadedLead?.consent_status !== "opted_in" && (
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        No SMS consent was captured on the form. Confirm the customer expects a text before sending.
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
 
               <div className="flex flex-wrap gap-2">
                 <button

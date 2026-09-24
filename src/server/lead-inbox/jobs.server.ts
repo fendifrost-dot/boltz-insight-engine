@@ -102,6 +102,10 @@ async function runJob(job: JobRow): Promise<void> {
       return processInbound(job);
     case "send_outbound":
       return processSendOutbound(job);
+    case "process_meta_lead": {
+      const { processMetaLead } = await import("@/server/meta-leads/first-touch.server");
+      return processMetaLead(job);
+    }
     default:
       // reconcile / renew_subscription are driven by their own cron routes.
       return;
@@ -295,7 +299,7 @@ export async function processInbound(job: JobRow): Promise<void> {
   }
 }
 
-function sanitizeLeadUpdates(updates: Record<string, unknown>): Record<string, unknown> {
+export function sanitizeLeadUpdates(updates: Record<string, unknown>): Record<string, unknown> {
   const allowed = [
     "name",
     "email",

@@ -31,6 +31,7 @@ MIGRATIONS=(
   "supabase/migrations/20260826001500_c6b8bc61-c333-4d63-ad2d-ed758784bc3e.sql"
   "supabase/migrations/20260827230000_lock_role_probe_to_caller.sql"
   "supabase/migrations/20260828013000_apply_lead_lifecycle_transition.sql"
+  "supabase/migrations/20260924180000_meta_lead_ads_ingestion.sql"
 )
 
 psql_cmd() {
@@ -268,6 +269,71 @@ DROP FUNCTION IF EXISTS public.test_force_lead_event_fail();
 SQL
 }
 
+test_meta_lead_submissions() {
+  psql_cmd -d "${TEST_DB}" <<'SQL'
+DO $$
+DECLARE
+  v_lead uuid;
+  v_count integer;
+BEGIN
+  INSERT INTO public.leads (phone_e164, lead_source) VALUES ('+15555550201', 'Facebook Lead Ads')
+  RETURNING id INTO v_lead;
+
+  -- Webhook receipt, then a replay and a reconciliation hit for the same Meta lead.
+  INSERT INTO public.meta_lead_submissions (meta_lead_id, ingestion_method, lead_id)
+  VALUES ('9001', 'WEBHOOK', v_lead);
+  INSERT INTO public.meta_lead_submissions (meta_lead_id, ingestion_method)
+  VALUES ('9001', 'WEBHOOK') ON CONFLICT (meta_lead_id) DO NOTHING;
+  INSERT INTO public.meta_lead_submissions (meta_lead_id, ingestion_method)
+  VALUES ('9001', 'RECONCILIATION') ON CONFLICT (meta_lead_id) DO NOTHING;
+
+  SELECT count(*) INTO v_count FROM public.meta_lead_submissions WHERE meta_lead_id = '9001';
+  IF v_count <> 1 THEN RAISE EXCEPTION 'expected one row per Meta lead, got %', v_count; END IF;
+  IF (SELECT ingestion_method::text FROM public.meta_lead_submissions WHERE meta_lead_id = '9001') <> 'WEBHOOK' THEN
+    RAISE EXCEPTION 'first ingestion method must be preserved';
+  END IF;
+
+  BEGIN
+    INSERT INTO public.meta_lead_submissions (meta_lead_id, ingestion_method) VALUES ('9001', 'MANUAL_IMPORT');
+    RAISE EXCEPTION 'duplicate meta_lead_id must be rejected';
+  EXCEPTION WHEN unique_violation THEN NULL;
+  END;
+
+  BEGIN
+    INSERT INTO public.meta_lead_submissions (meta_lead_id, ingestion_method, platform) VALUES ('9002', 'WEBHOOK', 'tiktok');
+    RAISE EXCEPTION 'unknown platform must be rejected';
+  EXCEPTION WHEN check_violation THEN NULL;
+  END;
+
+  -- Grok first-touch job dedupes per Meta lead through the existing unique index.
+  INSERT INTO public.message_jobs (job_type, inbound_provider_message_id) VALUES ('process_meta_lead', 'meta:9001');
+  BEGIN
+    INSERT INTO public.message_jobs (job_type, inbound_provider_message_id) VALUES ('process_meta_lead', 'meta:9001');
+    RAISE EXCEPTION 'duplicate process_meta_lead job must be rejected';
+  EXCEPTION WHEN unique_violation THEN NULL;
+  END;
+
+  -- Lead deletion keeps the Meta record (source of truth) and unlinks it.
+  DELETE FROM public.leads WHERE id = v_lead;
+  IF (SELECT lead_id FROM public.meta_lead_submissions WHERE meta_lead_id = '9001') IS NOT NULL THEN
+    RAISE EXCEPTION 'lead deletion must null lead_id, not delete the Meta record';
+  END IF;
+END $$;
+SQL
+  if ! psql_cmd -d "${TEST_DB}" -Atc "SELECT has_table_privilege('anon', 'public.meta_lead_submissions', 'SELECT');" | grep -q f; then
+    echo "ERROR: anon must not read meta_lead_submissions" >&2
+    exit 1
+  fi
+  if ! psql_cmd -d "${TEST_DB}" -Atc "SELECT has_table_privilege('authenticated', 'public.meta_lead_submissions', 'INSERT');" | grep -q f; then
+    echo "ERROR: authenticated must not write meta_lead_submissions" >&2
+    exit 1
+  fi
+  if ! psql_cmd -d "${TEST_DB}" -Atc "SELECT relrowsecurity FROM pg_class WHERE oid = 'public.meta_lead_submissions'::regclass;" | grep -q t; then
+    echo "ERROR: RLS must be enabled on meta_lead_submissions" >&2
+    exit 1
+  fi
+}
+
 echo "Creating isolated database ${TEST_DB} (PGHOST=${PGHOST} PGUSER=${PGUSER} sudo=${USE_SUDO})..."
 psql_cmd -c "DROP DATABASE IF EXISTS \"${TEST_DB}\";" postgres >/dev/null
 psql_cmd -c "CREATE DATABASE \"${TEST_DB}\";" postgres
@@ -287,6 +353,12 @@ assert_lifecycle_transition_rpc
 
 echo "Test 4: lifecycle transition RPC is atomic and returns stale without audit"
 test_lifecycle_transition_rpc
+
+echo "Test 5: Meta Lead Ads submissions dedupe on meta_lead_id and stay service-role writable only"
+test_meta_lead_submissions
+
+echo "Test 6: Meta migration is idempotent"
+apply_file "supabase/migrations/20260924180000_meta_lead_ads_ingestion.sql"
 
 echo "Test 2: baseline is idempotent on production-shaped schema"
 apply_baseline
