@@ -126,7 +126,7 @@ UI:
 | `META_PAGE_ID` | yes | Boltz Facebook Page id |
 | `META_PAGE_ACCESS_TOKEN` | yes | long-lived Page token (see step 3 below) |
 | `META_WEBHOOK_VERIFY_TOKEN` | yes | any long random string you choose; entered in both Lovable and the Meta webhook config |
-| `META_GRAPH_API_VERSION` | no | default `v24.0`; set e.g. `v25.0` when Meta sunsets it |
+| `META_GRAPH_API_VERSION` | no | default `v24.0`; set `v25.0` (current since Feb 2026) |
 | `META_AUTO_FIRST_TOUCH` | no | `enabled` to allow consented auto first-touch SMS; anything else = draft only |
 
 Existing `CRON_SECRET` and `PUBLIC_APP_URL` are reused.
@@ -159,6 +159,10 @@ $$);
 
 ## Meta App configuration (Fendi, manual)
 
+A step-by-step version for a browser agent, covering credentials, permissions,
+token and verification, is in
+`docs/handoffs/2026-09-24-meta-lead-ads-setup-agent.md`.
+
 1. **App.** In developers.facebook.com, use a Business-type app owned by the
    same Business portfolio as the Boltz Page and ad account. Copy App ID and
    App secret into Lovable secrets.
@@ -170,8 +174,8 @@ $$);
    create an admin system user. Assign it the Boltz **Page** (full control) and
    the **app**. *Generate token* for the app with `leads_retrieval`,
    `pages_manage_metadata`, `pages_show_list`, `pages_read_engagement`,
-   `pages_manage_ads` (add `ads_read` if you want ad, ad set and campaign
-   *names*; ids come through without it). Then, in Graph API Explorer with that
+   `pages_manage_ads`, `ads_management`, `business_management` (add `ads_read`
+   if you want ad, ad set and campaign *names*; ids come through without it). Then, in Graph API Explorer with that
    token, run `GET /{page-id}?fields=access_token`. That Page token is
    `META_PAGE_ACCESS_TOKEN` (a system-user-derived Page token does not expire).
 4. **Leads Access.** In Business settings → Integrations → **Leads Access**,
