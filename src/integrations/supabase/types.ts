@@ -541,6 +541,116 @@ export type Database = {
           },
         ]
       }
+      meta_lead_submissions: {
+        Row: {
+          ad_id: string | null
+          ad_name: string | null
+          adset_id: string | null
+          adset_name: string | null
+          attempts: number
+          campaign_id: string | null
+          campaign_name: string | null
+          consent_evidence: Json | null
+          consent_text: string | null
+          consent_version: string | null
+          created_at: string
+          created_time: string | null
+          form_id: string | null
+          form_name: string | null
+          graph_fetched_at: string | null
+          grok_enqueued_at: string | null
+          id: string
+          ingest_status: Database["public"]["Enums"]["meta_ingest_status"]
+          ingested_at: string | null
+          ingestion_method: Database["public"]["Enums"]["lead_ingestion_method"]
+          is_organic: boolean | null
+          last_error: string | null
+          lead_id: string | null
+          meta_lead_id: string
+          normalized_fields: Json | null
+          page_id: string | null
+          platform: string | null
+          raw_field_data: Json | null
+          updated_at: string
+          webhook_payload: Json | null
+          webhook_received_at: string | null
+        }
+        Insert: {
+          ad_id?: string | null
+          ad_name?: string | null
+          adset_id?: string | null
+          adset_name?: string | null
+          attempts?: number
+          campaign_id?: string | null
+          campaign_name?: string | null
+          consent_evidence?: Json | null
+          consent_text?: string | null
+          consent_version?: string | null
+          created_at?: string
+          created_time?: string | null
+          form_id?: string | null
+          form_name?: string | null
+          graph_fetched_at?: string | null
+          grok_enqueued_at?: string | null
+          id?: string
+          ingest_status?: Database["public"]["Enums"]["meta_ingest_status"]
+          ingested_at?: string | null
+          ingestion_method: Database["public"]["Enums"]["lead_ingestion_method"]
+          is_organic?: boolean | null
+          last_error?: string | null
+          lead_id?: string | null
+          meta_lead_id: string
+          normalized_fields?: Json | null
+          page_id?: string | null
+          platform?: string | null
+          raw_field_data?: Json | null
+          updated_at?: string
+          webhook_payload?: Json | null
+          webhook_received_at?: string | null
+        }
+        Update: {
+          ad_id?: string | null
+          ad_name?: string | null
+          adset_id?: string | null
+          adset_name?: string | null
+          attempts?: number
+          campaign_id?: string | null
+          campaign_name?: string | null
+          consent_evidence?: Json | null
+          consent_text?: string | null
+          consent_version?: string | null
+          created_at?: string
+          created_time?: string | null
+          form_id?: string | null
+          form_name?: string | null
+          graph_fetched_at?: string | null
+          grok_enqueued_at?: string | null
+          id?: string
+          ingest_status?: Database["public"]["Enums"]["meta_ingest_status"]
+          ingested_at?: string | null
+          ingestion_method?: Database["public"]["Enums"]["lead_ingestion_method"]
+          is_organic?: boolean | null
+          last_error?: string | null
+          lead_id?: string | null
+          meta_lead_id?: string
+          normalized_fields?: Json | null
+          page_id?: string | null
+          platform?: string | null
+          raw_field_data?: Json | null
+          updated_at?: string
+          webhook_payload?: Json | null
+          webhook_received_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_lead_submissions_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ringcentral_subscriptions: {
         Row: {
           created_at: string
@@ -650,6 +760,7 @@ export type Database = {
         | "human_requested"
         | "other_high_risk"
       escalation_status: "open" | "acknowledged" | "resolved"
+      lead_ingestion_method: "WEBHOOK" | "RECONCILIATION" | "MANUAL_IMPORT"
       lead_lifecycle:
         | "New"
         | "Contacted"
@@ -687,6 +798,8 @@ export type Database = {
         | "send_outbound"
         | "reconcile"
         | "renew_subscription"
+        | "process_meta_lead"
+      meta_ingest_status: "received" | "ingested" | "failed"
       sms_capability: "SmsSender" | "A2PSmsSender" | "none" | "unknown"
       thread_control_mode: "auto" | "human"
     }
@@ -831,6 +944,7 @@ export const Constants = {
         "other_high_risk",
       ],
       escalation_status: ["open", "acknowledged", "resolved"],
+      lead_ingestion_method: ["WEBHOOK", "RECONCILIATION", "MANUAL_IMPORT"],
       lead_lifecycle: [
         "New",
         "Contacted",
@@ -871,7 +985,9 @@ export const Constants = {
         "send_outbound",
         "reconcile",
         "renew_subscription",
+        "process_meta_lead",
       ],
+      meta_ingest_status: ["received", "ingested", "failed"],
       sms_capability: ["SmsSender", "A2PSmsSender", "none", "unknown"],
       thread_control_mode: ["auto", "human"],
     },
