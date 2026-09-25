@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { PageHeader, Panel, Shell } from "@/components/ops/Shell";
 import { Tag, TableWrap, Td, Th } from "@/components/ops/Bits";
+import { MetaHealthPanel } from "@/components/meta/MetaHealthPanel";
 import {
   ensureSubscription,
   getIntegrationHealth,
@@ -15,7 +16,8 @@ export const Route = createFileRoute("/_authenticated/integration-health")({
       { title: "Integration Health · Boltz SEO/GEO Ops" },
       {
         name: "description",
-        content: "RingCentral and Grok connection status, webhook subscriptions, and job queue state.",
+        content:
+          "RingCentral, Meta Lead Ads and Grok connection status, webhook subscriptions, and job queue state.",
       },
       { name: "robots", content: "noindex, nofollow" },
     ],
@@ -157,6 +159,8 @@ function HealthPage() {
             <p className="mt-2 text-xs text-destructive">{ensureMutation.data.error}</p>
           )}
         </Panel>
+
+        <MetaHealthPanel />
 
         <Panel title="Job queue" meta={`${data?.jobs.length ?? 0} recent`}>
           {(data?.jobs ?? []).length === 0 ? (

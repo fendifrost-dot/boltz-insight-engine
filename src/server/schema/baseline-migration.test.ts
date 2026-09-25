@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import productionExport from "../../../docs/schema/production-export.json" with { type: "json" };
@@ -114,13 +114,26 @@ test("production export includes columns, constraints, indexes, and function def
   assert.ok(Array.isArray(productionExport.policies) && productionExport.policies.length >= 10);
 });
 
+/** Enum values added after the production export by checked-in `ALTER TYPE … ADD VALUE` migrations. */
+function enumValuesAddedByMigrations(enumName: string): string[] {
+  const migrationsDir = join(repoRoot, "supabase/migrations");
+  const pattern = new RegExp(
+    `ALTER TYPE public\\.${enumName} ADD VALUE IF NOT EXISTS '([^']+)'`,
+    "gi",
+  );
+  return readdirSync(migrationsDir)
+    .filter((f) => f.endsWith(".sql"))
+    .flatMap((f) => [...readFileSync(join(migrationsDir, f), "utf8").matchAll(pattern)].map((m) => m[1]!));
+}
+
 test("generated Supabase enum constants match production export lead-inbox enums", () => {
   for (const enumName of LEAD_INBOX_ENUMS) {
     const exported = productionExport.enums[enumName as keyof typeof productionExport.enums];
     const generated = Constants.public.Enums[enumName as keyof typeof Constants.public.Enums];
     assert.ok(exported, `export missing enum ${enumName}`);
     assert.ok(generated, `types.ts missing enum ${enumName}`);
-    assert.deepEqual([...generated].sort(), [...exported].sort());
+    const expected = new Set<string>([...exported, ...enumValuesAddedByMigrations(enumName)]);
+    assert.deepEqual([...generated].sort(), [...expected].sort());
   }
 });
 

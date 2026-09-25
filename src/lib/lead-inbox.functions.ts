@@ -14,21 +14,55 @@ import { checkCapability, requireCapability, requireOwner } from "@/server/authz
  * - getIntegrationHealth, resumeAgentFn, ensureSubscription: secrets/provider/integration → integrations.manage (owner).
  */
 
+export const LEAD_SOURCE_FILTERS = ["all", "meta", "facebook", "instagram"] as const;
+
 export const listLeads = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
+  .inputValidator((input) =>
+    z.object({ source: z.enum(LEAD_SOURCE_FILTERS).default("all") }).parse(input ?? {}),
+  )
+  .handler(async ({ data: input, context }) => {
     try {
-      const { data, error } = await context.supabase
-        .from("leads")
-        .select(
-          "id, name, phone_e164, lifecycle, consent_status, vehicle_year, vehicle_make, vehicle_model, vehicle_mileage, symptoms, lead_source, last_inbound_at, last_outbound_at, last_message_at, unread_count, created_at",
-        )
-        .order("last_message_at", { ascending: false, nullsFirst: false })
-        .order("id", { ascending: true })
+      const columns =
+        "id, name, phone_e164, email, lifecycle, consent_status, vehicle_year, vehicle_make, vehicle_model, vehicle_mileage, symptoms, lead_source, last_inbound_at, last_outbound_at, last_message_at, unread_count, created_at";
+      // Meta filters use an inner join so a lead that texted first and later
+      // submitted a form still counts as a Facebook/Instagram lead.
+      let query =
+        input.source === "all"
+          ? context.supabase.from("leads").select(`${columns}, meta_lead_submissions(platform)`)
+          : context.supabase.from("leads").select(`${columns}, meta_lead_submissions!inner(platform)`);
+      if (input.source === "facebook" || input.source === "instagram") {
+        query = query.eq("meta_lead_submissions.platform", input.source);
+      }
+      const { data, error } = await query
+        // Never-messaged leads (new form submissions awaiting first touch) sort first.
+        .order("last_message_at", { ascending: false, nullsFirst: true })
+        .order("created_at", { ascending: false })
         .limit(200);
 
+      if (error && input.source === "all") {
+        // Published before the Meta migration ran: keep the SMS inbox working.
+        console.error("listLeads meta embed failed; falling back", error.message);
+        const plain = await context.supabase
+          .from("leads")
+          .select(columns)
+          .order("last_message_at", { ascending: false, nullsFirst: true })
+          .order("created_at", { ascending: false })
+          .limit(200);
+        if (plain.error) throw new Error(plain.error.message);
+        return (plain.data ?? []).map((lead) => ({ ...lead, meta_platforms: [] as string[] }));
+      }
       if (error) throw new Error(error.message);
-      return data ?? [];
+      return (data ?? []).map(({ meta_lead_submissions, ...lead }) => ({
+        ...lead,
+        meta_platforms: [
+          ...new Set(
+            ((meta_lead_submissions ?? []) as { platform: string | null }[])
+              .map((m) => m.platform)
+              .filter((p): p is string => Boolean(p)),
+          ),
+        ],
+      }));
     } catch (error) {
       console.error("listLeads failed", error);
       return [];
@@ -53,7 +87,7 @@ export const getThread = createServerFn({ method: "GET" })
     if (threadRes.error) throw new Error(threadRes.error.message);
 
     const thread = threadRes.data;
-    const [messagesRes, runsRes, eventsRes] = await Promise.all([
+    const [messagesRes, runsRes, eventsRes, metaRes] = await Promise.all([
       thread
         ? context.supabase
             .from("messages")
@@ -74,6 +108,14 @@ export const getThread = createServerFn({ method: "GET" })
         .eq("lead_id", data.leadId)
         .order("created_at", { ascending: false })
         .limit(50),
+      context.supabase
+        .from("meta_lead_submissions")
+        .select(
+          "id, meta_lead_id, platform, ingestion_method, ingest_status, form_id, form_name, ad_id, ad_name, adset_id, adset_name, campaign_id, campaign_name, created_time, consent_version, consent_evidence, raw_field_data",
+        )
+        .eq("lead_id", data.leadId)
+        .order("created_time", { ascending: false })
+        .limit(10),
     ]);
 
     return {
@@ -82,6 +124,7 @@ export const getThread = createServerFn({ method: "GET" })
       messages: messagesRes.data ?? [],
       agentRuns: runsRes.data ?? [],
       events: eventsRes.data ?? [],
+      metaSubmissions: metaRes.data ?? [],
     };
   });
 
