@@ -64,28 +64,55 @@ straight into Lovable.
 
 ---
 
-## Step 1 — Identify the right Business portfolio and Page
+## Step 1 — Find the Page and check who can read its leads
+
+**What actually gates lead retrieval is Page task assignment, not portfolio
+layout.** Someone has to be assigned to the Page with the **Leads** task
+(shown as *Manage leads* / *Leads* / full control). If nobody is, every lead
+call fails with `(#10) User has insufficient privileges on the page`, whoever
+owns what.
 
 1. Go to **business.facebook.com** → **Settings** (Business settings).
-2. Confirm which Business portfolio owns the **Boltz Facebook Page** and the
-   **ad account** running the Lead Ads. They must be the **same portfolio**. If
-   they are split across portfolios, stop and report which owns what.
+2. Note which Business portfolio owns the **Boltz Facebook Page** and which
+   owns the **ad account** running the Lead Ads. Record both in the report.
+   **A split across portfolios is not a blocker.** Do not stop for it; carry on.
 3. **Accounts → Pages** → select the Boltz Page → copy the **Page ID**.
-4. **Accounts → Instagram accounts**: note whether an Instagram account is
+4. On that Page, open **People** (or *Assigned people*) and check who has the
+   **Leads** task.
+   - If **Fendi is not assigned with Leads** (or full control), assign him:
+     *Assign people* → Fendi → enable the Leads task (full control is
+     fine) → save. This is the fix. It does not need another person or
+     another portfolio's owner.
+   - If you cannot assign people on this Page from this portfolio, stop and
+     report exactly what Meta shows. That, not the portfolio split, is a real blocker.
+5. **Verify with Graph API Explorer** (User token for Fendi is fine for this check):
+   `GET /{PAGE_ID}/leadgen_forms?fields=id,name,status,leads_count`
+   - `(#10) User has insufficient privileges on the page` → the Leads task is
+     still missing. Go back to 4.
+   - `(#190) This method must be called with a Page Access Token` → **pass**.
+     Privileges are fine; the call just needs a Page token, which step 4
+     produces. See [Verification evidence](#verification-evidence).
+6. **Accounts → Instagram accounts**: note whether an Instagram account is
    connected. Instagram lead forms deliver through the same Facebook Page, so
    no extra setup is needed.
-5. Confirm Fendi's own user has **full control** of the Page. An *Advertise*
-   task is the minimum, but full control avoids permission gaps.
 
 ## Step 2 — The Meta app (the API "client")
 
 1. Go to **developers.facebook.com → My Apps**.
-2. Reuse an existing Boltz app if one exists **and** it is owned by the same
-   Business portfolio from step 1. Otherwise **Create app**:
-   - Use case / type: **Other → Business** (or the "Manage everything on your
-     Page" / Business type offered). Do **not** pick Consumer/Gaming.
-   - Name: `Boltz Insight Engine`. Contact email: Fendi's.
-   - Business portfolio: the one from step 1.
+2. Reuse an existing Boltz Business-type app if one exists. Otherwise **Create app**:
+   1. Enter name `Boltz Insight Engine` and Fendi's contact email → **Next**.
+   2. On **Add use cases**, set the category filter to **Others**, scroll to
+      *Looking for something else?*, choose **Other** → **Next**.
+   3. Pick app type **Business** → **Next**. The app type cannot be changed after creation.
+   4. On **Details**, confirm name and contact email and select the Business
+      portfolio that owns the Page (step 1).
+   5. **Create app**.
+
+   The **Other** option now shows a banner, "This option is going away soon",
+   and creates the app "in the old experience". It still works, and it is the
+   path that was used for Boltz. *Create an app without a use case* is the
+   modern alternative. It was not chosen because nobody has verified which
+   permissions are available under it.
 3. **App settings → Basic**:
    - Copy **App ID** → Lovable secret `META_APP_ID`.
    - Click **Show** on **App secret** → Lovable secret `META_APP_SECRET`.
@@ -114,9 +141,8 @@ In **App Dashboard → App Review → Permissions and features** (sometimes show
 as *Use cases → Customize*):
 
 1. For each permission above, check its **access level**.
-   - **Standard access** is usually enough when the app, the Page and the ad
-     account all belong to the same Business portfolio and only Boltz's own
-     Page is used.
+   - **Standard access** is usually enough when only Boltz's own Page is used
+     and the token's owner is assigned to that Page with the Leads task (step 1).
    - If `leads_retrieval`, `pages_manage_metadata`, `pages_manage_ads` or
      `ads_management` shows a requirement to get **Advanced access** before
      it works for Live data, **stop and report exactly what Meta asks for**:
@@ -144,8 +170,8 @@ as *Use cases → Customize*):
 4. Open **developers.facebook.com/tools/explorer** (Graph API Explorer):
    - Application: the app from step 2. Paste the system-user token into the
      Access Token field.
-   - Version: **v25.0**. That's current as of Feb 2026; v20.0 stops working
-     24 Sep 2026, so don't choose anything that old.
+   - Version: **v26.0** (current). Don't choose anything older; v20.0
+     stopped working on 24 Sep 2026.
    - Run `GET /{PAGE_ID}?fields=id,name,access_token`.
    - The `access_token` returned is the **Page access token**. Copy it
      directly into the Lovable secret `META_PAGE_ACCESS_TOKEN`.
@@ -172,7 +198,7 @@ Paste values directly; never into the chat.
 | `META_PAGE_ID` | Page ID (step 1) |
 | `META_PAGE_ACCESS_TOKEN` | Page token (step 4.4) |
 | `META_WEBHOOK_VERIFY_TOKEN` | generate a new random string, 32+ chars, letters and digits only; you will paste the same string into Meta in step 7 |
-| `META_GRAPH_API_VERSION` | `v25.0` |
+| `META_GRAPH_API_VERSION` | `v26.0` |
 
 Leave `META_AUTO_FIRST_TOUCH` **unset**. `CRON_SECRET` and `PUBLIC_APP_URL`
 already exist; don't change them.
@@ -202,7 +228,7 @@ missing scopes.
      challenge only when the token matches. If it fails: check that the
      secret was saved, and that the app was published after saving it.
 3. In the Page field list, find **`leadgen`** → **Subscribe**. Use the
-   current API version (v25.0) if asked.
+   current API version (v26.0) if asked.
 4. Subscribe the **Page** to the app:
    - Easiest: `/integration-health` → Meta panel → **Subscribe Page to
      leadgen**. The status should turn **subscribed**.
@@ -281,6 +307,22 @@ Editing a published form may create a new form version, and copying it is safer.
    The second query must return **0 rows**.
 10. Leave the test leads in place so Fendi can see them. Report their lead ids.
 
+## Verification evidence
+
+The same Graph call on the Boltz Page, before and after assigning Fendi to the
+Page with the Leads task. The Page and the ad account were in different
+portfolios the whole time; that was never the problem.
+
+```
+GET /433712466491882/leadgen_forms?fields=id,name,status,leads_count
+
+before:  (#10) User has insufficient privileges on the page
+after:   (#190) This method must be called with a Page Access Token
+```
+
+Error 190 is the expected next state, not a failure. Privileges are fine; the
+call just needs a Page token rather than a User token (step 4).
+
 ## Troubleshooting map
 
 | Symptom in Boltz / Meta | Likely cause | Fix |
@@ -288,6 +330,8 @@ Editing a published form may create a new form version, and copying it is safer.
 | Verify and save fails | verify token mismatch, or secrets not live | re-enter the token in both places; Publish; retry |
 | Testing Tool delivery 401 | `META_APP_SECRET` is from a different app | re-copy the App secret of the app that owns the webhook |
 | Testing Tool delivery 503 | secret missing on the deployed app | add the secret; Publish |
+| Graph `(#10) User has insufficient privileges on the page` | nobody (or not the token owner) has the Leads task on the Page | step 1.4: assign the Leads task; re-run step 1.5 |
+| Graph `(#190) This method must be called with a Page Access Token` | a User/System-user token was used on a Page endpoint | expected during step 1.5; use the Page token from step 4.4 |
 | Delivery 200 but row `failed`; Graph failure "permission" | Leads Access excludes the app, or the token owner lacks the leads/advertise task | step 6; step 4.2 task assignment; regenerate the token |
 | Graph failure code 190 / Token invalid | wrong or expired token, or a User token was used | redo step 4.4 and 4.5 |
 | No webhook at all, Page shows subscribed | app in Development mode, or `leadgen` field not subscribed on the Page object | step 8; step 7.3 |
@@ -296,14 +340,15 @@ Editing a published form may create a new form version, and copying it is safer.
 ## Report back to Fendi (fill in)
 
 ```
-Business portfolio: <name> (<id>) — owns Page: yes/no, owns ad account: yes/no
+Business portfolio(s): Page owned by <name> (<id>); ad account owned by <name> (<id>)   (split is OK)
+Page Leads task: assigned to <who>; verification call → #10 / #190 (pass)
 Page: <name> (<id>); Instagram connected: <handle or none>
 App: <name> (<app id>), mode: Live/Development
 Permission access levels: leads_retrieval=<std/adv>, pages_manage_metadata=<>, pages_manage_ads=<>, ads_management=<>, ads_read=<>
 App Review / Business Verification required: <no | exactly what Meta asked for>
 System user: boltz-insight-engine, assets: Page=<tasks>, App=<role>, Ad account=<role>
 Page token: type Page, expires never, scopes OK: yes/no   (value NOT recorded)
-Lovable secrets configured: META_APP_ID, META_APP_SECRET, META_PAGE_ID, META_PAGE_ACCESS_TOKEN, META_WEBHOOK_VERIFY_TOKEN, META_GRAPH_API_VERSION=v25.0
+Lovable secrets configured: META_APP_ID, META_APP_SECRET, META_PAGE_ID, META_PAGE_ACCESS_TOKEN, META_WEBHOOK_VERIFY_TOKEN, META_GRAPH_API_VERSION=v26.0
 Leads Access: app allowed: yes/no
 Webhook: Page object verified: yes/no; leadgen subscribed: yes/no; Page subscribed_apps: yes/no
 Testing Tool lead 1: <lead id> — delivery <status>, Boltz row WEBHOOK/ingested: yes/no, visible in /leads: yes/no

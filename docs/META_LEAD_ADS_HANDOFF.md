@@ -126,7 +126,7 @@ UI:
 | `META_PAGE_ID` | yes | Boltz Facebook Page id |
 | `META_PAGE_ACCESS_TOKEN` | yes | long-lived Page token (see step 3 below) |
 | `META_WEBHOOK_VERIFY_TOKEN` | yes | any long random string you choose; entered in both Lovable and the Meta webhook config |
-| `META_GRAPH_API_VERSION` | no | default `v24.0`; set `v25.0` (current since Feb 2026) |
+| `META_GRAPH_API_VERSION` | no | code default `v24.0`; set `v26.0` (current) |
 | `META_AUTO_FIRST_TOUCH` | no | `enabled` to allow consented auto first-touch SMS; anything else = draft only |
 
 Existing `CRON_SECRET` and `PUBLIC_APP_URL` are reused.
@@ -163,9 +163,11 @@ A step-by-step version for a browser agent, covering credentials, permissions,
 token and verification, is in
 `docs/handoffs/2026-09-24-meta-lead-ads-setup-agent.md`.
 
-1. **App.** In developers.facebook.com, use a Business-type app owned by the
-   same Business portfolio as the Boltz Page and ad account. Copy App ID and
-   App secret into Lovable secrets.
+1. **App.** In developers.facebook.com, use a Business-type app (creation
+   flow: see the agent handoff, step 2). Copy App ID and App secret into
+   Lovable secrets. The Page and ad account may sit in different portfolios.
+   What matters is that the token's owner is assigned to the Page with the
+   **Leads** task (agent handoff, step 1).
 2. **Webhooks product.** Add *Webhooks* → object **Page** → *Subscribe to this object*:
    - Callback URL: `https://boltz-insight-engine.lovable.app/api/public/meta/webhook`
    - Verify token: the exact `META_WEBHOOK_VERIFY_TOKEN` value
@@ -184,8 +186,7 @@ token and verification, is in
    and `/integration-health` shows a Graph failure.
 5. **App mode.** Switch the app to **Live**. In Development mode, Meta only
    delivers leadgen webhooks for leads created by people with a role on the
-   app. Standard Access to `leads_retrieval` is normally enough when app, Page
-   and ad account share one Business portfolio. If the App Dashboard asks for
+   app. Standard Access to `leads_retrieval` is normally enough for Boltz's own Page. If the App Dashboard asks for
    Advanced Access or Business Verification, complete it there.
 6. **Subscribe the Page.** In `/integration-health` → Meta panel, click
    *Subscribe Page to leadgen*. Or call `POST /{page-id}/subscribed_apps?subscribed_fields=leadgen`
