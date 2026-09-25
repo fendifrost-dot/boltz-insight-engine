@@ -4,10 +4,29 @@ Boltz Insight Engine is the source of truth for Instant Form leads. Everything r
 as app server routes deployed with the Lovable app. There is no Supabase Edge
 Function, Zapier, Make or other middleware.
 
-**Status:** code complete and verified locally against real PostgreSQL (see
-[Evidence](#evidence)). **Not yet verified live.** Live success requires a real
-or Lead Ads Testing Tool lead visible in the deployed app, which needs the
-manual steps below.
+**Status (2026-09-25):**
+- PR #23 is merged, the migration is applied, and Meta is configured: a
+  Business app, eight permissions at Standard access, the Page webhook
+  handshake passed, `leadgen` subscribed on v26.0, and a system user on the Page.
+- Lead retrieval is proven through Graph with test lead `2283654155812202`.
+- **Not yet verified live end to end.** Still to do:
+  - Page `subscribed_apps`
+  - a Testing Tool lead visible in `/leads`
+  - the dedupe and reconciliation checks
+  - cron jobs
+  - switching the app to Live
+
+  See the Testing Tool procedure below.
+
+Open decisions (Fendi's, not bugs):
+- **Personal ad account `686411475366536`.** Claiming it would restore
+  ad/campaign attribution and access to the historical leads.
+- **Page ownership.** The Page is owned by Reverse Engineers Media and
+  partner-shared into Boltz, so only that portfolio can configure Leads
+  Access CRM allowlisting.
+- **SMS consent checkbox on the Instant Form.** Approved but not added. A
+  duplicate form only takes effect when an ad points at it.
+- **Auto first touch** (`META_AUTO_FIRST_TOUCH`) stays off.
 
 ## Flow
 
@@ -183,7 +202,9 @@ token and verification, is in
 4. **Leads Access.** In Business settings → Integrations → **Leads Access**,
    open the Page and make sure the app (CRM) is allowed. If Leads Access
    Manager is on and the app isn't listed, Graph returns a permission error
-   and `/integration-health` shows a Graph failure.
+   and `/integration-health` shows a Graph failure. For a partner-shared Page
+   Meta refuses to create leads access ("not owned by your business"). That
+   does not block retrieval; the Leads task assignment is what matters.
 5. **App mode.** Switch the app to **Live**. In Development mode, Meta only
    delivers leadgen webhooks for leads created by people with a role on the
    app. Standard Access to `leads_retrieval` is normally enough for Boltz's own Page. If the App Dashboard asks for

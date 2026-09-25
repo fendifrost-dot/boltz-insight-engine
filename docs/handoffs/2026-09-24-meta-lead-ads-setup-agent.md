@@ -116,8 +116,9 @@ owns what.
 3. **App settings → Basic**:
    - Copy **App ID** → Lovable secret `META_APP_ID`.
    - Click **Show** on **App secret** → Lovable secret `META_APP_SECRET`.
-   - Privacy Policy URL: `https://boltzautogarage.com/privacy` if that page
-     exists; otherwise report that one is needed. Live mode requires it.
+   - Privacy Policy URL: `https://boltzautogarage.com/privacy-policy`
+     (`/privacy` returns 404). Live mode requires it. The page already
+     contains the SMS consent and SMS Terms language.
    - Category: Business. Save.
 4. Add products: **Webhooks**, and **Marketing API** if the dashboard offers
    it (it enables the ads permissions).
@@ -218,9 +219,20 @@ missing scopes.
    Add CRM). Also make sure Fendi's user and the system user are allowed
    under **People** if that list is restricted.
 
+**Partner-shared Page:** if the Page is owned by another portfolio and only
+shared into Boltz's, Business settings refuses with *"You cannot create leads
+access for pages that are not owned by your business"*. **This does not block
+lead retrieval.** For Boltz, assigning Fendi and the system user to the shared
+Page (step 1.4, step 4.2) was enough. CRM allowlisting can then only be set up
+by the owning portfolio (Reverse Engineers Media). Record the refusal in the
+report and carry on.
+
 ## Step 7 — Webhook subscription (Meta → Boltz)
 
 1. **App Dashboard → Webhooks** (or Use cases → Customize → Webhooks). In the object dropdown pick **Page**.
+   Subscribe **only** the Page object. If the **User** object also has a
+   subscription pointing at the Boltz endpoint, remove it. It only sends
+   profile-change events, which the handler ignores, and it confuses later debugging.
 2. **Subscribe to this object**:
    - Callback URL: `https://boltz-insight-engine.lovable.app/api/public/meta/webhook`
    - Verify token: the exact `META_WEBHOOK_VERIFY_TOKEN` string from step 5

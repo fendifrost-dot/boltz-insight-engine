@@ -15,8 +15,16 @@ export const getMetaHealthFn = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     await requireCapability(context, "integrations.manage");
-    const { getMetaHealth } = await import("@/server/meta-leads/health.server");
-    return getMetaHealth();
+    // Never throw past this point: an opaque server-fn failure is what made the
+    // panel show only "Meta health unavailable". Return the real reason instead.
+    try {
+      const { getMetaHealth } = await import("@/server/meta-leads/health.server");
+      return { ok: true as const, health: await getMetaHealth(), error: null };
+    } catch (error) {
+      const message = error instanceof Error ? error.message.slice(0, 400) : String(error);
+      console.error("[meta health] failed", message);
+      return { ok: false as const, health: null, error: message };
+    }
   });
 
 export const reconcileMetaNow = createServerFn({ method: "POST" })

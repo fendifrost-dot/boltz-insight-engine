@@ -159,3 +159,35 @@ test("migration: unique Meta lead id, RLS on, staff read-only, no anon", () => {
   assert.match(migration, /'WEBHOOK',\s*'RECONCILIATION',\s*'MANUAL_IMPORT'/);
   assert.doesNotMatch(migration, /\bDROP TABLE\b/i);
 });
+
+const health = read("src/server/meta-leads/health.server.ts");
+const panel = read("src/components/meta/MetaHealthPanel.tsx");
+
+test("Meta health server fn gates first, then never throws an opaque failure", () => {
+  const start = fns.indexOf("export const getMetaHealthFn = createServerFn");
+  const body = fns.slice(start, fns.indexOf("\nexport const ", start + 1));
+  const gate = body.indexOf('requireCapability(context, "integrations.manage")');
+  const tryIdx = body.indexOf("try {");
+  assert.ok(gate >= 0 && tryIdx > gate, "capability gate stays outside the try");
+  assert.match(body, /catch \(error\)[\s\S]*ok: false as const, health: null, error: message/);
+});
+
+test("each Meta health check fails independently and reports its real error", () => {
+  assert.match(health, /async function settle</);
+  assert.match(health, /errors\.push\(\{ check, message \}\)/);
+  // Supabase returns errors instead of throwing; every query must surface them.
+  const queries = (health.match(/await (query|supabaseAdmin)/g) ?? []).length;
+  const checks = (health.match(/if \(error\) throw error;/g) ?? []).length;
+  assert.ok(checks >= 4 && checks >= queries - 1, "every health query checks its error");
+  assert.doesNotMatch(health, /head: true/, "HEAD count queries hide the error body");
+  assert.match(health, /\berrors,\n/, "errors are returned to the panel");
+});
+
+test("Meta panel shows the actual failure and keeps actions available", () => {
+  assert.doesNotMatch(panel, /Meta health unavailable/);
+  assert.match(panel, /loadError/);
+  assert.match(panel, /data\.errors\.map/);
+  assert.match(panel, /health\.refetch\(\)/, "Re-check forces a new request");
+  const conditionalEnd = panel.indexOf(`<div className="mt-4">`);
+  assert.ok(conditionalEnd > 0 && panel.indexOf("subscribe.mutate()") > conditionalEnd);
+});

@@ -32,7 +32,11 @@ export function MetaHealthPanel() {
   const subscribeFn = useServerFn(subscribeMetaPage);
   const [leadgenId, setLeadgenId] = useState("");
 
-  const health = useQuery({ queryKey: ["meta-health"], queryFn: () => healthFn() });
+  const health = useQuery({
+    queryKey: ["meta-health"],
+    queryFn: () => healthFn(),
+    retry: 1,
+  });
   const refresh = () => void queryClient.invalidateQueries({ queryKey: ["meta-health"] });
 
   const reconcile = useMutation({
@@ -48,23 +52,65 @@ export function MetaHealthPanel() {
   });
   const subscribe = useMutation({ mutationFn: () => subscribeFn(), onSuccess: refresh });
 
-  const data = health.data;
+  const result = health.data;
+  const data = result?.ok ? result.health : null;
+  // Surface the real reason, whether the server fn threw (auth, network) or
+  // returned a handled failure. Never collapse to a generic message.
+  const loadError = health.isError
+    ? health.error instanceof Error
+      ? health.error.message
+      : String(health.error)
+    : result && !result.ok
+      ? result.error
+      : null;
+  const checkedAt = health.dataUpdatedAt || health.errorUpdatedAt;
 
   return (
     <Panel
       title="Meta Lead Ads (Facebook / Instagram)"
       meta={
-        <button onClick={refresh} className="rounded border border-border px-2 py-1 text-[10px]">
-          {health.isFetching ? "Checking…" : "Re-check"}
-        </button>
+        <span className="flex items-center gap-2">
+          {checkedAt > 0 && (
+            <span className="text-[10px] text-muted-foreground">
+              checked {new Date(checkedAt).toLocaleTimeString()}
+            </span>
+          )}
+          <button
+            onClick={() => void health.refetch()}
+            disabled={health.isFetching}
+            className="rounded border border-border px-2 py-1 text-[10px] disabled:opacity-40"
+          >
+            {health.isFetching ? "Checking…" : "Re-check"}
+          </button>
+        </span>
       }
     >
       {health.isLoading ? (
         <p className="text-sm text-muted-foreground">Checking Meta…</p>
-      ) : health.isError || !data ? (
-        <p className="text-sm text-destructive">Meta health unavailable.</p>
+      ) : loadError || !data ? (
+        <div className="space-y-1 rounded border border-destructive/40 p-2 text-sm">
+          <p className="text-destructive">Meta health check failed.</p>
+          <p className="font-mono text-xs break-words text-destructive">
+            {loadError ?? "The server returned no health data."}
+          </p>
+        </div>
       ) : (
         <div className="space-y-4">
+          {data.errors.length > 0 && (
+            <div className="rounded border border-destructive/40 p-2">
+              <div className="label-caps mb-1 text-destructive">
+                {data.errors.length} check{data.errors.length === 1 ? "" : "s"} failed
+              </div>
+              <ul className="space-y-0.5 text-xs">
+                {data.errors.map((e) => (
+                  <li key={e.check} className="break-words">
+                    <span className="font-medium">{e.check}:</span>{" "}
+                    <span className="font-mono text-destructive">{e.message}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           {data.configError && <p className="text-xs text-destructive">{data.configError}</p>}
 
           <div className="grid gap-2 sm:grid-cols-2">
@@ -118,17 +164,6 @@ export function MetaHealthPanel() {
                 {data.subscription.status}
               </Tag>
               <span className="text-xs text-muted-foreground">{data.subscription.detail}</span>
-              {data.subscription.status !== "subscribed" && !data.configError && (
-                <button
-                  onClick={() => subscribe.mutate()}
-                  className="rounded border border-border px-2 py-1 text-xs"
-                >
-                  {subscribe.isPending ? "Subscribing…" : "Subscribe Page to leadgen"}
-                </button>
-              )}
-              {subscribe.data && !subscribe.data.ok && (
-                <span className="text-xs text-destructive">{subscribe.data.error}</span>
-              )}
             </Row>
             <Row label="Token">
               <Tag
@@ -203,62 +238,6 @@ export function MetaHealthPanel() {
             </Row>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              onClick={() => reconcile.mutate("incremental")}
-              disabled={reconcile.isPending || Boolean(data.configError)}
-              className="rounded border border-border px-2 py-1 text-xs disabled:opacity-40"
-            >
-              {reconcile.isPending ? "Reconciling…" : "Reconcile now (2h)"}
-            </button>
-            <button
-              onClick={() => reconcile.mutate("nightly")}
-              disabled={reconcile.isPending || Boolean(data.configError)}
-              className="rounded border border-border px-2 py-1 text-xs disabled:opacity-40"
-            >
-              Reconcile 7 days
-            </button>
-            <input
-              value={leadgenId}
-              onChange={(e) => setLeadgenId(e.target.value)}
-              placeholder="Meta lead ID"
-              className="w-44 rounded border border-border bg-input px-2 py-1 font-mono text-xs"
-            />
-            <button
-              onClick={() => manualImport.mutate()}
-              disabled={
-                manualImport.isPending || leadgenId.trim().length === 0 || Boolean(data.configError)
-              }
-              className="rounded border border-border px-2 py-1 text-xs disabled:opacity-40"
-            >
-              {manualImport.isPending ? "Importing…" : "Manual import"}
-            </button>
-            {reconcile.data && (
-              <span
-                className={
-                  reconcile.data.ok ? "text-xs text-muted-foreground" : "text-xs text-destructive"
-                }
-              >
-                {reconcile.data.ok && reconcile.data.summary
-                  ? `scanned ${reconcile.data.summary.scanned}, missing ${reconcile.data.summary.missingDetected + reconcile.data.summary.notIngested}, ingested ${reconcile.data.summary.ingested}, duplicates ${reconcile.data.summary.duplicates}`
-                  : reconcile.data.error}
-              </span>
-            )}
-            {manualImport.data && (
-              <span
-                className={
-                  manualImport.data.ok
-                    ? "text-xs text-muted-foreground"
-                    : "text-xs text-destructive"
-                }
-              >
-                {manualImport.data.ok
-                  ? `Import: ${manualImport.data.outcome?.status}`
-                  : manualImport.data.error}
-              </span>
-            )}
-          </div>
-
           {data.recent.length > 0 && (
             <TableWrap>
               <thead>
@@ -303,6 +282,94 @@ export function MetaHealthPanel() {
           )}
         </div>
       )}
+
+      {/* Actions stay usable when the health read fails, so subscribing the
+          Page or reconciling is never blocked by the dashboard itself. */}
+      <div className="mt-4">
+        <div className="flex flex-wrap items-center gap-2">
+          {data?.subscription.status !== "subscribed" && (
+            <button
+              onClick={() => subscribe.mutate()}
+              disabled={subscribe.isPending || Boolean(data?.configError)}
+              className="rounded border border-border px-2 py-1 text-xs disabled:opacity-40"
+            >
+              {subscribe.isPending ? "Subscribing…" : "Subscribe Page to leadgen"}
+            </button>
+          )}
+          <button
+            onClick={() => reconcile.mutate("incremental")}
+            disabled={reconcile.isPending || Boolean(data?.configError)}
+            className="rounded border border-border px-2 py-1 text-xs disabled:opacity-40"
+          >
+            {reconcile.isPending ? "Reconciling…" : "Reconcile now (2h)"}
+          </button>
+          <button
+            onClick={() => reconcile.mutate("nightly")}
+            disabled={reconcile.isPending || Boolean(data?.configError)}
+            className="rounded border border-border px-2 py-1 text-xs disabled:opacity-40"
+          >
+            Reconcile 7 days
+          </button>
+          <input
+            value={leadgenId}
+            onChange={(e) => setLeadgenId(e.target.value)}
+            placeholder="Meta lead ID"
+            className="w-44 rounded border border-border bg-input px-2 py-1 font-mono text-xs"
+          />
+          <button
+            onClick={() => manualImport.mutate()}
+            disabled={
+              manualImport.isPending || leadgenId.trim().length === 0 || Boolean(data?.configError)
+            }
+            className="rounded border border-border px-2 py-1 text-xs disabled:opacity-40"
+          >
+            {manualImport.isPending ? "Importing…" : "Manual import"}
+          </button>
+          {subscribe.data && (
+            <span
+              className={
+                subscribe.data.ok ? "text-xs text-muted-foreground" : "text-xs text-destructive"
+              }
+            >
+              {subscribe.data.ok ? "Page subscribed to leadgen" : subscribe.data.error}
+            </span>
+          )}
+          {[reconcile, manualImport].map((m, i) =>
+            m.isError ? (
+              <span key={i} className="text-xs text-destructive">
+                {m.error instanceof Error ? m.error.message : "Request failed"}
+              </span>
+            ) : null,
+          )}
+          {subscribe.isError && (
+            <span className="text-xs text-destructive">
+              {subscribe.error instanceof Error ? subscribe.error.message : "Subscribe failed"}
+            </span>
+          )}
+          {reconcile.data && (
+            <span
+              className={
+                reconcile.data.ok ? "text-xs text-muted-foreground" : "text-xs text-destructive"
+              }
+            >
+              {reconcile.data.ok && reconcile.data.summary
+                ? `scanned ${reconcile.data.summary.scanned}, missing ${reconcile.data.summary.missingDetected + reconcile.data.summary.notIngested}, ingested ${reconcile.data.summary.ingested}, duplicates ${reconcile.data.summary.duplicates}`
+                : reconcile.data.error}
+            </span>
+          )}
+          {manualImport.data && (
+            <span
+              className={
+                manualImport.data.ok ? "text-xs text-muted-foreground" : "text-xs text-destructive"
+              }
+            >
+              {manualImport.data.ok
+                ? `Import: ${manualImport.data.outcome?.status}`
+                : manualImport.data.error}
+            </span>
+          )}
+        </div>
+      </div>
     </Panel>
   );
 }
