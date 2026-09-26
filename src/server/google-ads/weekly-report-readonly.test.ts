@@ -47,7 +47,7 @@ test("the ads-weekly cron route never references adsMutate", () => {
 });
 
 test("reports.server.ts issues no mutate or write calls of any kind", () => {
-  for (const forbidden of [":mutate", "adsWriteFreeze", "campaignBudgets", "adGroupCriteria"]) {
+  for (const forbidden of [":mutate", "adsWriteGate", "campaignBudgets", "adGroupCriteria"]) {
     assert.ok(!reportsCode.includes(forbidden), `unexpected write-path reference: ${forbidden}`);
   }
 });

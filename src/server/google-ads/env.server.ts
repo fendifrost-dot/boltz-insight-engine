@@ -76,3 +76,45 @@ export function adsConfigError(): string | null {
   if (missing.length === 0) return null;
   return `Google Ads is not configured. Missing: ${missing.join(", ")}.`;
 }
+
+// ---------------------------------------------------------------------------
+// Live-write gate
+// ---------------------------------------------------------------------------
+
+/**
+ * Name of the operator flag that enables live Google Ads mutations.
+ * Not a secret — a deployment switch — so it is deliberately not in
+ * ADS_SECRET_NAMES and never appears in `adsSecretStatus()`.
+ */
+export const ADS_WRITES_FLAG = "GOOGLE_ADS_WRITES_ENABLED";
+
+export type AdsWriteGate = { allowed: boolean; reason: string };
+
+/**
+ * Whether live ads mutations are permitted.
+ *
+ * This replaces the original time-based change-control freeze
+ * (`ADS_WRITE_FREEZE_UNTIL`, 2026-08-29), which expired silently and left
+ * `adsMutate` open while the UI still reported protection. A date constant is
+ * the wrong shape for this control: it stops protecting on a schedule, without
+ * anyone deciding that it should.
+ *
+ * This gate instead **fails closed and cannot lapse with time**. Live writes
+ * stay blocked until an operator explicitly sets the flag in Lovable Cloud
+ * secrets, and turning it back off is a single edit. Dry runs (`validateOnly`)
+ * are always permitted so changes can still be staged and reviewed.
+ */
+export function adsWriteGate(env: Record<string, string | undefined> = process.env): AdsWriteGate {
+  const raw = env[ADS_WRITES_FLAG];
+  // Only an exact, deliberate "true" opens the gate. Anything else — unset,
+  // empty, "1", "yes", "TRUE " with junk — stays closed rather than guessing.
+  if (raw !== undefined && raw.trim().toLowerCase() === "true") {
+    return { allowed: true, reason: `Live ads writes enabled by ${ADS_WRITES_FLAG}.` };
+  }
+  return {
+    allowed: false,
+    reason:
+      `Live ads writes are disabled. Set ${ADS_WRITES_FLAG}=true in Lovable Cloud ` +
+      `secrets to enable them. Dry runs (validateOnly) are always permitted.`,
+  };
+}

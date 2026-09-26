@@ -6,9 +6,11 @@ import { requireCapability } from "@/server/authz/require-capability.server";
 /**
  * Google Ads server functions.
  * - Reads: owner-only (integrations.manage), live via the Google Ads API.
- * - Writes: owner-only, require explicit confirmation, and are blocked by the
- *   Boltz change-control freeze until 2026-08-29 10:00 America/Chicago.
- *   Dry runs (validateOnly) are always allowed so changes can be staged.
+ * - Writes: owner-only, require explicit confirmation, and stay blocked unless an
+ *   operator has set GOOGLE_ADS_WRITES_ENABLED=true in Lovable Cloud secrets.
+ *   The gate fails closed and cannot lapse with time, unlike the date-based
+ *   freeze it replaced. Dry runs (validateOnly) are always allowed so changes
+ *   can be staged.
  */
 
 export const getAdsStatus = createServerFn({ method: "GET" })
@@ -16,9 +18,8 @@ export const getAdsStatus = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     await requireCapability(context, "integrations.manage");
     const { adsSecretStatus, adsConfigError } = await import("@/server/google-ads/env.server");
-    const { adsWriteFreezeActive, ADS_WRITE_FREEZE_UNTIL, adsSearch } = await import(
-      "@/server/google-ads/client.server"
-    );
+    const { adsWriteGate, ADS_WRITES_FLAG, adsSearch } =
+      await import("@/server/google-ads/client.server");
 
     const secrets = adsSecretStatus();
     const configError = adsConfigError();
@@ -45,8 +46,9 @@ export const getAdsStatus = createServerFn({ method: "GET" })
       reachable,
       accountName,
       detail,
-      writeFreezeActive: adsWriteFreezeActive(),
-      writeFreezeUntil: new Date(ADS_WRITE_FREEZE_UNTIL).toISOString(),
+      writesEnabled: adsWriteGate().allowed,
+      writeGateReason: adsWriteGate().reason,
+      writeGateFlag: ADS_WRITES_FLAG,
     };
   });
 

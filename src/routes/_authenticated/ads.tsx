@@ -13,7 +13,7 @@ export const Route = createFileRoute("/_authenticated/ads")({
       {
         name: "description",
         content:
-          "Internal Google Ads API read surface for Boltz Automotive: campaign spend, search terms, and freeze-gated change control.",
+          "Internal Google Ads API read surface for Boltz Automotive: campaign spend, search terms, and gated change control.",
       },
       { name: "robots", content: "noindex, nofollow" },
     ],
@@ -41,7 +41,7 @@ function AdsPage() {
       <PageHeader
         kicker="Paid search"
         title="Google Ads"
-        description="Live read-only pull from the Google Ads API. Writes require owner confirmation and stay blocked by the change-control freeze until 2026-08-29 10:00 America/Chicago."
+        description="Live read-only pull from the Google Ads API. Writes require owner confirmation and stay blocked unless GOOGLE_ADS_WRITES_ENABLED is set; dry runs are always permitted."
       />
 
       <Panel
@@ -55,8 +55,8 @@ function AdsPage() {
               <Tag tone={s.reachable ? "success" : "warning"}>
                 {s.reachable ? `Connected${s.accountName ? ` · ${s.accountName}` : ""}` : "Offline"}
               </Tag>
-              <Tag tone={s.writeFreezeActive ? "warning" : "neutral"}>
-                {s.writeFreezeActive ? "Write freeze ACTIVE" : "Writes permitted after approval"}
+              <Tag tone={s.writesEnabled ? "warning" : "neutral"}>
+                {s.writesEnabled ? "Live writes ENABLED" : "Live writes blocked"}
               </Tag>
             </div>
             {s.detail && (
@@ -105,7 +105,10 @@ function AdsPage() {
           <p className="font-mono text-xs text-destructive">{perf.data.error}</p>
         )}
         {perf.data?.ok && perf.data.campaigns.length === 0 && (
-          <EmptyState label="No campaigns returned" hint="The account reported no spend in range." />
+          <EmptyState
+            label="No campaigns returned"
+            hint="The account reported no spend in range."
+          />
         )}
         {perf.data?.ok && perf.data.campaigns.length > 0 && (
           <TableWrap>
@@ -172,10 +175,18 @@ function AdsPage() {
       <Panel title="Change control">
         <p className="text-sm text-muted-foreground">
           Campaign status writes are implemented server-side (owner capability + explicit
-          confirmation + dry-run default), but stay refused while the freeze is active. After the
-          freeze lifts, findings from this page go through the Decision Queue —
-          finding → hypothesis → proposed intervention → approval → deployment → measurement.
+          confirmation + dry-run default), and live writes stay refused unless an operator has set{" "}
+          <code className="font-mono text-xs">GOOGLE_ADS_WRITES_ENABLED</code> to{" "}
+          <code className="font-mono text-xs">true</code> in Lovable Cloud secrets. The gate fails
+          closed and does not lapse on its own. Dry runs are always permitted. Whether or not writes
+          are enabled, findings from this page go through the Decision Queue — finding → hypothesis
+          → proposed intervention → approval → deployment → measurement.
         </p>
+        {s && (
+          <p className="mt-2 rounded-md border border-border bg-muted/30 px-3 py-2 font-mono text-xs break-words text-muted-foreground">
+            {s.writeGateReason}
+          </p>
+        )}
       </Panel>
     </div>
   );

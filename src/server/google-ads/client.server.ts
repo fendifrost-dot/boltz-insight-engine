@@ -1,6 +1,7 @@
 // Server-only Google Ads API client (REST). Never import from client code.
 import {
   adsConfigError,
+  adsWriteGate,
   normalizeCustomerId,
   readAdsSecret,
   requireAdsSecret,
@@ -12,15 +13,7 @@ const API_VERSION = "v22";
 const API_BASE = `https://googleads.googleapis.com/${API_VERSION}`;
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 
-/**
- * Boltz change-control freeze. No production ads mutations before this instant.
- * 2026-08-29 10:00 America/Chicago (UTC-5) === 2026-08-29T15:00:00Z.
- */
-export const ADS_WRITE_FREEZE_UNTIL = Date.parse("2026-08-29T15:00:00Z");
-
-export function adsWriteFreezeActive(now: number = Date.now()): boolean {
-  return now < ADS_WRITE_FREEZE_UNTIL;
-}
+export { adsWriteGate, ADS_WRITES_FLAG, type AdsWriteGate } from "./env.server";
 
 let cachedToken: { value: string; expiresAt: number } | null = null;
 
@@ -69,9 +62,7 @@ export function adsCustomerId(): string {
 
 /** Strip anything that looks like a token out of provider error text. */
 function redact(text: string): string {
-  return text
-    .replace(/(ya29|1\/\/)[A-Za-z0-9._\-]+/g, "[redacted-token]")
-    .slice(0, 800);
+  return text.replace(/(ya29|1\/\/)[A-Za-z0-9._\-]+/g, "[redacted-token]").slice(0, 800);
 }
 
 /** Run a GAQL query via searchStream and return flattened result rows. */
@@ -86,7 +77,8 @@ export async function adsSearch<T = Record<string, unknown>>(query: string): Pro
     body: JSON.stringify({ query }),
   });
   const text = await response.text();
-  if (!response.ok) throw new Error(`Google Ads query failed (${response.status}): ${redact(text)}`);
+  if (!response.ok)
+    throw new Error(`Google Ads query failed (${response.status}): ${redact(text)}`);
 
   const payload = JSON.parse(text) as unknown;
   const chunks = Array.isArray(payload) ? payload : [payload];
@@ -99,7 +91,7 @@ export async function adsSearch<T = Record<string, unknown>>(query: string): Pro
 }
 
 /**
- * Mutation entry point. Every write goes through here so the freeze and the
+ * Mutation entry point. Every write goes through here so the write gate and the
  * explicit-confirmation rule cannot be bypassed by a caller.
  */
 export async function adsMutate(
@@ -110,12 +102,9 @@ export async function adsMutate(
   if (!opts.confirmed) {
     return { ok: false, reason: "Write not confirmed by an owner — refused." };
   }
-  if (adsWriteFreezeActive() && !opts.validateOnly) {
-    return {
-      ok: false,
-      reason:
-        "Change-control freeze active until 2026-08-29 10:00 America/Chicago. Live ads writes are blocked; run with validateOnly to dry-run.",
-    };
+  const gate = adsWriteGate();
+  if (!gate.allowed && !opts.validateOnly) {
+    return { ok: false, reason: gate.reason };
   }
 
   const token = await getAccessToken();
