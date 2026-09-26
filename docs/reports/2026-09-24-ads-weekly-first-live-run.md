@@ -169,40 +169,29 @@ as an expired constant that reads like protection.
 
 Scheduling is **resolved and needs no build**: the Monday agent pulls the endpoint
 itself (owner decision, 2026-09-24). No pg_cron job, no snapshot table, no new
-infrastructure. See the section below for why, and
-`docs/handoffs/2026-09-24-ads-weekly-monday-agent-brief.md` for how the agent
-should consume the response.
+infrastructure. See `docs/handoffs/2026-09-24-ads-weekly-monday-agent-brief.md`
+for how the agent should consume the response.
 
-Remaining items are both **owner decisions, not engineering work**:
+**The expired write freeze is resolved in code** (2026-09-26). `adsWriteGate()`
+replaces the date constant: it fails closed, has no time dependence, and blocks
+live writes until an operator sets `GOOGLE_ADS_WRITES_ENABLED=true`. Unset means
+blocked, so no Lovable action is needed to be safe. Dry runs stay permitted. The
+Ads page now reports the real state instead of implying an approval workflow that
+had lapsed.
 
-- **Conversion-action restructuring** — needs owner approval (above). Highest
-  leverage item on the Ads side.
-- **Expired write freeze** — needs a deliberate decision (above).
+**The conversion-action breakdown is now in the report** (2026-09-26).
+`conversion_actions` splits the window per conversion action, so the double
+counting found by manual audit is visible in the feed every week. It is additive
+and non-fatal: those GAQL fields are not yet validated against this account, so a
+failure yields an empty list plus a note rather than breaking the working report.
+**Confirm on the next live run** whether `conversion_actions` is populated or
+`conversion_actions_error` is set.
 
-## Why a plain pg_cron trigger is not the right Monday wiring
+Remaining item is **not engineering work**:
 
-The documented scheduling idiom for this repo is pg_cron + pg_net posting to the
-published URL (see `docs/RINGCENTRAL_HANDOFF.md`). That is correct for the three
-lead-inbox endpoints, because each one _does work_ as a side effect — draining
-jobs, reconciling messages, renewing subscriptions. The HTTP response is
-incidental.
-
-`ads-weekly` is the opposite: it has **no side effect**. Its entire value is the
-JSON it returns. V1 deliberately has no snapshot table. So a pg_cron job would
-fire it on Monday, Google would be queried, and the report would be **thrown
-away** — pg_net parks the response in `net._http_response` with a short TTL, which
-is not a place to read a weekly business report from.
-
-Two coherent options:
-
-1. **Agent-pull (no new infrastructure).** The Monday agent calls the endpoint
-   when it runs and uses the response directly. This is what the current
-   architecture supports, and it needs nothing built. If the agent is already
-   scheduled, the job is done.
-2. **Cron-push plus a snapshot table (V2).** Add an `ads_weekly_snapshots` table,
-   have the endpoint persist each run, and let pg_cron fire it Monday. This buys
-   durable history and week-over-week comparison, which V1 cannot do at all since
-   every call is live. It requires a migration through the Lovable SQL editor.
-
-Option 1 unless durable history is wanted. Option 2 is the natural V2 and is
-where week-over-week trend analysis would come from.
+- **Conversion-action restructuring in the Google Ads account** — one primary
+  action per real business outcome, real values, secondary actions demoted. This
+  is a live-account change that can affect delivery, because Smart Campaigns bid
+  on conversions; changing which actions are Primary changes bidding behaviour.
+  Owner decision, through the Decision Queue. Until it happens, `conversions` and
+  `conversions_value` are diagnostic only.
