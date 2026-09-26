@@ -195,3 +195,43 @@ test("no secret name is ever placed in the report payload or logged", () => {
 test("the report never logs the raw provider response", () => {
   assert.ok(!reportsCode.includes("console.log"), "no ad-hoc logging in the report path");
 });
+
+// --- Conversion-action breakdown (additive, must never break the report) ------
+
+test("the conversion-action breakdown is its own resource, not blended in", () => {
+  assert.ok(
+    reportsCode.includes("segments.conversion_action_name"),
+    "the breakdown must segment by conversion action",
+  );
+  // It reads FROM campaign; the keyword and search-term queries must be untouched.
+  assert.equal(reportsCode.split("FROM keyword_view").length - 1, 1);
+  assert.equal(reportsCode.split("FROM search_term_view").length - 1, 1);
+});
+
+test("a conversion-action failure cannot fail the weekly report", () => {
+  const start = reportsCode.indexOf("export async function getWeeklyConversionActions");
+  assert.ok(start >= 0, "missing getWeeklyConversionActions");
+  const next = reportsCode.indexOf("\nexport ", start + 1);
+  const block = reportsCode.slice(start, next >= 0 ? next : undefined);
+  assert.match(block, /try \{/, "the query must be wrapped in try/catch");
+  assert.match(block, /catch \(error\)/, "the query must catch provider failures");
+  assert.match(block, /rows: \[\]/, "a failure must yield an empty list, not a throw");
+  assert.ok(!/throw /.test(block), "it must never rethrow");
+});
+
+test("the combined report surfaces a breakdown failure instead of hiding it", () => {
+  assert.ok(reportsCode.includes("conversion_actions_error"), "the error must reach the caller");
+  assert.ok(
+    reportsCode.includes("conversionActions.error"),
+    "a failed breakdown must add an explanatory note",
+  );
+});
+
+test("the breakdown does not introduce a mutation path", () => {
+  const start = reportsCode.indexOf("export async function getWeeklyConversionActions");
+  const next = reportsCode.indexOf("\nexport ", start + 1);
+  const block = reportsCode.slice(start, next >= 0 ? next : undefined);
+  for (const forbidden of ["adsMutate", ":mutate", "POST"]) {
+    assert.ok(!block.includes(forbidden), `unexpected write reference: ${forbidden}`);
+  }
+});

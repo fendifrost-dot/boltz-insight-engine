@@ -56,6 +56,13 @@ export type KeywordRow = {
   conversions_value: number;
 };
 
+export type ConversionActionRow = {
+  conversion_action_name: string;
+  conversion_action_category: string;
+  conversions: number;
+  conversions_value: number;
+};
+
 export type MetricTotals = {
   impressions: number;
   clicks: number;
@@ -73,9 +80,19 @@ export type AdsWeeklyReport = {
   };
   search_terms: SearchTermRow[];
   keywords: KeywordRow[];
+  /**
+   * Per-conversion-action breakdown of the same window. A single blended
+   * `conversions` number hides double counting; this makes it legible.
+   * Empty with a non-null `conversion_actions_error` if the breakdown could not
+   * be fetched — that never fails the report.
+   */
+  conversion_actions: ConversionActionRow[];
+  conversion_actions_error: string | null;
   summary: MetricTotals & {
     search_term_rows: number;
     keyword_rows: number;
+    /** Distinct conversion actions that recorded anything in the window. */
+    conversion_action_count: number;
     /** True when either report hit `ROW_LIMIT`; totals are then partial. */
     truncated: boolean;
   };
@@ -83,6 +100,7 @@ export type AdsWeeklyReport = {
   resources: {
     search_terms: "search_term_view";
     keywords: "keyword_view";
+    conversion_actions: "campaign segmented by conversion_action_name";
   };
   notes: string[];
   generated_at: string;
@@ -258,6 +276,70 @@ export async function getWeeklyKeywords(
 }
 
 // ---------------------------------------------------------------------------
+// Conversion actions — per-action breakdown of the same window.
+//
+// A single blended `conversions` figure cannot show double counting. Splitting
+// by conversion action makes it visible in the feed every week instead of
+// depending on a manual audit: two call actions both recording, or an
+// engagement action outscoring a booking, is then obvious from the data.
+//
+// This is additive and deliberately non-fatal. The fields below have not been
+// validated against this account, so a failure here must never take down the
+// Search Terms and Keywords report, which has been.
+// ---------------------------------------------------------------------------
+
+export async function getWeeklyConversionActions(
+  period: AdsReportPeriod,
+): Promise<{ rows: ConversionActionRow[]; error: string | null }> {
+  try {
+    const raw = await adsSearch<GaqlRow>(
+      `SELECT segments.conversion_action_name,
+              segments.conversion_action_category,
+              metrics.conversions,
+              metrics.conversions_value
+       FROM campaign
+       WHERE ${dateClause(period)}
+       ORDER BY metrics.conversions DESC
+       LIMIT ${ROW_LIMIT}`,
+    );
+
+    // Rows arrive per campaign × action; fold to one row per action.
+    const byAction = new Map<string, ConversionActionRow>();
+    for (const r of raw) {
+      const segments = r["segments"] ?? {};
+      const name = str(segments.conversionActionName);
+      if (!name) continue;
+      const existing = byAction.get(name);
+      const conversions = num(r["metrics"]?.conversions);
+      const value = num(r["metrics"]?.conversionsValue);
+      if (existing) {
+        existing.conversions += conversions;
+        existing.conversions_value += value;
+      } else {
+        byAction.set(name, {
+          conversion_action_name: name,
+          conversion_action_category: str(segments.conversionActionCategory),
+          conversions,
+          conversions_value: value,
+        });
+      }
+    }
+
+    const rows = [...byAction.values()]
+      .filter((row) => row.conversions > 0 || row.conversions_value > 0)
+      .sort((a, b) => b.conversions - a.conversions);
+
+    return { rows, error: null };
+  } catch (error) {
+    // Already provider-redacted by adsSearch.
+    return {
+      rows: [],
+      error: error instanceof Error ? error.message : "Unknown Google Ads error",
+    };
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Combined weekly report
 // ---------------------------------------------------------------------------
 
@@ -278,9 +360,10 @@ export async function getAdsWeeklyReport(
     now: opts.now,
   });
 
-  const [searchTerms, keywords] = await Promise.all([
+  const [searchTerms, keywords, conversionActions] = await Promise.all([
     getWeeklySearchTerms(period),
     getWeeklyKeywords(period),
+    getWeeklyConversionActions(period),
   ]);
 
   // Search terms and keywords both roll up the same underlying clicks, so
@@ -298,6 +381,16 @@ export async function getAdsWeeklyReport(
       `Row cap of ${ROW_LIMIT} reached; totals are partial and must not be reconciled against the Ads UI.`,
     );
   }
+  if (conversionActions.error) {
+    notes.push(
+      "The per-conversion-action breakdown could not be fetched; conversion totals are blended and double counting cannot be ruled out from this report alone.",
+    );
+  } else if (conversionActions.rows.length > 1) {
+    notes.push(
+      `Conversions are spread across ${conversionActions.rows.length} conversion actions (see conversion_actions). ` +
+        "Review it before treating `conversions` as a business outcome: overlapping actions -- for example a call-button tap counted alongside the connected call -- inflate the blended figure.",
+    );
+  }
 
   return {
     period,
@@ -308,15 +401,19 @@ export async function getAdsWeeklyReport(
     },
     search_terms: searchTerms.rows,
     keywords: keywords.rows,
+    conversion_actions: conversionActions.rows,
+    conversion_actions_error: conversionActions.error,
     summary: {
       ...totals,
       search_term_rows: searchTerms.rows.length,
       keyword_rows: keywords.rows.length,
+      conversion_action_count: conversionActions.rows.length,
       truncated,
     },
     resources: {
       search_terms: "search_term_view",
       keywords: "keyword_view",
+      conversion_actions: "campaign segmented by conversion_action_name",
     },
     notes,
     generated_at: new Date().toISOString(),
