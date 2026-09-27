@@ -1,11 +1,12 @@
 // Single outbound send path: capability check, idempotency, audit.
 import { resolveSmsCapability, sendSms, redact } from "./ringcentral.server";
 import { requireSecret } from "./env.server";
-import { validateOutbound } from "./safety.server";
+import { describeOutboundBlock, validateOutbound } from "./safety.server";
 import { addEvent, recordHealth, recordOutboundMessage, toE164 } from "./store.server";
 import type { MessageRow } from "./store.server";
 
-let capabilityCache: { value: Awaited<ReturnType<typeof resolveSmsCapability>>; at: number } | undefined;
+let capabilityCache:
+  { value: Awaited<ReturnType<typeof resolveSmsCapability>>; at: number } | undefined;
 
 export async function cachedCapability(force = false) {
   if (!force && capabilityCache && Date.now() - capabilityCache.at < 10 * 60_000) {
@@ -30,10 +31,12 @@ export async function sendOutbound(args: {
 }): Promise<SendOutcome> {
   const check = validateOutbound(args.text);
   if (!check.ok) {
-    await addEvent(args.leadId, "outbound_blocked", "Outbound text blocked by policy validation", args.actor, {
+    const reason = describeOutboundBlock(check);
+    await addEvent(args.leadId, "outbound_blocked", reason, args.actor, {
       tags: check.tags,
+      problems: check.problems,
     });
-    return { ok: false, reason: "Blocked by outbound policy validation", tags: check.tags };
+    return { ok: false, reason, tags: check.tags };
   }
 
   const capability = await cachedCapability();
