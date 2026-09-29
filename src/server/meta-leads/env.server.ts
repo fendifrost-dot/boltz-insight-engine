@@ -26,7 +26,7 @@ export const META_OPTIONAL_SECRETS: MetaSecretName[] = [
 ];
 
 /** Bump when Meta sunsets it; each Graph version lives roughly two years. */
-export const DEFAULT_GRAPH_API_VERSION = "v24.0";
+export const DEFAULT_GRAPH_API_VERSION = "v26.0";
 
 export function readMetaSecret(name: MetaSecretName): string | undefined {
   const value = process.env[name];

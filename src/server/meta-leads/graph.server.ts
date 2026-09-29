@@ -32,19 +32,60 @@ function base(): string {
   return `https://graph.facebook.com/${graphApiVersion()}`;
 }
 
+let pageTokenCache: {
+  stored: string;
+  token: string;
+  source: "stored" | "derived";
+  until: number;
+} | null = null;
+
+/**
+ * The token used for Page endpoints. The stored credential may be a Page
+ * token, or a User / System-user token with a role on the Page; in the latter
+ * case Meta rejects Page calls ("must be called with a Page Access Token").
+ * Asking the Page for its own access_token with the stored credential yields
+ * a Page token either way, so the Engine works with whichever was stored.
+ */
+export async function pageAccessToken(): Promise<{ token: string; source: "stored" | "derived" }> {
+  const stored = requireMetaSecret("META_PAGE_ACCESS_TOKEN");
+  if (pageTokenCache && pageTokenCache.stored === stored && Date.now() < pageTokenCache.until) {
+    return { token: pageTokenCache.token, source: pageTokenCache.source };
+  }
+  let token = stored;
+  let source: "stored" | "derived" = "stored";
+  let ttl = 5 * 60_000;
+  try {
+    const res = await graphRequest<{ access_token?: string }>(
+      `/${encodeURIComponent(requireMetaSecret("META_PAGE_ID"))}`,
+      { fields: "access_token" },
+      { token: stored },
+    );
+    if (res.access_token) {
+      source = res.access_token === stored ? "stored" : "derived";
+      token = res.access_token;
+      ttl = 30 * 60_000;
+    }
+  } catch {
+    // Fall back to the stored value; the real call will surface Meta's error.
+  }
+  pageTokenCache = { stored, token, source, until: Date.now() + ttl };
+  return { token, source };
+}
+
 async function graphRequest<T>(
   pathOrUrl: string,
   params: Record<string, string> = {},
-  init: { method?: "GET" | "POST"; token?: string } = {},
+  init: { method?: "GET" | "POST"; token?: string; appToken?: boolean } = {},
 ): Promise<T> {
   const url = new URL(pathOrUrl.startsWith("https://") ? pathOrUrl : `${base()}${pathOrUrl}`);
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
   if (!url.searchParams.has("access_token")) {
-    const token = init.token ?? requireMetaSecret("META_PAGE_ACCESS_TOKEN");
+    const token = init.token ?? (await pageAccessToken()).token;
     url.searchParams.set("access_token", token);
     // appsecret_proof satisfies apps with "Require App Secret" on; harmless otherwise.
+    // App tokens (id|secret) never take a proof.
     const appSecret = readMetaSecret("META_APP_SECRET");
-    if (appSecret && !init.token) {
+    if (appSecret && !init.appToken) {
       url.searchParams.set("appsecret_proof", await hmacSha256Hex(appSecret, token));
     }
   }
@@ -55,17 +96,29 @@ async function graphRequest<T>(
   const text = await res.text();
   if (!res.ok) {
     let code: number | null = null;
+    let subcode: number | null = null;
     let message = text;
     try {
-      const parsed = JSON.parse(text) as { error?: { code?: number; message?: string } };
+      const parsed = JSON.parse(text) as {
+        error?: { code?: number; error_subcode?: number; message?: string };
+      };
       code = parsed.error?.code ?? null;
+      subcode = parsed.error?.error_subcode ?? null;
       message = parsed.error?.message ?? text;
     } catch {
       // non-JSON error body
     }
     const path = url.pathname.replace(/^\/v\d+\.\d+/, "");
+    // Always carry Meta's numeric code: operators match on it, and the
+    // message text alone often omits it.
+    const codes = [
+      code !== null ? `code ${code}` : null,
+      subcode !== null ? `subcode ${subcode}` : null,
+    ]
+      .filter(Boolean)
+      .join(", ");
     throw new GraphError(
-      `Graph ${path} failed (${res.status}): ${redactGraph(message)}`,
+      `Graph ${path} failed (${res.status}${codes ? `, ${codes}` : ""}): ${redactGraph(message)}`,
       res.status,
       code,
     );
@@ -211,6 +264,8 @@ export async function subscribePageLeadgen(pageId: string): Promise<boolean> {
 }
 
 export type TokenDebug = {
+  /** "derived": the stored credential was a User/System-user token and the Engine derived the Page token. */
+  source: "stored" | "derived";
   isValid: boolean;
   type: string | null;
   expiresAt: string | null;
@@ -222,6 +277,7 @@ export type TokenDebug = {
 /** Inspects the Page token with an app token; never returns the token itself. */
 export async function debugPageToken(): Promise<TokenDebug> {
   const appToken = `${requireMetaSecret("META_APP_ID")}|${requireMetaSecret("META_APP_SECRET")}`;
+  const effective = await pageAccessToken();
   const res = await graphRequest<{
     data?: {
       is_valid?: boolean;
@@ -233,11 +289,13 @@ export async function debugPageToken(): Promise<TokenDebug> {
     };
   }>(
     "/debug_token",
-    { input_token: requireMetaSecret("META_PAGE_ACCESS_TOKEN") },
-    { token: appToken },
+    // Inspect the token actually used for Page calls, not just the stored one.
+    { input_token: effective.token },
+    { token: appToken, appToken: true },
   );
   const d = res.data ?? {};
   return {
+    source: effective.source,
     isValid: d.is_valid === true,
     type: d.type ?? null,
     // expires_at 0 means a never-expiring Page / system-user token.
