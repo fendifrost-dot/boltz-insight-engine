@@ -221,10 +221,13 @@ export async function getMetaHealth() {
             expiresAt: t.expiresAt,
             missingScopes,
             detail:
-              t.error ??
-              (missingScopes.length > 0
-                ? `Missing scopes: ${missingScopes.join(", ")}`
-                : "Token valid"),
+              (t.error ??
+                (missingScopes.length > 0
+                  ? `Missing scopes: ${missingScopes.join(", ")}`
+                  : "Token valid")) +
+              (t.source === "derived"
+                ? " (Page token derived from the stored User/System-user credential)"
+                : ""),
           };
         } catch (error) {
           token.status = "invalid";

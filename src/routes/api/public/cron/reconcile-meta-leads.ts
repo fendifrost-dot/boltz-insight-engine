@@ -12,7 +12,13 @@ async function run(request: Request): Promise<Response> {
 
   const { metaConfigError } = await import("@/server/meta-leads/env.server");
   const configError = metaConfigError();
-  if (configError) return Response.json({ error: configError }, { status: 503 });
+  if (configError) {
+    // Leave a trace in the health log (secret names only, never values) so a
+    // scheduled run that can't start is visible, not silent.
+    const { recordHealth } = await import("@/server/lead-inbox/store.server");
+    await recordHealth({ provider: "meta", checkName: "config", ok: false, detail: configError });
+    return Response.json({ error: configError }, { status: 503 });
+  }
 
   const params = new URL(request.url).searchParams;
   const windowParam = params.get("window") ?? "incremental";

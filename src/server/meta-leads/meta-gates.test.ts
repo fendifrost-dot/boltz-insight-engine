@@ -191,3 +191,33 @@ test("Meta panel shows the actual failure and keeps actions available", () => {
   const conditionalEnd = panel.indexOf(`<div className="mt-4">`);
   assert.ok(conditionalEnd > 0 && panel.indexOf("subscribe.mutate()") > conditionalEnd);
 });
+
+const graph = read("src/server/meta-leads/graph.server.ts");
+const reconcileRouteSrc = read("src/routes/api/public/cron/reconcile-meta-leads.ts");
+
+test("Page calls use a Page token derived from whatever credential is stored", () => {
+  assert.match(graph, /export async function pageAccessToken\(\)/);
+  assert.match(
+    graph,
+    /\{ fields: "access_token" \}/,
+    "derives via GET /{page}?fields=access_token",
+  );
+  assert.match(
+    graph,
+    /init\.token \?\? \(await pageAccessToken\(\)\)\.token/,
+    "default token is the derived one",
+  );
+  assert.match(graph, /appToken: true/, "app tokens never get an appsecret_proof");
+});
+
+test("Graph errors always carry Meta's numeric code", () => {
+  assert.match(graph, /code \$\{code\}/);
+  assert.match(graph, /subcode \$\{subcode\}/);
+});
+
+test("a reconcile run blocked by missing config leaves a health-log trace", () => {
+  const cfg = reconcileRouteSrc.indexOf("if (configError)");
+  const trace = reconcileRouteSrc.indexOf('checkName: "config"');
+  const deny = reconcileRouteSrc.indexOf("status: 503");
+  assert.ok(cfg >= 0 && trace > cfg && deny > trace);
+});
