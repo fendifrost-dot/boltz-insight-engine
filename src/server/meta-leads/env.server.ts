@@ -1,4 +1,5 @@
 // Server-only secret access for Meta Lead Ads. Never import from client code.
+import { parsePageIdList } from "./pages";
 
 export type MetaSecretName =
   | "META_APP_ID"
@@ -75,6 +76,11 @@ function maskMeta(name: MetaSecretName, value: string): string | null {
   if (name === "META_APP_ID" || name === "META_PAGE_ID") return value;
   if (name === "META_GRAPH_API_VERSION" || name === "META_AUTO_FIRST_TOUCH") return value;
   return `configured (${value.length} chars)`;
+}
+
+/** Page ids from META_PAGE_ID. A comma-separated list is allowed. */
+export function configuredLeadgenPageIds(): string[] {
+  return parsePageIdList(readMetaSecret("META_PAGE_ID"));
 }
 
 export function metaConfigError(): string | null {

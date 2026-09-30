@@ -211,6 +211,20 @@ export function MetaHealthPanel() {
                   : ""}
               </span>
             </Row>
+            <Row label="Forms seen">
+              <span className="text-xs">
+                {data.reconciliation.formsSeen === null
+                  ? "Not recorded yet"
+                  : `${data.reconciliation.formsSeen} forms`}
+              </span>
+              {data.reconciliation.formStats.length > 0 && (
+                <span className="break-all font-mono text-[10px] text-muted-foreground">
+                  {data.reconciliation.formStats
+                    .map((form) => `${form.formId} @ ${form.pageId} (${form.leads})`)
+                    .join(" · ")}
+                </span>
+              )}
+            </Row>
             <Row label="Missing leads">
               <Tag tone={data.counts.notIngested > 0 ? "danger" : "success"}>
                 {data.counts.notIngested} not ingested
@@ -353,7 +367,7 @@ export function MetaHealthPanel() {
               }
             >
               {reconcile.data.ok && reconcile.data.summary
-                ? `scanned ${reconcile.data.summary.scanned}, missing ${reconcile.data.summary.missingDetected + reconcile.data.summary.notIngested}, ingested ${reconcile.data.summary.ingested}, duplicates ${reconcile.data.summary.duplicates}`
+                ? `forms ${reconcile.data.summary.forms}, scanned ${reconcile.data.summary.scanned}, missing ${reconcile.data.summary.missingDetected + reconcile.data.summary.notIngested}, ingested ${reconcile.data.summary.ingested}, duplicates ${reconcile.data.summary.duplicates}`
                 : reconcile.data.error}
             </span>
           )}

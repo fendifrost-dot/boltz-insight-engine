@@ -1,0 +1,39 @@
+// Which Pages reconciliation lists Instant Forms for. Public Page ids only.
+
+/** Page subscribed for leadgen. Always scanned. */
+export const SUBSCRIBED_LEADGEN_PAGE_ID = "433712466491882";
+
+/** Duplicate Page. Scanned only when it appears in the configured page id list. */
+export const DUPLICATE_LEADGEN_PAGE_ID = "101035642014297";
+
+const PAGE_ID = /^\d{5,32}$/;
+
+export type LeadgenPage = {
+  pageId: string;
+  reason: "subscribed" | "configured";
+};
+
+/** Splits a comma- or whitespace-separated list of Page ids. Drops anything else. */
+export function parsePageIdList(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  const ids: string[] = [];
+  for (const part of raw.split(/[\s,]+/)) {
+    const id = part.trim();
+    if (!PAGE_ID.test(id) || ids.includes(id)) continue;
+    ids.push(id);
+  }
+  return ids;
+}
+
+/**
+ * Subscribed Page first, then every other configured Page id (the duplicate
+ * Page only when META_PAGE_ID contains it). Ids are de-duplicated.
+ */
+export function leadgenPagesToScan(configured: readonly string[]): LeadgenPage[] {
+  const pages: LeadgenPage[] = [{ pageId: SUBSCRIBED_LEADGEN_PAGE_ID, reason: "subscribed" }];
+  for (const id of configured) {
+    if (!PAGE_ID.test(id) || pages.some((page) => page.pageId === id)) continue;
+    pages.push({ pageId: id, reason: "configured" });
+  }
+  return pages;
+}

@@ -198,6 +198,50 @@ test("fillBlankLeadFields never overwrites existing lead data", () => {
   assert.deepEqual(updates, { email: "form@example.com", vehicle_make: "Toyota" });
 });
 
+test("service need, insurance, and year/make/model map together", () => {
+  const n = normalizeFieldData([
+    { name: "full_name", values: ["Casey Example"] },
+    { name: "phone_number", values: ["+13125550102"] },
+    { name: "email", values: ["casey@example.com"] },
+    { name: "What does the car need?", values: ["Brakes"] },
+    { name: "Is this going through insurance?", values: ["Yes"] },
+    { name: "Year, make and model?", values: ["2018 Toyota Camry"] },
+  ]);
+  assert.equal(n.name, "Casey Example");
+  assert.equal(n.phone_e164, "+13125550102");
+  assert.equal(n.email, "casey@example.com");
+  assert.equal(n.vehicle_year, 2018);
+  assert.equal(n.vehicle_make, "Toyota");
+  assert.equal(n.vehicle_model, "Camry");
+  assert.match(n.symptoms ?? "", /Brakes/);
+  assert.match(n.symptoms ?? "", /Insurance: Yes/);
+  assert.deepEqual(n.other_answers, []);
+});
+
+test("a service answer that mentions a year stays in symptoms", () => {
+  const n = normalizeFieldData([
+    { name: "what_does_the_car_need?", values: ["2016 alignment"] },
+    { name: "year_make_and_model", values: ["2018 Toyota Camry"] },
+  ]);
+  assert.match(n.symptoms ?? "", /2016 alignment/);
+  assert.equal(n.vehicle_year, 2018);
+  assert.equal(n.vehicle_make, "Toyota");
+  assert.equal(n.vehicle_model, "Camry");
+});
+
+test("existing vehicle and problem questions still map when insurance is present", () => {
+  const n = normalizeFieldData([
+    { name: "what_year,_make_and_model_is_your_vehicle?", values: ["2014 Honda Accord EX"] },
+    { name: "describe_the_problem", values: ["Knocking noise"] },
+    { name: "is_this_going_through_insurance?", values: ["No"] },
+  ]);
+  assert.equal(n.vehicle_year, 2014);
+  assert.equal(n.vehicle_make, "Honda");
+  assert.equal(n.vehicle_model, "Accord EX");
+  assert.match(n.symptoms ?? "", /Knocking noise/);
+  assert.match(n.symptoms ?? "", /Insurance: No/);
+});
+
 test("formSummary is readable and bounded", () => {
   const summary = formSummary(
     normalizeFieldData([

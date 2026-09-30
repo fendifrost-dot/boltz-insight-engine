@@ -11,13 +11,14 @@ import {
 } from "@/server/lead-inbox/store.server";
 import type { LeadRow } from "@/server/lead-inbox/store.server";
 import { readMetaSecret } from "./env.server";
-import { GraphError, getForm, getLead } from "./graph.server";
+import { GraphError, getForm, getLead, pageAccessTokenFor } from "./graph.server";
 import {
   META_LEAD_SOURCE,
   buildConsentEvidence,
   fillBlankLeadFields,
   formSummary,
   normalizeFieldData,
+  normalizePhone,
   resolvePlatform,
 } from "./normalize";
 import type { GraphLead, LeadgenEvent } from "./normalize";
@@ -38,6 +39,7 @@ export async function recordReceipt(args: {
   metaLeadId: string;
   method: IngestionMethod;
   event?: LeadgenEvent | undefined;
+  pageId?: string | undefined;
   webhookPayload?: unknown;
 }): Promise<boolean> {
   const { data, error } = await supabaseAdmin
@@ -46,7 +48,7 @@ export async function recordReceipt(args: {
       {
         meta_lead_id: args.metaLeadId,
         ingestion_method: args.method,
-        page_id: args.event?.pageId ?? null,
+        page_id: args.event?.pageId ?? args.pageId ?? null,
         form_id: args.event?.formId ?? null,
         ad_id: args.event?.adId ?? null,
         created_time: args.event?.createdTime ?? null,
@@ -61,9 +63,15 @@ export async function recordReceipt(args: {
 }
 
 export type IngestOutcome =
-  | { status: "ingested"; leadId: string; created: boolean; submissionId: string }
-  | { status: "duplicate"; leadId: string | null; submissionId: string }
-  | { status: "failed"; error: string };
+  | {
+      status: "ingested";
+      leadId: string;
+      created: boolean;
+      submissionId: string;
+      alreadyContacted: boolean;
+    }
+  | { status: "duplicate"; leadId: string | null; submissionId: string; alreadyContacted: boolean }
+  | { status: "failed"; error: string; alreadyContacted: false };
 
 /**
  * Fetches (unless `prefetched`), normalizes and links one Meta lead. Safe to
@@ -75,8 +83,22 @@ export async function ingestMetaLead(args: {
   method: IngestionMethod;
   prefetched?: GraphLead | undefined;
   event?: LeadgenEvent | undefined;
+  /** Page that owns the form. Stored on the row; used to read that Page's token. */
+  pageId?: string | undefined;
+  /**
+   * Backfill sets this. The lead is stored and deduped, and no `message_jobs`
+   * row is enqueued. `suppress_first_touch` blocks a later job from sending.
+   */
+  suppressFirstTouch?: boolean | undefined;
+  /** E.164 numbers, compared in memory. Never log this set. */
+  contactedPhones?: ReadonlySet<string> | undefined;
 }): Promise<IngestOutcome> {
-  await recordReceipt({ metaLeadId: args.metaLeadId, method: args.method, event: args.event });
+  await recordReceipt({
+    metaLeadId: args.metaLeadId,
+    method: args.method,
+    event: args.event,
+    pageId: args.pageId,
+  });
 
   const { data: row, error: rowError } = await supabaseAdmin
     .from("meta_lead_submissions")
@@ -85,11 +107,21 @@ export async function ingestMetaLead(args: {
     .single();
   if (rowError) throw rowError;
   if (row.ingest_status === "ingested") {
-    return { status: "duplicate", leadId: row.lead_id, submissionId: row.id };
+    const alreadyContacted = await maybeApplyBackfillMarkers({
+      submissionId: row.id,
+      leadId: row.lead_id,
+      metaLeadId: args.metaLeadId,
+      alreadySuppressed: row.suppress_first_touch === true,
+      suppressFirstTouch: args.suppressFirstTouch === true,
+      contactedPhones: args.contactedPhones,
+    });
+    return { status: "duplicate", leadId: row.lead_id, submissionId: row.id, alreadyContacted };
   }
 
   try {
-    const graphLead = args.prefetched ?? (await getLead(args.metaLeadId));
+    const pageId = args.pageId ?? args.event?.pageId ?? undefined;
+    const token = pageId ? (await pageAccessTokenFor(pageId)).token : undefined;
+    const graphLead = args.prefetched ?? (await getLead(args.metaLeadId, token));
     const fetchedAt = new Date().toISOString();
     if (!args.prefetched) {
       await recordHealth({
@@ -100,7 +132,7 @@ export async function ingestMetaLead(args: {
       });
     }
     const formId = graphLead.form_id ?? row.form_id;
-    const form = formId ? await getForm(formId).catch(() => null) : null;
+    const form = formId ? await getForm(formId, token).catch(() => null) : null;
     const platform = resolvePlatform(graphLead.platform);
     const normalized = normalizeFieldData(graphLead.field_data);
     const consent = buildConsentEvidence({ lead: graphLead, form, platform, nowIso: fetchedAt });
@@ -145,7 +177,8 @@ export async function ingestMetaLead(args: {
         ingest_status: "ingested",
         platform,
         is_organic: graphLead.is_organic ?? null,
-        page_id: row.page_id ?? readMetaSecret("META_PAGE_ID") ?? null,
+        page_id: row.page_id ?? pageId ?? readMetaSecret("META_PAGE_ID") ?? null,
+        ...(args.suppressFirstTouch ? { suppress_first_touch: true } : {}),
         form_id: formId ?? null,
         form_name: form?.name ?? null,
         ad_id: graphLead.ad_id ?? row.ad_id,
@@ -173,7 +206,16 @@ export async function ingestMetaLead(args: {
     if (updateError) throw updateError;
     // A concurrent path (webhook vs reconciliation) finished first: stay silent.
     if ((claimed ?? []).length === 0) {
-      return { status: "duplicate", leadId: lead.id, submissionId: row.id };
+      const alreadyContacted = await maybeApplyBackfillMarkers({
+        submissionId: row.id,
+        leadId: lead.id,
+        metaLeadId: args.metaLeadId,
+        alreadySuppressed: row.suppress_first_touch === true,
+        suppressFirstTouch: args.suppressFirstTouch === true,
+        contactedPhones: args.contactedPhones,
+        phone: lead.phone_e164,
+      });
+      return { status: "duplicate", leadId: lead.id, submissionId: row.id, alreadyContacted };
     }
 
     await addEvent(
@@ -191,21 +233,37 @@ export async function ingestMetaLead(args: {
       },
     );
 
-    // Grok runs only after the lead and its Meta record are durably stored.
-    const job = await enqueueJob({
-      jobType: "process_meta_lead",
-      leadId: lead.id,
-      inboundProviderMessageId: `meta:${args.metaLeadId}`,
-      payload: { meta_lead_id: args.metaLeadId, submission_id: row.id },
-    });
-    if (job) {
-      await supabaseAdmin
-        .from("meta_lead_submissions")
-        .update({ grok_enqueued_at: new Date().toISOString() })
-        .eq("id", row.id);
+    if (args.suppressFirstTouch) {
+      await addEvent(
+        lead.id,
+        "meta_first_touch_suppressed",
+        "First touch suppressed for backfilled Meta lead",
+        "system",
+        { meta_lead_id: args.metaLeadId },
+      );
     }
 
-    return { status: "ingested", leadId: lead.id, created, submissionId: row.id };
+    const alreadyContacted = matchesContacted(lead.phone_e164, args.contactedPhones);
+    if (alreadyContacted) await markAlreadyContacted(lead.id, args.metaLeadId);
+
+    // Grok runs only after the lead and its Meta record are durably stored.
+    // Backfill never enqueues, so process-jobs cannot send a first touch.
+    if (!args.suppressFirstTouch) {
+      const job = await enqueueJob({
+        jobType: "process_meta_lead",
+        leadId: lead.id,
+        inboundProviderMessageId: `meta:${args.metaLeadId}`,
+        payload: { meta_lead_id: args.metaLeadId, submission_id: row.id },
+      });
+      if (job) {
+        await supabaseAdmin
+          .from("meta_lead_submissions")
+          .update({ grok_enqueued_at: new Date().toISOString() })
+          .eq("id", row.id);
+      }
+    }
+
+    return { status: "ingested", leadId: lead.id, created, submissionId: row.id, alreadyContacted };
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
     await supabaseAdmin
@@ -225,7 +283,7 @@ export async function ingestMetaLead(args: {
       detail,
       metadata: { meta_lead_id: args.metaLeadId, method: args.method },
     });
-    return { status: "failed", error: detail };
+    return { status: "failed", error: detail, alreadyContacted: false };
   }
 }
 
@@ -326,4 +384,101 @@ export async function handleLeadgenEvents(
     else summary.failed += 1;
   }
   return summary;
+}
+
+function matchesContacted(
+  phone: string | null | undefined,
+  contacted: ReadonlySet<string> | undefined,
+): boolean {
+  if (!phone || !contacted || contacted.size === 0) return false;
+  const e164 = normalizePhone(phone);
+  return Boolean(e164 && contacted.has(e164));
+}
+
+async function phoneForLead(leadId: string | null): Promise<string | null> {
+  if (!leadId) return null;
+  const { data, error } = await supabaseAdmin
+    .from("leads")
+    .select("phone_e164")
+    .eq("id", leadId)
+    .maybeSingle();
+  if (error) throw error;
+  return data?.phone_e164 ?? null;
+}
+
+/** Stamps blank message timestamps. Does not write a message or the phone number. */
+async function markAlreadyContacted(leadId: string, metaLeadId: string): Promise<void> {
+  const now = new Date().toISOString();
+  const { data: lead, error } = await supabaseAdmin
+    .from("leads")
+    .select("id, last_message_at, last_outbound_at")
+    .eq("id", leadId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!lead) return;
+  const updates: { last_message_at?: string; last_outbound_at?: string } = {};
+  if (!lead.last_message_at) updates.last_message_at = now;
+  if (!lead.last_outbound_at) updates.last_outbound_at = now;
+  if (Object.keys(updates).length === 0) return;
+  const { error: updateError } = await supabaseAdmin.from("leads").update(updates).eq("id", leadId);
+  if (updateError) throw updateError;
+  await supabaseAdmin
+    .from("message_threads")
+    .update({ last_message_at: now })
+    .eq("lead_id", leadId)
+    .is("last_message_at", null);
+  await addEvent(
+    leadId,
+    "meta_backfill_already_contacted",
+    "Marked already contacted during Meta backfill",
+    "system",
+    {
+      meta_lead_id: metaLeadId,
+    },
+  );
+}
+
+async function maybeApplyBackfillMarkers(args: {
+  submissionId: string;
+  leadId: string | null;
+  metaLeadId: string;
+  alreadySuppressed: boolean;
+  suppressFirstTouch: boolean;
+  contactedPhones: ReadonlySet<string> | undefined;
+  phone?: string | null;
+}): Promise<boolean> {
+  const marking = args.suppressFirstTouch || (args.contactedPhones?.size ?? 0) > 0;
+  if (!marking) return false;
+  return applyBackfillMarkers(args);
+}
+
+async function applyBackfillMarkers(args: {
+  submissionId: string;
+  leadId: string | null;
+  metaLeadId: string;
+  alreadySuppressed: boolean;
+  suppressFirstTouch: boolean;
+  contactedPhones: ReadonlySet<string> | undefined;
+  phone?: string | null;
+}): Promise<boolean> {
+  if (args.suppressFirstTouch && !args.alreadySuppressed) {
+    const { error } = await supabaseAdmin
+      .from("meta_lead_submissions")
+      .update({ suppress_first_touch: true })
+      .eq("id", args.submissionId);
+    if (error) throw error;
+    if (args.leadId) {
+      await addEvent(
+        args.leadId,
+        "meta_first_touch_suppressed",
+        "First touch suppressed for backfilled Meta lead",
+        "system",
+        { meta_lead_id: args.metaLeadId },
+      );
+    }
+  }
+  const phone = args.phone !== undefined ? args.phone : await phoneForLead(args.leadId);
+  if (!matchesContacted(phone, args.contactedPhones) || !args.leadId) return false;
+  await markAlreadyContacted(args.leadId, args.metaLeadId);
+  return true;
 }

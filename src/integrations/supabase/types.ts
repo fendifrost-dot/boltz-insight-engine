@@ -571,6 +571,7 @@ export type Database = {
           page_id: string | null
           platform: string | null
           raw_field_data: Json | null
+          suppress_first_touch: boolean
           updated_at: string
           webhook_payload: Json | null
           webhook_received_at: string | null
@@ -604,6 +605,7 @@ export type Database = {
           page_id?: string | null
           platform?: string | null
           raw_field_data?: Json | null
+          suppress_first_touch?: boolean
           updated_at?: string
           webhook_payload?: Json | null
           webhook_received_at?: string | null
@@ -637,6 +639,7 @@ export type Database = {
           page_id?: string | null
           platform?: string | null
           raw_field_data?: Json | null
+          suppress_first_touch?: boolean
           updated_at?: string
           webhook_payload?: Json | null
           webhook_received_at?: string | null
