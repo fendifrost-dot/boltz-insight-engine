@@ -164,6 +164,46 @@ export function parseBackfillSince(
 }
 
 /**
+ * Leads created before this instant were already contacted by hand.
+ * No ingest path may enqueue a first touch for them.
+ */
+export const FIRST_TOUCH_CREATED_CUTOFF_MS = Date.parse("2026-10-01T00:00:00.000Z");
+
+/** Reconciliation must not first-touch a lead older than the incremental window. */
+export const RECONCILE_FIRST_TOUCH_MAX_AGE_MS = 2 * 60 * 60 * 1000;
+
+export type FirstTouchIngestMethod = "WEBHOOK" | "RECONCILIATION" | "MANUAL_IMPORT";
+
+/**
+ * Whether ingest may enqueue `process_meta_lead`.
+ * Missing or unparseable `created_time` fails closed.
+ * Every method refuses a lead created before `FIRST_TOUCH_CREATED_CUTOFF_MS`.
+ * Reconciliation also refuses a lead older than 2 hours, so the nightly 7-day
+ * pull cannot text a backlog. A live webhook after the cutoff still can.
+ */
+export function enqueuesFirstTouch(args: {
+  method: FirstTouchIngestMethod;
+  createdTime: string | null | undefined;
+  nowMs: number;
+}): boolean {
+  const parsed = parseCreatedTimeMs(args.createdTime);
+  if (parsed === null) return false;
+  if (parsed < FIRST_TOUCH_CREATED_CUTOFF_MS) return false;
+  if (args.method === "RECONCILIATION" && args.nowMs - parsed > RECONCILE_FIRST_TOUCH_MAX_AGE_MS) {
+    return false;
+  }
+  return true;
+}
+
+function parseCreatedTimeMs(value: string | null | undefined): number | null {
+  if (value === null || value === undefined) return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const parsed = Date.parse(trimmed);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+/**
  * Normalizes to E.164 in memory. Invalid entries are counted and dropped.
  * Callers must not log `values` or the returned set.
  */

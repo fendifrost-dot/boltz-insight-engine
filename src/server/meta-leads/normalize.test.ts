@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   META_LEAD_SOURCE,
   buildConsentEvidence,
+  enqueuesFirstTouch,
   fillBlankLeadFields,
   formSummary,
   normalizeFieldData,
@@ -240,6 +241,94 @@ test("existing vehicle and problem questions still map when insurance is present
   assert.equal(n.vehicle_model, "Accord EX");
   assert.match(n.symptoms ?? "", /Knocking noise/);
   assert.match(n.symptoms ?? "", /Insurance: No/);
+});
+
+test("reconcile and webhook never enqueue first touch for the pre-cutoff backlog", () => {
+  const sep26 = "2026-09-26T15:00:00.000Z";
+  const sep30Late = "2026-09-30T23:00:00.000Z";
+  const nowSep30 = Date.parse("2026-09-30T23:30:00.000Z");
+  assert.equal(
+    enqueuesFirstTouch({ method: "RECONCILIATION", createdTime: sep26, nowMs: nowSep30 }),
+    false,
+  );
+  // Inside the 2-hour incremental window, but still before the cutoff.
+  assert.equal(
+    enqueuesFirstTouch({ method: "RECONCILIATION", createdTime: sep30Late, nowMs: nowSep30 }),
+    false,
+  );
+  assert.equal(
+    enqueuesFirstTouch({ method: "WEBHOOK", createdTime: sep30Late, nowMs: nowSep30 }),
+    false,
+  );
+  assert.equal(
+    enqueuesFirstTouch({ method: "MANUAL_IMPORT", createdTime: sep26, nowMs: nowSep30 }),
+    false,
+  );
+  assert.equal(
+    enqueuesFirstTouch({
+      method: "RECONCILIATION",
+      createdTime: "2026-09-28T08:49:14+0000",
+      nowMs: nowSep30,
+    }),
+    false,
+  );
+
+  const oct1 = "2026-10-01T01:00:00.000Z";
+  const nowSoon = Date.parse("2026-10-01T01:30:00.000Z");
+  const nowLater = Date.parse("2026-10-01T04:00:00.000Z");
+  assert.equal(
+    enqueuesFirstTouch({ method: "RECONCILIATION", createdTime: oct1, nowMs: nowSoon }),
+    true,
+  );
+  assert.equal(
+    enqueuesFirstTouch({ method: "RECONCILIATION", createdTime: oct1, nowMs: nowLater }),
+    false,
+  );
+  // A delayed webhook after the cutoff can still first-touch. Reconciliation cannot.
+  assert.equal(enqueuesFirstTouch({ method: "WEBHOOK", createdTime: oct1, nowMs: nowLater }), true);
+
+  const atCutoff = "2026-10-01T00:00:00.000Z";
+  assert.equal(
+    enqueuesFirstTouch({
+      method: "RECONCILIATION",
+      createdTime: atCutoff,
+      nowMs: Date.parse("2026-10-01T00:30:00.000Z"),
+    }),
+    true,
+  );
+
+  const nowOct2 = Date.parse("2026-10-02T12:00:00.000Z");
+  const exactlyTwoHours = new Date(nowOct2 - 2 * 60 * 60 * 1000).toISOString();
+  const olderThanTwoHours = new Date(nowOct2 - 2 * 60 * 60 * 1000 - 1).toISOString();
+  assert.equal(
+    enqueuesFirstTouch({
+      method: "RECONCILIATION",
+      createdTime: exactlyTwoHours,
+      nowMs: nowOct2,
+    }),
+    true,
+  );
+  assert.equal(
+    enqueuesFirstTouch({
+      method: "RECONCILIATION",
+      createdTime: olderThanTwoHours,
+      nowMs: nowOct2,
+    }),
+    false,
+  );
+
+  assert.equal(
+    enqueuesFirstTouch({ method: "RECONCILIATION", createdTime: null, nowMs: nowSoon }),
+    false,
+  );
+  assert.equal(
+    enqueuesFirstTouch({ method: "WEBHOOK", createdTime: "not-a-date", nowMs: nowSoon }),
+    false,
+  );
+  assert.equal(
+    enqueuesFirstTouch({ method: "RECONCILIATION", createdTime: "  ", nowMs: nowSoon }),
+    false,
+  );
 });
 
 test("formSummary is readable and bounded", () => {

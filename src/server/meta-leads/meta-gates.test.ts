@@ -240,9 +240,10 @@ test("backfill does not enqueue first touch and diagnose does not ingest", () =>
   assert.match(reconcileRoute, /contactedPhones must be sent in the JSON body/);
   const ingest = read("src/server/meta-leads/ingest.server.ts");
   const ingestFn = block(ingest, "export async function ingestMetaLead");
-  const guard = ingestFn.indexOf("if (!args.suppressFirstTouch)");
+  const windowGuard = ingestFn.indexOf("enqueuesFirstTouch(");
+  const guard = ingestFn.indexOf("if (!suppressFirstTouch)");
   const enqueue = ingestFn.indexOf('jobType: "process_meta_lead"');
-  assert.ok(guard >= 0 && enqueue > guard);
+  assert.ok(windowGuard >= 0 && guard > windowGuard && enqueue > guard);
   const firstTouchSrc = read("src/server/meta-leads/first-touch.server.ts");
   assert.ok(
     firstTouchSrc.indexOf("suppress_first_touch") < firstTouchSrc.indexOf("decideFirstTouch("),

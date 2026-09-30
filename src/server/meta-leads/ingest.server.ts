@@ -15,6 +15,7 @@ import { GraphError, getForm, getLead, pageAccessTokenFor } from "./graph.server
 import {
   META_LEAD_SOURCE,
   buildConsentEvidence,
+  enqueuesFirstTouch,
   fillBlankLeadFields,
   formSummary,
   normalizeFieldData,
@@ -88,6 +89,7 @@ export async function ingestMetaLead(args: {
   /**
    * Backfill sets this. The lead is stored and deduped, and no `message_jobs`
    * row is enqueued. `suppress_first_touch` blocks a later job from sending.
+   * Ingest also sets the flag when `enqueuesFirstTouch` refuses the lead.
    */
   suppressFirstTouch?: boolean | undefined;
   /** E.164 numbers, compared in memory. Never log this set. */
@@ -170,6 +172,18 @@ export async function ingestMetaLead(args: {
       );
     }
 
+    const createdTime =
+      graphLead.created_time ?? row.created_time ?? args.event?.createdTime ?? null;
+    // Backfill, the pre-cutoff backlog, and a reconciliation lead older than
+    // 2 hours all store the row and never enqueue a first touch.
+    const suppressFirstTouch =
+      args.suppressFirstTouch === true ||
+      !enqueuesFirstTouch({
+        method: args.method,
+        createdTime,
+        nowMs: Date.parse(fetchedAt),
+      });
+
     const { data: claimed, error: updateError } = await supabaseAdmin
       .from("meta_lead_submissions")
       .update({
@@ -178,7 +192,7 @@ export async function ingestMetaLead(args: {
         platform,
         is_organic: graphLead.is_organic ?? null,
         page_id: row.page_id ?? pageId ?? readMetaSecret("META_PAGE_ID") ?? null,
-        ...(args.suppressFirstTouch ? { suppress_first_touch: true } : {}),
+        ...(suppressFirstTouch ? { suppress_first_touch: true } : {}),
         form_id: formId ?? null,
         form_name: form?.name ?? null,
         ad_id: graphLead.ad_id ?? row.ad_id,
@@ -211,7 +225,7 @@ export async function ingestMetaLead(args: {
         leadId: lead.id,
         metaLeadId: args.metaLeadId,
         alreadySuppressed: row.suppress_first_touch === true,
-        suppressFirstTouch: args.suppressFirstTouch === true,
+        suppressFirstTouch,
         contactedPhones: args.contactedPhones,
         phone: lead.phone_e164,
       });
@@ -233,11 +247,13 @@ export async function ingestMetaLead(args: {
       },
     );
 
-    if (args.suppressFirstTouch) {
+    if (suppressFirstTouch) {
       await addEvent(
         lead.id,
         "meta_first_touch_suppressed",
-        "First touch suppressed for backfilled Meta lead",
+        args.suppressFirstTouch
+          ? "First touch suppressed for backfilled Meta lead"
+          : "First touch suppressed because the Meta lead is outside the first-touch window",
         "system",
         { meta_lead_id: args.metaLeadId },
       );
@@ -247,8 +263,9 @@ export async function ingestMetaLead(args: {
     if (alreadyContacted) await markAlreadyContacted(lead.id, args.metaLeadId);
 
     // Grok runs only after the lead and its Meta record are durably stored.
-    // Backfill never enqueues, so process-jobs cannot send a first touch.
-    if (!args.suppressFirstTouch) {
+    // Backfill and out-of-window leads never enqueue, so process-jobs cannot
+    // send a first touch. The flag is written in the same update, above.
+    if (!suppressFirstTouch) {
       const job = await enqueueJob({
         jobType: "process_meta_lead",
         leadId: lead.id,
