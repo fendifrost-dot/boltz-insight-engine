@@ -49,6 +49,10 @@ export async function processMetaLead(job: JobRow): Promise<void> {
   const skip = (reason: string) =>
     addEvent(lead.id, "meta_first_touch_skipped", reason, "system", { meta_lead_id: metaLeadId });
 
+  if (submission.suppress_first_touch) {
+    return skip("First touch suppressed");
+  }
+
   if (!lead.phone_e164)
     return skip("No usable phone number on the form; no SMS first touch possible");
   if (lead.consent_status === "opted_out") return skip("Lead is opted out; no first touch");

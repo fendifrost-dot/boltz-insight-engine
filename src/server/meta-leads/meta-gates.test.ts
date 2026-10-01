@@ -215,6 +215,45 @@ test("Graph errors always carry Meta's numeric code", () => {
   assert.match(graph, /subcode \$\{subcode\}/);
 });
 
+test("Graph proof is attached even when the URL already has an access token", () => {
+  const tokenGuard = graph.indexOf('if (!url.searchParams.has("access_token"))');
+  const proof = graph.indexOf('tokenForProof && !url.searchParams.has("appsecret_proof")');
+  assert.ok(tokenGuard >= 0 && proof > tokenGuard);
+});
+
+test("reconciliation scans every configured page and records form ids", () => {
+  const reconcile = read("src/server/meta-leads/reconcile.server.ts");
+  assert.match(reconcile, /leadgenPagesToScan\(configuredLeadgenPageIds\(\)\)/);
+  assert.match(reconcile, /formStats/);
+  assert.doesNotMatch(reconcile, /enqueueJob|processJobs|sendOutbound/);
+  assert.match(reconcile, /suppressFirstTouch: args\.suppressFirstTouch === true/);
+});
+
+test("backfill does not enqueue first touch and diagnose does not ingest", () => {
+  const diagnose = reconcileRoute.indexOf('if (mode === "diagnose")');
+  const backfill = reconcileRoute.indexOf('if (mode === "backfill") {');
+  const process = reconcileRoute.indexOf("processJobs()");
+  assert.ok(diagnose >= 0 && backfill > diagnose && process > backfill);
+  const backfillBlock = reconcileRoute.slice(backfill, reconcileRoute.indexOf("windowParam"));
+  assert.doesNotMatch(backfillBlock, /processJobs/);
+  assert.match(reconcileRoute, /suppressFirstTouch: true/);
+  assert.match(reconcileRoute, /contactedPhones must be sent in the JSON body/);
+  const ingest = read("src/server/meta-leads/ingest.server.ts");
+  const ingestFn = block(ingest, "export async function ingestMetaLead");
+  const windowGuard = ingestFn.indexOf("enqueuesFirstTouch(");
+  const guard = ingestFn.indexOf("if (!suppressFirstTouch)");
+  const enqueue = ingestFn.indexOf('jobType: "process_meta_lead"');
+  assert.ok(windowGuard >= 0 && guard > windowGuard && enqueue > guard);
+  const firstTouchSrc = read("src/server/meta-leads/first-touch.server.ts");
+  assert.ok(
+    firstTouchSrc.indexOf("suppress_first_touch") < firstTouchSrc.indexOf("decideFirstTouch("),
+  );
+  assert.ok(
+    firstTouchSrc.indexOf("suppress_first_touch") < firstTouchSrc.indexOf("sendOutbound({"),
+  );
+  assert.doesNotMatch(read("src/server/meta-leads/backfill.ts"), /console\./);
+});
+
 test("a reconcile run blocked by missing config leaves a health-log trace", () => {
   const cfg = reconcileRouteSrc.indexOf("if (configError)");
   const trace = reconcileRouteSrc.indexOf('checkName: "config"');

@@ -15,6 +15,27 @@ type Snapshot = {
 
 export type MetaHealthCheckError = { check: string; message: string };
 
+function readFormStats(snapshot: Snapshot): {
+  forms: number | null;
+  formStats: { pageId: string; formId: string; leads: number }[];
+} {
+  const meta = (snapshot.metadata_redacted ?? null) as {
+    forms?: unknown;
+    formStats?: unknown;
+  } | null;
+  const raw = Array.isArray(meta?.formStats) ? meta.formStats : [];
+  const formStats = raw.flatMap((item) => {
+    if (!item || typeof item !== "object") return [];
+    const row = item as { pageId?: unknown; formId?: unknown; leads?: unknown };
+    if (typeof row.pageId !== "string" || typeof row.formId !== "string") return [];
+    const leads = typeof row.leads === "number" && Number.isFinite(row.leads) ? row.leads : 0;
+    return [{ pageId: row.pageId, formId: row.formId, leads }];
+  });
+  const forms =
+    typeof meta?.forms === "number" ? meta.forms : formStats.length > 0 ? formStats.length : null;
+  return { forms, formStats };
+}
+
 function describe(error: unknown): string {
   if (error instanceof Error) return error.message.slice(0, 400);
   if (error && typeof error === "object") {
@@ -112,6 +133,8 @@ export async function getMetaHealth() {
     lastGraphFail,
     lastIncremental,
     lastNightly,
+    lastBackfill,
+    lastFormList,
     lastTokenFailure,
     lastLead,
     recent,
@@ -128,6 +151,8 @@ export async function getMetaHealth() {
     snap("last Graph failure", "graph_fetch", false),
     snap("last incremental reconciliation", "reconcile_incremental"),
     snap("last nightly reconciliation", "reconcile_nightly"),
+    snap("last backfill", "reconcile_backfill"),
+    snap("last form listing", "leadgen_forms"),
     snap("last token failure", "token_auth", false),
     settle<LastLead | null>(errors, "last Meta lead", null, async () => {
       const { data, error } = await supabaseAdmin
@@ -262,6 +287,14 @@ export async function getMetaHealth() {
     missingDetected?: number;
     notIngested?: number;
   };
+  const formsSnapshot = [lastIncremental, lastNightly, lastBackfill, lastFormList]
+    .filter((s): s is Snapshot => Boolean(s))
+    .map((snapshot) => ({ snapshot, forms: readFormStats(snapshot) }))
+    .filter((entry) => entry.forms.forms !== null)
+    .sort((a, b) => b.snapshot.created_at.localeCompare(a.snapshot.created_at))[0]?.forms ?? {
+    forms: null,
+    formStats: [],
+  };
 
   return {
     checkedAt: new Date().toISOString(),
@@ -295,6 +328,8 @@ export async function getMetaHealth() {
         ? { at: lastNightly.created_at, ok: lastNightly.ok, detail: lastNightly.detail }
         : null,
       missingAtLastRun: (reconcileMeta.missingDetected ?? 0) + (reconcileMeta.notIngested ?? 0),
+      formsSeen: formsSnapshot.forms,
+      formStats: formsSnapshot.formStats,
     },
     lastLead,
     counts: {

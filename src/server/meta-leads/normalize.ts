@@ -120,6 +120,110 @@ export function resolvePlatform(raw: string | undefined | null): MetaPlatform {
   return value === "ig" || value === "instagram" ? "instagram" : "facebook";
 }
 
+const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+export type ParsedSince = {
+  sinceMs: number;
+  /** Exclusive Graph `time_created` bound; one second before `sinceMs` so that instant is included. */
+  sinceUnix: number;
+  iso: string;
+};
+
+/**
+ * `since` is a UTC date (`YYYY-MM-DD`) or an ISO timestamp, not older than
+ * `maxLookbackMinutes`. The error text never echoes the input.
+ */
+export function parseBackfillSince(
+  since: string,
+  nowMs: number,
+  maxLookbackMinutes: number,
+): ParsedSince | { error: string } {
+  const trimmed = since.trim();
+  const dateOnly = DATE_ONLY.exec(trimmed);
+  let ms: number;
+  if (dateOnly) {
+    const year = Number(dateOnly[1]);
+    const month = Number(dateOnly[2]);
+    const day = Number(dateOnly[3]);
+    ms = Date.UTC(year, month - 1, day);
+    const check = new Date(ms);
+    if (
+      check.getUTCFullYear() !== year ||
+      check.getUTCMonth() !== month - 1 ||
+      check.getUTCDate() !== day
+    ) {
+      return { error: "since must be YYYY-MM-DD or an ISO timestamp" };
+    }
+  } else {
+    ms = Date.parse(trimmed);
+    if (!Number.isFinite(ms)) return { error: "since must be YYYY-MM-DD or an ISO timestamp" };
+  }
+  if (ms > nowMs + 60_000) return { error: "since is in the future" };
+  if (ms < nowMs - maxLookbackMinutes * 60_000) return { error: "since is older than 90 days" };
+  return { sinceMs: ms, sinceUnix: Math.floor(ms / 1000) - 1, iso: new Date(ms).toISOString() };
+}
+
+/**
+ * Leads created before this instant were already contacted by hand.
+ * No ingest path may enqueue a first touch for them.
+ */
+export const FIRST_TOUCH_CREATED_CUTOFF_MS = Date.parse("2026-10-01T00:00:00.000Z");
+
+/** Reconciliation must not first-touch a lead older than the incremental window. */
+export const RECONCILE_FIRST_TOUCH_MAX_AGE_MS = 2 * 60 * 60 * 1000;
+
+export type FirstTouchIngestMethod = "WEBHOOK" | "RECONCILIATION" | "MANUAL_IMPORT";
+
+/**
+ * Whether ingest may enqueue `process_meta_lead`.
+ * Missing or unparseable `created_time` fails closed.
+ * Every method refuses a lead created before `FIRST_TOUCH_CREATED_CUTOFF_MS`.
+ * Reconciliation also refuses a lead older than 2 hours, so the nightly 7-day
+ * pull cannot text a backlog. A live webhook after the cutoff still can.
+ */
+export function enqueuesFirstTouch(args: {
+  method: FirstTouchIngestMethod;
+  createdTime: string | null | undefined;
+  nowMs: number;
+}): boolean {
+  const parsed = parseCreatedTimeMs(args.createdTime);
+  if (parsed === null) return false;
+  if (parsed < FIRST_TOUCH_CREATED_CUTOFF_MS) return false;
+  if (args.method === "RECONCILIATION" && args.nowMs - parsed > RECONCILE_FIRST_TOUCH_MAX_AGE_MS) {
+    return false;
+  }
+  return true;
+}
+
+function parseCreatedTimeMs(value: string | null | undefined): number | null {
+  if (value === null || value === undefined) return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const parsed = Date.parse(trimmed);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+/**
+ * Normalizes to E.164 in memory. Invalid entries are counted and dropped.
+ * Callers must not log `values` or the returned set.
+ */
+export function contactedPhoneSet(values: readonly string[]): {
+  phones: Set<string>;
+  ignored: number;
+} {
+  const phones = new Set<string>();
+  let ignored = 0;
+  for (const value of values) {
+    const e164 = normalizePhone(value);
+    if (!e164) {
+      ignored += 1;
+      continue;
+    }
+    phones.add(e164);
+  }
+  return { phones, ignored };
+}
+
 /** E.164 or null. Mirrors the leads.phone_e164 CHECK constraint. */
 export function normalizePhone(raw: string | null | undefined): string | null {
   if (!raw) return null;
@@ -193,6 +297,13 @@ function parseVehicleCombo(value: string): {
 
 const clip = (value: string, max: number) => value.slice(0, max);
 
+/** Damage, service, and "what does the car need" land in symptoms. */
+function isServiceNeedQuestion(wordsKey: string): boolean {
+  return /\b(symptom|symptoms|problem|issue|issues|describe|service|repair|concern|wrong|help|need|needs|damage)\b/.test(
+    wordsKey,
+  );
+}
+
 /**
  * Maps Instant Form answers onto the Boltz lead model. Standard Meta keys
  * (full_name, phone_number, email, …) map exactly; custom questions map by
@@ -256,17 +367,17 @@ export function normalizeFieldData(fieldData: MetaFieldDatum[] | undefined): Nor
       if (out.vehicle_year === null) out.other_answers.push({ question: key, answer: value });
     } else if (/\bmake\b/.test(w) && !/\bmodel\b/.test(w)) out.vehicle_make = clip(value, 100);
     else if (/\bmodel\b/.test(w) && !/\bmake\b/.test(w)) out.vehicle_model = clip(value, 100);
-    else if (/\b(vehicle|car|truck)\b/.test(w) && parseYear(value) !== null) {
-      const combo = parseVehicleCombo(value);
-      out.vehicle_year = combo.year;
-      out.vehicle_make = combo.make ? clip(combo.make, 100) : null;
-      out.vehicle_model = combo.model ? clip(combo.model, 100) : null;
-    } else if (
-      /\b(symptom|symptoms|problem|issue|issues|describe|service|repair|concern|wrong|help)\b/.test(
-        w,
-      )
-    ) {
+    else if (/\binsurance\b/.test(w)) {
+      symptomParts.push(`Insurance: ${clip(value, 200)}`);
+    } else if (isServiceNeedQuestion(w)) {
+      // Before the vehicle/car+year rule, so "what does the car need" stays a
+      // service answer even when the answer text contains a year.
       symptomParts.push(value);
+    } else if (/\b(vehicle|car|truck)\b/.test(w) && parseYear(value) !== null) {
+      const combo = parseVehicleCombo(value);
+      out.vehicle_year = combo.year ?? out.vehicle_year;
+      out.vehicle_make = combo.make ? clip(combo.make, 100) : out.vehicle_make;
+      out.vehicle_model = combo.model ? clip(combo.model, 100) : out.vehicle_model;
     } else {
       out.other_answers.push({ question: key, answer: clip(value, 500) });
     }

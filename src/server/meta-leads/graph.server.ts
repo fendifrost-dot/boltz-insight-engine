@@ -1,6 +1,13 @@
 // Meta Graph API adapter (REST). Server-only: never call from the browser.
-import { graphApiVersion, readMetaSecret, requireMetaSecret } from "./env.server";
+import {
+  configuredLeadgenPageIds,
+  graphApiVersion,
+  readMetaSecret,
+  requireMetaSecret,
+} from "./env.server";
 import type { GraphLead, GraphLeadForm } from "./normalize";
+import { nextPageCursor } from "./paging";
+import type { GraphPaging } from "./paging";
 import { hmacSha256Hex } from "./signature";
 
 export class GraphError extends Error {
@@ -32,31 +39,33 @@ function base(): string {
   return `https://graph.facebook.com/${graphApiVersion()}`;
 }
 
-let pageTokenCache: {
-  stored: string;
-  token: string;
-  source: "stored" | "derived";
-  until: number;
-} | null = null;
+const pageTokenCache = new Map<
+  string,
+  { stored: string; token: string; source: "stored" | "derived"; until: number }
+>();
 
 /**
- * The token used for Page endpoints. The stored credential may be a Page
- * token, or a User / System-user token with a role on the Page; in the latter
- * case Meta rejects Page calls ("must be called with a Page Access Token").
- * Asking the Page for its own access_token with the stored credential yields
- * a Page token either way, so the Engine works with whichever was stored.
+ * Page token for one Page. The stored credential may be a Page token, or a
+ * User / System-user token with a role on the Page; in the latter case Meta
+ * rejects Page calls ("must be called with a Page Access Token"). Asking that
+ * Page for its own access_token with the stored credential yields a Page token
+ * either way. Cached per Page so a second Page is not called with the first
+ * Page's token.
  */
-export async function pageAccessToken(): Promise<{ token: string; source: "stored" | "derived" }> {
+export async function pageAccessTokenFor(
+  pageId: string,
+): Promise<{ token: string; source: "stored" | "derived" }> {
   const stored = requireMetaSecret("META_PAGE_ACCESS_TOKEN");
-  if (pageTokenCache && pageTokenCache.stored === stored && Date.now() < pageTokenCache.until) {
-    return { token: pageTokenCache.token, source: pageTokenCache.source };
+  const cached = pageTokenCache.get(pageId);
+  if (cached && cached.stored === stored && Date.now() < cached.until) {
+    return { token: cached.token, source: cached.source };
   }
   let token = stored;
   let source: "stored" | "derived" = "stored";
   let ttl = 5 * 60_000;
   try {
     const res = await graphRequest<{ access_token?: string }>(
-      `/${encodeURIComponent(requireMetaSecret("META_PAGE_ID"))}`,
+      `/${encodeURIComponent(pageId)}`,
       { fields: "access_token" },
       { token: stored },
     );
@@ -68,8 +77,15 @@ export async function pageAccessToken(): Promise<{ token: string; source: "store
   } catch {
     // Fall back to the stored value; the real call will surface Meta's error.
   }
-  pageTokenCache = { stored, token, source, until: Date.now() + ttl };
-  return { token, source };
+  const entry = { stored, token, source, until: Date.now() + ttl };
+  pageTokenCache.set(pageId, entry);
+  return { token: entry.token, source: entry.source };
+}
+
+/** Token for the first configured Page. Other Pages use pageAccessTokenFor. */
+export async function pageAccessToken(): Promise<{ token: string; source: "stored" | "derived" }> {
+  const pageId = configuredLeadgenPageIds()[0] ?? requireMetaSecret("META_PAGE_ID");
+  return pageAccessTokenFor(pageId);
 }
 
 async function graphRequest<T>(
@@ -82,12 +98,14 @@ async function graphRequest<T>(
   if (!url.searchParams.has("access_token")) {
     const token = init.token ?? (await pageAccessToken()).token;
     url.searchParams.set("access_token", token);
-    // appsecret_proof satisfies apps with "Require App Secret" on; harmless otherwise.
-    // App tokens (id|secret) never take a proof.
-    const appSecret = readMetaSecret("META_APP_SECRET");
-    if (appSecret && !init.appToken) {
-      url.searchParams.set("appsecret_proof", await hmacSha256Hex(appSecret, token));
-    }
+  }
+  // paging.next already carries access_token and omits appsecret_proof. Apps
+  // that require the proof reject every page after the first unless it is added
+  // for that token too. App tokens (id|secret) never take a proof.
+  const appSecret = readMetaSecret("META_APP_SECRET");
+  const tokenForProof = url.searchParams.get("access_token");
+  if (appSecret && !init.appToken && tokenForProof && !url.searchParams.has("appsecret_proof")) {
+    url.searchParams.set("appsecret_proof", await hmacSha256Hex(appSecret, tokenForProof));
   }
   const res = await fetch(url, {
     method: init.method ?? "GET",
@@ -158,9 +176,10 @@ async function withFieldFallback<T>(
   throw lastError;
 }
 
-export async function getLead(leadgenId: string): Promise<GraphLead> {
+export async function getLead(leadgenId: string, token?: string): Promise<GraphLead> {
+  const init = token ? { token } : {};
   const { result } = await withFieldFallback((fields) =>
-    graphRequest<GraphLead>(`/${encodeURIComponent(leadgenId)}`, { fields }),
+    graphRequest<GraphLead>(`/${encodeURIComponent(leadgenId)}`, { fields }, init),
   );
   return result;
 }
@@ -168,16 +187,21 @@ export async function getLead(leadgenId: string): Promise<GraphLead> {
 const formCache = new Map<string, { form: GraphLeadForm; at: number }>();
 
 /** Form metadata + legal content (consent wording). Cached for an hour per worker. */
-export async function getForm(formId: string): Promise<GraphLeadForm | null> {
+export async function getForm(formId: string, token?: string): Promise<GraphLeadForm | null> {
   const cached = formCache.get(formId);
   if (cached && Date.now() - cached.at < 60 * 60_000) return cached.form;
+  const init = token ? { token } : {};
   const attempts = [
     "id,name,status,locale,privacy_policy_url,legal_content",
     "id,name,status,locale",
   ];
   for (const fields of attempts) {
     try {
-      const form = await graphRequest<GraphLeadForm>(`/${encodeURIComponent(formId)}`, { fields });
+      const form = await graphRequest<GraphLeadForm>(
+        `/${encodeURIComponent(formId)}`,
+        { fields },
+        init,
+      );
       formCache.set(formId, { form, at: Date.now() });
       return form;
     } catch (error) {
@@ -187,32 +211,119 @@ export async function getForm(formId: string): Promise<GraphLeadForm | null> {
   return null;
 }
 
-type Paged<T> = { data?: T[]; paging?: { next?: string } };
+type Paged<T> = { data?: T[]; paging?: GraphPaging };
 
-async function collectPages<T>(
-  first: Paged<T>,
+async function collectEdge<T>(
+  path: string,
+  params: Record<string, string>,
+  init: { token?: string },
   maxPages: number,
 ): Promise<{ items: T[]; truncated: boolean }> {
-  const items = [...(first.data ?? [])];
-  let next = first.paging?.next;
-  let pages = 1;
-  while (next && pages < maxPages) {
-    const page = await graphRequest<Paged<T>>(next);
-    items.push(...(page.data ?? []));
-    next = page.paging?.next;
-    pages += 1;
+  const items: T[] = [];
+  let after: string | undefined;
+  let nextUrl: string | undefined;
+  for (let page = 0; page < maxPages; page += 1) {
+    const result = nextUrl
+      ? await graphRequest<Paged<T>>(nextUrl, {}, init)
+      : await graphRequest<Paged<T>>(path, after ? { ...params, after } : params, init);
+    items.push(...(result.data ?? []));
+    const step = nextPageCursor(result.paging, after);
+    if (step.kind === "end") return { items, truncated: false };
+    if (page === maxPages - 1) return { items, truncated: true };
+    if (step.kind === "cursor") {
+      after = step.after;
+      nextUrl = undefined;
+    } else {
+      nextUrl = step.url;
+      after = undefined;
+    }
   }
-  return { items, truncated: Boolean(next) };
+  return { items, truncated: true };
 }
 
+export type ListedForm = {
+  id: string;
+  name?: string;
+  status?: string;
+  leadsCount: number | null;
+};
+
+/** Every Instant Form on the Page, following cursors. `leads_count` is optional. */
 export async function listForms(
   pageId: string,
-): Promise<{ id: string; name?: string; status?: string }[]> {
-  const first = await graphRequest<Paged<{ id: string; name?: string; status?: string }>>(
-    `/${encodeURIComponent(pageId)}/leadgen_forms`,
-    { fields: "id,name,status", limit: "100" },
+): Promise<{ forms: ListedForm[]; truncated: boolean }> {
+  const { token } = await pageAccessTokenFor(pageId);
+  const fieldSets = ["id,name,status,leads_count", "id,name,status"];
+  let lastError: unknown;
+  for (const fields of fieldSets) {
+    try {
+      const { items, truncated } = await collectEdge<{
+        id: string;
+        name?: string;
+        status?: string;
+        leads_count?: number | string;
+      }>(`/${encodeURIComponent(pageId)}/leadgen_forms`, { fields, limit: "100" }, { token }, 10);
+      const seen = new Set<string>();
+      const forms: ListedForm[] = [];
+      for (const form of items) {
+        if (!form.id || seen.has(form.id)) continue;
+        seen.add(form.id);
+        const count = Number(form.leads_count);
+        const listed: ListedForm = {
+          id: form.id,
+          leadsCount: Number.isFinite(count) ? count : null,
+        };
+        if (form.name !== undefined) listed.name = form.name;
+        if (form.status !== undefined) listed.status = form.status;
+        forms.push(listed);
+      }
+      return { forms, truncated };
+    } catch (error) {
+      lastError = error;
+      if (!isFieldOrPermissionError(error)) throw error;
+    }
+  }
+  throw lastError;
+}
+
+/** Question keys only (`questions[].key`, else type). No labels, options, or answers. */
+export async function listFormQuestionKeys(formId: string, token?: string): Promise<string[]> {
+  const init = token ? { token } : {};
+  const form = await graphRequest<{ questions?: { key?: string; type?: string }[] }>(
+    `/${encodeURIComponent(formId)}`,
+    { fields: "id,questions" },
+    init,
   );
-  return (await collectPages(first, 10)).items;
+  const keys: string[] = [];
+  if (!Array.isArray(form.questions)) return keys;
+  for (const question of form.questions) {
+    const key = (question.key ?? "").trim() || (question.type ?? "").trim();
+    if (!key || keys.includes(key)) continue;
+    keys.push(key);
+    if (keys.length >= 40) break;
+  }
+  return keys;
+}
+
+/** Counts lead ids in a window. Requests `id` only, so answers are never read. */
+export async function countFormLeads(
+  formId: string,
+  sinceUnix: number | null,
+  token?: string,
+): Promise<{ count: number; truncated: boolean }> {
+  const params: Record<string, string> = { fields: "id", limit: "100" };
+  if (sinceUnix !== null) {
+    params["filtering"] = JSON.stringify([
+      { field: "time_created", operator: "GREATER_THAN", value: sinceUnix },
+    ]);
+  }
+  const { items, truncated } = await collectEdge<{ id?: string }>(
+    `/${encodeURIComponent(formId)}/leads`,
+    params,
+    token ? { token } : {},
+    20,
+  );
+  return { count: items.filter((lead) => lead.id).length, truncated };
 }
 
 /** Leads created after `sinceUnix` on one form, newest first, bounded by maxPages. */
@@ -220,18 +331,20 @@ export async function listFormLeads(
   formId: string,
   sinceUnix: number,
   maxPages = 10,
+  token?: string,
 ): Promise<{ leads: GraphLead[]; truncated: boolean }> {
   const filtering = JSON.stringify([
     { field: "time_created", operator: "GREATER_THAN", value: sinceUnix },
   ]);
-  const { result } = await withFieldFallback(async (fields) => {
-    const first = await graphRequest<Paged<GraphLead>>(`/${encodeURIComponent(formId)}/leads`, {
-      fields,
-      filtering,
-      limit: "100",
-    });
-    return collectPages(first, maxPages);
-  });
+  const init = token ? { token } : {};
+  const { result } = await withFieldFallback(async (fields) =>
+    collectEdge<GraphLead>(
+      `/${encodeURIComponent(formId)}/leads`,
+      { fields, filtering, limit: "100" },
+      init,
+      maxPages,
+    ),
+  );
   return { leads: result.items, truncated: result.truncated };
 }
 
