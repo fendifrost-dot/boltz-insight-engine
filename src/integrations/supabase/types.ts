@@ -203,6 +203,50 @@ export type Database = {
         }
         Relationships: []
       }
+      email_intake_receipts: {
+        Row: {
+          created_at: string
+          external_id: string | null
+          id: string
+          lead_id: string | null
+          provider_message_id: string
+          received_at: string | null
+          source: string
+          status: string
+          suppress_first_touch: boolean
+        }
+        Insert: {
+          created_at?: string
+          external_id?: string | null
+          id?: string
+          lead_id?: string | null
+          provider_message_id: string
+          received_at?: string | null
+          source: string
+          status: string
+          suppress_first_touch?: boolean
+        }
+        Update: {
+          created_at?: string
+          external_id?: string | null
+          id?: string
+          lead_id?: string | null
+          provider_message_id?: string
+          received_at?: string | null
+          source?: string
+          status?: string
+          suppress_first_touch?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_intake_receipts_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lead_events: {
         Row: {
           actor: string | null

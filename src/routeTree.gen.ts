@@ -28,6 +28,7 @@ import { Route as AuthenticatedProvenanceRouteImport } from './routes/_authentic
 import { Route as AuthenticatedQueriesRouteImport } from './routes/_authenticated/queries'
 import { Route as ApiPublicSupabaseConfigRouteImport } from './routes/api/public/supabase-config'
 import { Route as ApiPublicCronAdsWeeklyRouteImport } from './routes/api/public/cron/ads-weekly'
+import { Route as ApiPublicCronIngestLeadsRouteImport } from './routes/api/public/cron/ingest-leads'
 import { Route as ApiPublicCronProcessJobsRouteImport } from './routes/api/public/cron/process-jobs'
 import { Route as ApiPublicCronReconcileMessagesRouteImport } from './routes/api/public/cron/reconcile-messages'
 import { Route as ApiPublicCronReconcileMetaLeadsRouteImport } from './routes/api/public/cron/reconcile-meta-leads'
@@ -135,6 +136,11 @@ const ApiPublicCronAdsWeeklyRoute = ApiPublicCronAdsWeeklyRouteImport.update({
   path: '/api/public/cron/ads-weekly',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicCronIngestLeadsRoute = ApiPublicCronIngestLeadsRouteImport.update({
+  id: '/api/public/cron/ingest-leads',
+  path: '/api/public/cron/ingest-leads',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicCronProcessJobsRoute =
   ApiPublicCronProcessJobsRouteImport.update({
     id: '/api/public/cron/process-jobs',
@@ -190,6 +196,7 @@ export interface FileRoutesByFullPath {
   '/queries': typeof AuthenticatedQueriesRoute
   '/api/public/supabase-config': typeof ApiPublicSupabaseConfigRoute
   '/api/public/cron/ads-weekly': typeof ApiPublicCronAdsWeeklyRoute
+  '/api/public/cron/ingest-leads': typeof ApiPublicCronIngestLeadsRoute
   '/api/public/cron/process-jobs': typeof ApiPublicCronProcessJobsRoute
   '/api/public/cron/reconcile-messages': typeof ApiPublicCronReconcileMessagesRoute
   '/api/public/cron/reconcile-meta-leads': typeof ApiPublicCronReconcileMetaLeadsRoute
@@ -216,6 +223,7 @@ export interface FileRoutesByTo {
   '/': typeof AuthenticatedIndexRoute
   '/api/public/supabase-config': typeof ApiPublicSupabaseConfigRoute
   '/api/public/cron/ads-weekly': typeof ApiPublicCronAdsWeeklyRoute
+  '/api/public/cron/ingest-leads': typeof ApiPublicCronIngestLeadsRoute
   '/api/public/cron/process-jobs': typeof ApiPublicCronProcessJobsRoute
   '/api/public/cron/reconcile-messages': typeof ApiPublicCronReconcileMessagesRoute
   '/api/public/cron/reconcile-meta-leads': typeof ApiPublicCronReconcileMetaLeadsRoute
@@ -244,6 +252,7 @@ export interface FileRoutesById {
   '/_authenticated/': typeof AuthenticatedIndexRoute
   '/api/public/supabase-config': typeof ApiPublicSupabaseConfigRoute
   '/api/public/cron/ads-weekly': typeof ApiPublicCronAdsWeeklyRoute
+  '/api/public/cron/ingest-leads': typeof ApiPublicCronIngestLeadsRoute
   '/api/public/cron/process-jobs': typeof ApiPublicCronProcessJobsRoute
   '/api/public/cron/reconcile-messages': typeof ApiPublicCronReconcileMessagesRoute
   '/api/public/cron/reconcile-meta-leads': typeof ApiPublicCronReconcileMetaLeadsRoute
@@ -272,6 +281,7 @@ export interface FileRouteTypes {
     | '/queries'
     | '/api/public/supabase-config'
     | '/api/public/cron/ads-weekly'
+    | '/api/public/cron/ingest-leads'
     | '/api/public/cron/process-jobs'
     | '/api/public/cron/reconcile-messages'
     | '/api/public/cron/reconcile-meta-leads'
@@ -298,6 +308,7 @@ export interface FileRouteTypes {
     | '/'
     | '/api/public/supabase-config'
     | '/api/public/cron/ads-weekly'
+    | '/api/public/cron/ingest-leads'
     | '/api/public/cron/process-jobs'
     | '/api/public/cron/reconcile-messages'
     | '/api/public/cron/reconcile-meta-leads'
@@ -325,6 +336,7 @@ export interface FileRouteTypes {
     | '/_authenticated/'
     | '/api/public/supabase-config'
     | '/api/public/cron/ads-weekly'
+    | '/api/public/cron/ingest-leads'
     | '/api/public/cron/process-jobs'
     | '/api/public/cron/reconcile-messages'
     | '/api/public/cron/reconcile-meta-leads'
@@ -338,6 +350,7 @@ export interface RootRouteChildren {
   AuthRoute: typeof AuthRoute
   ApiPublicSupabaseConfigRoute: typeof ApiPublicSupabaseConfigRoute
   ApiPublicCronAdsWeeklyRoute: typeof ApiPublicCronAdsWeeklyRoute
+  ApiPublicCronIngestLeadsRoute: typeof ApiPublicCronIngestLeadsRoute
   ApiPublicCronProcessJobsRoute: typeof ApiPublicCronProcessJobsRoute
   ApiPublicCronReconcileMessagesRoute: typeof ApiPublicCronReconcileMessagesRoute
   ApiPublicCronReconcileMetaLeadsRoute: typeof ApiPublicCronReconcileMetaLeadsRoute
@@ -481,6 +494,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicCronAdsWeeklyRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/cron/ingest-leads': {
+      id: '/api/public/cron/ingest-leads'
+      path: '/api/public/cron/ingest-leads'
+      fullPath: '/api/public/cron/ingest-leads'
+      preLoaderRoute: typeof ApiPublicCronIngestLeadsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/cron/process-jobs': {
       id: '/api/public/cron/process-jobs'
       path: '/api/public/cron/process-jobs'
@@ -570,6 +590,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthRoute: AuthRoute,
   ApiPublicSupabaseConfigRoute: ApiPublicSupabaseConfigRoute,
   ApiPublicCronAdsWeeklyRoute: ApiPublicCronAdsWeeklyRoute,
+  ApiPublicCronIngestLeadsRoute: ApiPublicCronIngestLeadsRoute,
   ApiPublicCronProcessJobsRoute: ApiPublicCronProcessJobsRoute,
   ApiPublicCronReconcileMessagesRoute: ApiPublicCronReconcileMessagesRoute,
   ApiPublicCronReconcileMetaLeadsRoute: ApiPublicCronReconcileMetaLeadsRoute,

@@ -17,7 +17,7 @@ export const Route = createFileRoute("/_authenticated/integration-health")({
       {
         name: "description",
         content:
-          "RingCentral, Meta Lead Ads and Grok connection status, webhook subscriptions, and job queue state.",
+          "RingCentral, Meta Lead Ads, Gmail lead intake and Grok connection status, webhook subscriptions, and job queue state.",
       },
       { name: "robots", content: "noindex, nofollow" },
     ],

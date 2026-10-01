@@ -32,6 +32,7 @@ MIGRATIONS=(
   "supabase/migrations/20260827230000_lock_role_probe_to_caller.sql"
   "supabase/migrations/20260828013000_apply_lead_lifecycle_transition.sql"
   "supabase/migrations/20260924180000_meta_lead_ads_ingestion.sql"
+  "supabase/migrations/20261001190000_email_intake_receipts.sql"
 )
 
 psql_cmd() {

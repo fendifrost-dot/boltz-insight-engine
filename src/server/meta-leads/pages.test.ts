@@ -16,26 +16,28 @@ test("parsePageIdList keeps numeric page ids and drops anything else", () => {
   assert.deepEqual(parsePageIdList(undefined), []);
 });
 
-test("the subscribed page is always scanned and the duplicate page only when configured", () => {
+test("the subscribed page and the known duplicate page are always scanned", () => {
   assert.deepEqual(
-    leadgenPagesToScan([SUBSCRIBED_LEADGEN_PAGE_ID]).map((page) => page.pageId),
-    [SUBSCRIBED_LEADGEN_PAGE_ID],
-  );
-  assert.deepEqual(
-    leadgenPagesToScan([DUPLICATE_LEADGEN_PAGE_ID]).map((page) => [page.pageId, page.reason]),
+    leadgenPagesToScan([]).map((page) => [page.pageId, page.reason]),
     [
       [SUBSCRIBED_LEADGEN_PAGE_ID, "subscribed"],
-      [DUPLICATE_LEADGEN_PAGE_ID, "configured"],
+      [DUPLICATE_LEADGEN_PAGE_ID, "known_duplicate"],
     ],
   );
   assert.deepEqual(
-    leadgenPagesToScan([SUBSCRIBED_LEADGEN_PAGE_ID, DUPLICATE_LEADGEN_PAGE_ID]).map(
-      (page) => page.pageId,
-    ),
+    leadgenPagesToScan([SUBSCRIBED_LEADGEN_PAGE_ID]).map((page) => page.pageId),
     [SUBSCRIBED_LEADGEN_PAGE_ID, DUPLICATE_LEADGEN_PAGE_ID],
   );
-  assert.equal(
-    leadgenPagesToScan([]).some((page) => page.pageId === DUPLICATE_LEADGEN_PAGE_ID),
-    false,
+  assert.deepEqual(
+    leadgenPagesToScan([DUPLICATE_LEADGEN_PAGE_ID]).map((page) => page.pageId),
+    [SUBSCRIBED_LEADGEN_PAGE_ID, DUPLICATE_LEADGEN_PAGE_ID],
+  );
+  assert.deepEqual(
+    leadgenPagesToScan(["555000111222333"]).map((page) => [page.pageId, page.reason]),
+    [
+      [SUBSCRIBED_LEADGEN_PAGE_ID, "subscribed"],
+      [DUPLICATE_LEADGEN_PAGE_ID, "known_duplicate"],
+      ["555000111222333", "configured"],
+    ],
   );
 });
