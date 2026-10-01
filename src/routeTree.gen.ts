@@ -136,11 +136,12 @@ const ApiPublicCronAdsWeeklyRoute = ApiPublicCronAdsWeeklyRouteImport.update({
   path: '/api/public/cron/ads-weekly',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiPublicCronIngestLeadsRoute = ApiPublicCronIngestLeadsRouteImport.update({
-  id: '/api/public/cron/ingest-leads',
-  path: '/api/public/cron/ingest-leads',
-  getParentRoute: () => rootRouteImport,
-} as any)
+const ApiPublicCronIngestLeadsRoute =
+  ApiPublicCronIngestLeadsRouteImport.update({
+    id: '/api/public/cron/ingest-leads',
+    path: '/api/public/cron/ingest-leads',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicCronProcessJobsRoute =
   ApiPublicCronProcessJobsRouteImport.update({
     id: '/api/public/cron/process-jobs',
