@@ -12,7 +12,7 @@ import {
   pageAccessTokenFor,
 } from "./graph.server";
 import type { GraphLead } from "./normalize";
-import { leadgenPagesToScan } from "./pages";
+import { DUPLICATE_LEADGEN_PAGE_ID, leadgenPagesToScan } from "./pages";
 import type { LeadgenPage } from "./pages";
 import { MAX_INGEST_ATTEMPTS, META_PROVIDER, ingestMetaLead } from "./ingest.server";
 
@@ -52,6 +52,9 @@ export type ReconcileSummary = {
   contactedMatched: number;
   contactedIgnored: number;
   errors: string[];
+  /** Failures on a Page other than the subscribed one. They do not fail graph_fetch. */
+  pageErrors: string[];
+  duplicatePageChecked: boolean;
 };
 
 export async function reconcileMetaLeads(args: {
@@ -98,6 +101,8 @@ export async function reconcileMetaLeads(args: {
     contactedMatched: 0,
     contactedIgnored: args.contactedIgnored ?? 0,
     errors: [],
+    pageErrors: [],
+    duplicatePageChecked: false,
   };
   const maxIngest = args.window === "backfill" ? MAX_BACKFILL_INGEST : MAX_INGEST_PER_RUN;
 
@@ -107,6 +112,7 @@ export async function reconcileMetaLeads(args: {
     const byId = new Map<string, { lead: GraphLead; pageId: string }>();
 
     for (const page of pages) {
+      if (page.reason !== "subscribed") summary.duplicatePageChecked = true;
       let forms: { id: string }[] = [];
       let pageToken: string | undefined;
       try {
@@ -114,10 +120,9 @@ export async function reconcileMetaLeads(args: {
         const listed = await listForms(page.pageId);
         forms = listed.forms;
         summary.truncated ||= listed.truncated;
-        if (listed.truncated) summary.errors.push(`page ${page.pageId}: form list truncated`);
+        if (listed.truncated) notePageIssue(summary, page, `page ${page.pageId}: form list truncated`);
       } catch (error) {
-        if (error instanceof GraphError && error.isAuthError) throw error;
-        summary.errors.push(`page ${page.pageId}: ${graphErrorCode(error)}`);
+        notePageIssue(summary, page, `page ${page.pageId}: ${graphErrorCode(error)}`, error);
         continue;
       }
 
@@ -139,8 +144,7 @@ export async function reconcileMetaLeads(args: {
             });
           }
         } catch (error) {
-          if (error instanceof GraphError && error.isAuthError) throw error;
-          summary.errors.push(`form ${form.id}: ${graphErrorCode(error)}`);
+          notePageIssue(summary, page, `form ${form.id}: ${graphErrorCode(error)}`, error);
         }
       }
     }
@@ -155,6 +159,7 @@ export async function reconcileMetaLeads(args: {
         forms: summary.forms,
         formStats: summary.formStats.slice(0, 100),
         pages: summary.pages,
+        pageErrors: summary.pageErrors.slice(0, 5),
       },
     });
 
@@ -225,6 +230,18 @@ export async function reconcileMetaLeads(args: {
     }
   }
 
+  if (summary.duplicatePageChecked) {
+    await recordHealth({
+      provider: META_PROVIDER,
+      checkName: "duplicate_page",
+      ok: summary.pageErrors.length === 0,
+      detail: (
+        summary.pageErrors[0] ?? `scanned page ${DUPLICATE_LEADGEN_PAGE_ID}`
+      ).slice(0, 300),
+      metadata: { pageErrors: summary.pageErrors.slice(0, 5) },
+    });
+  }
+
   await recordHealth({
     provider: META_PROVIDER,
     checkName: `reconcile_${summary.window}`,
@@ -284,7 +301,9 @@ export async function diagnoseMetaLeadForms(args: {
         try {
           questionKeys = await listFormQuestionKeys(form.id, token);
         } catch (error) {
-          if (error instanceof GraphError && error.isAuthError) throw error;
+          if (error instanceof GraphError && error.isAuthError && page.reason === "subscribed") {
+            throw error;
+          }
           questionsError = graphErrorCode(error);
         }
         let leadsInWindow: number | null = null;
@@ -295,7 +314,9 @@ export async function diagnoseMetaLeadForms(args: {
             leadsInWindow = counted.count;
             truncated ||= counted.truncated;
           } catch (error) {
-            if (error instanceof GraphError && error.isAuthError) throw error;
+            if (error instanceof GraphError && error.isAuthError && page.reason === "subscribed") {
+              throw error;
+            }
             errors.push(`form ${form.id}: ${graphErrorCode(error)}`);
           }
         }
@@ -311,11 +332,8 @@ export async function diagnoseMetaLeadForms(args: {
         });
       }
     } catch (error) {
-      if (error instanceof GraphError && error.isAuthError) {
-        errors.push(`page ${page.pageId}: ${graphErrorCode(error)}`);
-        break;
-      }
       errors.push(`page ${page.pageId}: ${graphErrorCode(error)}`);
+      if (error instanceof GraphError && error.isAuthError && page.reason === "subscribed") break;
     }
   }
 
@@ -343,6 +361,25 @@ export async function diagnoseMetaLeadForms(args: {
     },
   });
   return report;
+}
+
+/**
+ * Subscribed-page auth failures abort the run. Any other Page keeps going so
+ * a token that cannot read page 101035642014297 cannot hide leads on the
+ * subscribed Page, and the failure is recorded on `duplicate_page` instead.
+ */
+function notePageIssue(
+  summary: ReconcileSummary,
+  page: LeadgenPage,
+  message: string,
+  error?: unknown,
+): void {
+  if (page.reason === "subscribed") {
+    if (error instanceof GraphError && error.isAuthError) throw error;
+    summary.errors.push(message);
+    return;
+  }
+  summary.pageErrors.push(message);
 }
 
 function graphErrorCode(error: unknown): string {
