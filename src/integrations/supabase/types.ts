@@ -708,6 +708,36 @@ export type Database = {
         }
         Relationships: []
       }
+      sales_weekly: {
+        Row: {
+          created_at: string | null
+          notes: string | null
+          reported_by: string | null
+          square_gross: number | null
+          stripe_gross: number | null
+          updated_at: string | null
+          week_start: string
+        }
+        Insert: {
+          created_at?: string | null
+          notes?: string | null
+          reported_by?: string | null
+          square_gross?: number | null
+          stripe_gross?: number | null
+          updated_at?: string | null
+          week_start: string
+        }
+        Update: {
+          created_at?: string | null
+          notes?: string | null
+          reported_by?: string | null
+          square_gross?: number | null
+          stripe_gross?: number | null
+          updated_at?: string | null
+          week_start?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string
