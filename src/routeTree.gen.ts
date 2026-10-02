@@ -27,6 +27,7 @@ import { Route as AuthenticatedModulesRouteImport } from './routes/_authenticate
 import { Route as AuthenticatedProvenanceRouteImport } from './routes/_authenticated/provenance'
 import { Route as AuthenticatedQueriesRouteImport } from './routes/_authenticated/queries'
 import { Route as ApiPublicSupabaseConfigRouteImport } from './routes/api/public/supabase-config'
+import { Route as ApiPublicCronAdsCallsRouteImport } from './routes/api/public/cron/ads-calls'
 import { Route as ApiPublicCronAdsWeeklyRouteImport } from './routes/api/public/cron/ads-weekly'
 import { Route as ApiPublicCronIngestLeadsRouteImport } from './routes/api/public/cron/ingest-leads'
 import { Route as ApiPublicCronProcessJobsRouteImport } from './routes/api/public/cron/process-jobs'
@@ -131,6 +132,11 @@ const ApiPublicSupabaseConfigRoute = ApiPublicSupabaseConfigRouteImport.update({
   path: '/api/public/supabase-config',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicCronAdsCallsRoute = ApiPublicCronAdsCallsRouteImport.update({
+  id: '/api/public/cron/ads-calls',
+  path: '/api/public/cron/ads-calls',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicCronAdsWeeklyRoute = ApiPublicCronAdsWeeklyRouteImport.update({
   id: '/api/public/cron/ads-weekly',
   path: '/api/public/cron/ads-weekly',
@@ -196,6 +202,7 @@ export interface FileRoutesByFullPath {
   '/provenance': typeof AuthenticatedProvenanceRoute
   '/queries': typeof AuthenticatedQueriesRoute
   '/api/public/supabase-config': typeof ApiPublicSupabaseConfigRoute
+  '/api/public/cron/ads-calls': typeof ApiPublicCronAdsCallsRoute
   '/api/public/cron/ads-weekly': typeof ApiPublicCronAdsWeeklyRoute
   '/api/public/cron/ingest-leads': typeof ApiPublicCronIngestLeadsRoute
   '/api/public/cron/process-jobs': typeof ApiPublicCronProcessJobsRoute
@@ -223,6 +230,7 @@ export interface FileRoutesByTo {
   '/queries': typeof AuthenticatedQueriesRoute
   '/': typeof AuthenticatedIndexRoute
   '/api/public/supabase-config': typeof ApiPublicSupabaseConfigRoute
+  '/api/public/cron/ads-calls': typeof ApiPublicCronAdsCallsRoute
   '/api/public/cron/ads-weekly': typeof ApiPublicCronAdsWeeklyRoute
   '/api/public/cron/ingest-leads': typeof ApiPublicCronIngestLeadsRoute
   '/api/public/cron/process-jobs': typeof ApiPublicCronProcessJobsRoute
@@ -252,6 +260,7 @@ export interface FileRoutesById {
   '/_authenticated/queries': typeof AuthenticatedQueriesRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
   '/api/public/supabase-config': typeof ApiPublicSupabaseConfigRoute
+  '/api/public/cron/ads-calls': typeof ApiPublicCronAdsCallsRoute
   '/api/public/cron/ads-weekly': typeof ApiPublicCronAdsWeeklyRoute
   '/api/public/cron/ingest-leads': typeof ApiPublicCronIngestLeadsRoute
   '/api/public/cron/process-jobs': typeof ApiPublicCronProcessJobsRoute
@@ -281,6 +290,7 @@ export interface FileRouteTypes {
     | '/provenance'
     | '/queries'
     | '/api/public/supabase-config'
+    | '/api/public/cron/ads-calls'
     | '/api/public/cron/ads-weekly'
     | '/api/public/cron/ingest-leads'
     | '/api/public/cron/process-jobs'
@@ -308,6 +318,7 @@ export interface FileRouteTypes {
     | '/queries'
     | '/'
     | '/api/public/supabase-config'
+    | '/api/public/cron/ads-calls'
     | '/api/public/cron/ads-weekly'
     | '/api/public/cron/ingest-leads'
     | '/api/public/cron/process-jobs'
@@ -336,6 +347,7 @@ export interface FileRouteTypes {
     | '/_authenticated/queries'
     | '/_authenticated/'
     | '/api/public/supabase-config'
+    | '/api/public/cron/ads-calls'
     | '/api/public/cron/ads-weekly'
     | '/api/public/cron/ingest-leads'
     | '/api/public/cron/process-jobs'
@@ -350,6 +362,7 @@ export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
   ApiPublicSupabaseConfigRoute: typeof ApiPublicSupabaseConfigRoute
+  ApiPublicCronAdsCallsRoute: typeof ApiPublicCronAdsCallsRoute
   ApiPublicCronAdsWeeklyRoute: typeof ApiPublicCronAdsWeeklyRoute
   ApiPublicCronIngestLeadsRoute: typeof ApiPublicCronIngestLeadsRoute
   ApiPublicCronProcessJobsRoute: typeof ApiPublicCronProcessJobsRoute
@@ -488,6 +501,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicSupabaseConfigRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/cron/ads-calls': {
+      id: '/api/public/cron/ads-calls'
+      path: '/api/public/cron/ads-calls'
+      fullPath: '/api/public/cron/ads-calls'
+      preLoaderRoute: typeof ApiPublicCronAdsCallsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/cron/ads-weekly': {
       id: '/api/public/cron/ads-weekly'
       path: '/api/public/cron/ads-weekly'
@@ -590,6 +610,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
   ApiPublicSupabaseConfigRoute: ApiPublicSupabaseConfigRoute,
+  ApiPublicCronAdsCallsRoute: ApiPublicCronAdsCallsRoute,
   ApiPublicCronAdsWeeklyRoute: ApiPublicCronAdsWeeklyRoute,
   ApiPublicCronIngestLeadsRoute: ApiPublicCronIngestLeadsRoute,
   ApiPublicCronProcessJobsRoute: ApiPublicCronProcessJobsRoute,
