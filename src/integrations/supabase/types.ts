@@ -14,6 +14,75 @@ export type Database = {
   }
   public: {
     Tables: {
+      ads_call_weekly: {
+        Row: {
+          answered_avg_duration_seconds: number | null
+          answered_calls: number | null
+          answered_duration_seconds: number | null
+          call_conversions: number | null
+          call_reporting_ok: boolean
+          calls_by_campaign: Json | null
+          calls_by_day: Json | null
+          created_at: string
+          customer_id: string
+          detail: string | null
+          id: string
+          lead_form_submissions: number | null
+          metrics_by_campaign: Json | null
+          missed_calls: number | null
+          other_calls: number | null
+          phone_calls: number | null
+          total_calls: number | null
+          updated_at: string
+          week_end: string
+          week_start: string
+        }
+        Insert: {
+          answered_avg_duration_seconds?: number | null
+          answered_calls?: number | null
+          answered_duration_seconds?: number | null
+          call_conversions?: number | null
+          call_reporting_ok: boolean
+          calls_by_campaign?: Json | null
+          calls_by_day?: Json | null
+          created_at?: string
+          customer_id: string
+          detail?: string | null
+          id?: string
+          lead_form_submissions?: number | null
+          metrics_by_campaign?: Json | null
+          missed_calls?: number | null
+          other_calls?: number | null
+          phone_calls?: number | null
+          total_calls?: number | null
+          updated_at?: string
+          week_end: string
+          week_start: string
+        }
+        Update: {
+          answered_avg_duration_seconds?: number | null
+          answered_calls?: number | null
+          answered_duration_seconds?: number | null
+          call_conversions?: number | null
+          call_reporting_ok?: boolean
+          calls_by_campaign?: Json | null
+          calls_by_day?: Json | null
+          created_at?: string
+          customer_id?: string
+          detail?: string | null
+          id?: string
+          lead_form_submissions?: number | null
+          metrics_by_campaign?: Json | null
+          missed_calls?: number | null
+          other_calls?: number | null
+          phone_calls?: number | null
+          total_calls?: number | null
+          updated_at?: string
+          week_end?: string
+          week_start?: string
+        }
+        Relationships: []
+      }
       agent_runs: {
         Row: {
           action: Database["public"]["Enums"]["agent_action"]
