@@ -33,6 +33,7 @@ MIGRATIONS=(
   "supabase/migrations/20260828013000_apply_lead_lifecycle_transition.sql"
   "supabase/migrations/20260924180000_meta_lead_ads_ingestion.sql"
   "supabase/migrations/20261001190000_email_intake_receipts.sql"
+  "supabase/migrations/20261002150000_ads_call_weekly.sql"
 )
 
 psql_cmd() {
