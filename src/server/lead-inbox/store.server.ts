@@ -91,6 +91,18 @@ export async function addEvent(
   if (error) throw error;
 }
 
+export async function findMessageByIdempotencyKey(
+  idempotencyKey: string,
+): Promise<MessageRow | null> {
+  const { data, error } = await supabaseAdmin
+    .from("messages")
+    .select("*")
+    .eq("idempotency_key", idempotencyKey)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
 export async function findMessageByProviderId(providerMessageId: string): Promise<MessageRow | null> {
   const { data, error } = await supabaseAdmin
     .from("messages")
@@ -166,12 +178,7 @@ export async function recordOutboundMessage(args: {
   providerCreatedAt: string | null;
   metadata?: Record<string, unknown>;
 }): Promise<MessageRow | null> {
-  const { data: existing, error: existingError } = await supabaseAdmin
-    .from("messages")
-    .select("*")
-    .eq("idempotency_key", args.idempotencyKey)
-    .maybeSingle();
-  if (existingError) throw existingError;
+  const existing = await findMessageByIdempotencyKey(args.idempotencyKey);
   if (existing) return null;
 
   const { data, error } = await supabaseAdmin

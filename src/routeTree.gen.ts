@@ -36,6 +36,7 @@ import { Route as ApiPublicCronReconcileMetaLeadsRouteImport } from './routes/ap
 import { Route as ApiPublicCronRenewSubscriptionsRouteImport } from './routes/api/public/cron/renew-subscriptions'
 import { Route as ApiPublicMetaWebhookRouteImport } from './routes/api/public/meta/webhook'
 import { Route as ApiPublicRingcentralWebhookRouteImport } from './routes/api/public/ringcentral/webhook'
+import { Route as ApiPublicBotRouteImport } from './routes/api/public/bot'
 
 const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
   id: '/_authenticated',
@@ -183,6 +184,11 @@ const ApiPublicRingcentralWebhookRoute =
     path: '/api/public/ringcentral/webhook',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicBotRoute = ApiPublicBotRouteImport.update({
+  id: '/api/public/bot',
+  path: '/api/public/bot',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedIndexRoute
@@ -211,6 +217,7 @@ export interface FileRoutesByFullPath {
   '/api/public/cron/renew-subscriptions': typeof ApiPublicCronRenewSubscriptionsRoute
   '/api/public/meta/webhook': typeof ApiPublicMetaWebhookRoute
   '/api/public/ringcentral/webhook': typeof ApiPublicRingcentralWebhookRoute
+  '/api/public/bot': typeof ApiPublicBotRoute
 }
 export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
@@ -239,6 +246,7 @@ export interface FileRoutesByTo {
   '/api/public/cron/renew-subscriptions': typeof ApiPublicCronRenewSubscriptionsRoute
   '/api/public/meta/webhook': typeof ApiPublicMetaWebhookRoute
   '/api/public/ringcentral/webhook': typeof ApiPublicRingcentralWebhookRoute
+  '/api/public/bot': typeof ApiPublicBotRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -269,6 +277,7 @@ export interface FileRoutesById {
   '/api/public/cron/renew-subscriptions': typeof ApiPublicCronRenewSubscriptionsRoute
   '/api/public/meta/webhook': typeof ApiPublicMetaWebhookRoute
   '/api/public/ringcentral/webhook': typeof ApiPublicRingcentralWebhookRoute
+  '/api/public/bot': typeof ApiPublicBotRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -299,6 +308,7 @@ export interface FileRouteTypes {
     | '/api/public/cron/renew-subscriptions'
     | '/api/public/meta/webhook'
     | '/api/public/ringcentral/webhook'
+    | '/api/public/bot'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/auth'
@@ -327,6 +337,7 @@ export interface FileRouteTypes {
     | '/api/public/cron/renew-subscriptions'
     | '/api/public/meta/webhook'
     | '/api/public/ringcentral/webhook'
+    | '/api/public/bot'
   id:
     | '__root__'
     | '/_authenticated'
@@ -356,6 +367,7 @@ export interface FileRouteTypes {
     | '/api/public/cron/renew-subscriptions'
     | '/api/public/meta/webhook'
     | '/api/public/ringcentral/webhook'
+    | '/api/public/bot'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -371,6 +383,7 @@ export interface RootRouteChildren {
   ApiPublicCronRenewSubscriptionsRoute: typeof ApiPublicCronRenewSubscriptionsRoute
   ApiPublicMetaWebhookRoute: typeof ApiPublicMetaWebhookRoute
   ApiPublicRingcentralWebhookRoute: typeof ApiPublicRingcentralWebhookRoute
+  ApiPublicBotRoute: typeof ApiPublicBotRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -564,6 +577,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicRingcentralWebhookRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/bot': {
+      id: '/api/public/bot'
+      path: '/api/public/bot'
+      fullPath: '/api/public/bot'
+      preLoaderRoute: typeof ApiPublicBotRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -619,6 +639,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicCronRenewSubscriptionsRoute: ApiPublicCronRenewSubscriptionsRoute,
   ApiPublicMetaWebhookRoute: ApiPublicMetaWebhookRoute,
   ApiPublicRingcentralWebhookRoute: ApiPublicRingcentralWebhookRoute,
+  ApiPublicBotRoute: ApiPublicBotRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
