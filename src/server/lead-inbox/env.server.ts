@@ -1,3 +1,5 @@
+import { createHash, timingSafeEqual } from "node:crypto";
+
 // Server-only secret access for the lead inbox. Never import from client code.
 
 export type SecretName =
@@ -10,6 +12,7 @@ export type SecretName =
   | "XAI_API_KEY"
   | "XAI_MODEL"
   | "CRON_SECRET"
+  | "BOT_API_SECRET"
   | "PUBLIC_APP_URL"
   | "AGENT_AUTH_EMAIL"
   | "AGENT_AUTH_PASSWORD";
@@ -24,6 +27,7 @@ export const SECRET_NAMES: SecretName[] = [
   "XAI_API_KEY",
   "XAI_MODEL",
   "CRON_SECRET",
+  "BOT_API_SECRET",
   "PUBLIC_APP_URL",
   "AGENT_AUTH_EMAIL",
   "AGENT_AUTH_PASSWORD",
@@ -77,4 +81,14 @@ export function safeEqual(a: string, b: string): boolean {
   let diff = 0;
   for (let i = 0; i < a.length; i += 1) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
   return diff === 0;
+}
+
+/**
+ * Compare secrets without leaking length or a shared prefix.
+ * SHA-256 digests are fixed length, then timingSafeEqual compares them.
+ */
+export function secretEqual(a: string, b: string): boolean {
+  const left = createHash("sha256").update(a, "utf8").digest();
+  const right = createHash("sha256").update(b, "utf8").digest();
+  return timingSafeEqual(left, right);
 }

@@ -2,7 +2,13 @@
 import { resolveSmsCapability, sendSms, redact } from "./ringcentral.server";
 import { requireSecret } from "./env.server";
 import { describeOutboundBlock, validateOutbound } from "./safety.server";
-import { addEvent, recordHealth, recordOutboundMessage, toE164 } from "./store.server";
+import {
+  addEvent,
+  findMessageByIdempotencyKey,
+  recordHealth,
+  recordOutboundMessage,
+  toE164,
+} from "./store.server";
 import type { MessageRow } from "./store.server";
 
 let capabilityCache:
@@ -28,6 +34,7 @@ export async function sendOutbound(args: {
   text: string;
   idempotencyKey: string;
   actor: string;
+  eventMetadata?: Record<string, unknown>;
 }): Promise<SendOutcome> {
   const check = validateOutbound(args.text);
   if (!check.ok) {
@@ -37,6 +44,14 @@ export async function sendOutbound(args: {
       problems: check.problems,
     });
     return { ok: false, reason, tags: check.tags };
+  }
+
+  // A recorded key means this send already reached the provider. Retrying
+  // must not call RingCentral again. Owner keys include a timestamp, so this
+  // only changes callers that reuse a key (jobs, first touch, bots).
+  const alreadySent = await findMessageByIdempotencyKey(args.idempotencyKey);
+  if (alreadySent) {
+    return { ok: true, message: alreadySent, duplicate: true };
   }
 
   const capability = await cachedCapability();
@@ -71,9 +86,17 @@ export async function sendOutbound(args: {
       providerCreatedAt: result.providerCreatedAt,
       metadata: result.raw,
     });
-    await addEvent(args.leadId, "outbound_sent", `Outbound SMS sent by ${args.actor}`, args.actor, {
+    const eventMetadata: Record<string, unknown> = {
       provider_message_id: result.providerMessageId,
-    });
+    };
+    if (args.eventMetadata) Object.assign(eventMetadata, args.eventMetadata);
+    await addEvent(
+      args.leadId,
+      "outbound_sent",
+      `Outbound SMS sent by ${args.actor}`,
+      args.actor,
+      eventMetadata,
+    );
     await recordHealth({ provider: "ringcentral", checkName: "send_sms", ok: true });
     return { ok: true, message, duplicate: message === null };
   } catch (error) {
