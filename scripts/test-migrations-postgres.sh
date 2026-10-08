@@ -34,6 +34,7 @@ MIGRATIONS=(
   "supabase/migrations/20260924180000_meta_lead_ads_ingestion.sql"
   "supabase/migrations/20261001190000_email_intake_receipts.sql"
   "supabase/migrations/20261002150000_ads_call_weekly.sql"
+  "supabase/migrations/20261008170000_mcp_agents.sql"
 )
 
 psql_cmd() {
@@ -342,6 +343,33 @@ psql_cmd -c "CREATE DATABASE \"${TEST_DB}\";" postgres
 
 setup_supabase_roles
 
+assert_mcp_locked() {
+  if ! psql_cmd -d "${TEST_DB}" -Atc "SELECT relrowsecurity AND relforcerowsecurity FROM pg_class WHERE oid = 'public.mcp_agents'::regclass;" | grep -q t; then
+    echo "ERROR: mcp_agents must enable and force row level security" >&2
+    exit 1
+  fi
+  if ! psql_cmd -d "${TEST_DB}" -Atc "SELECT relrowsecurity AND relforcerowsecurity FROM pg_class WHERE oid = 'public.mcp_audit_log'::regclass;" | grep -q t; then
+    echo "ERROR: mcp_audit_log must enable and force row level security" >&2
+    exit 1
+  fi
+  if psql_cmd -d "${TEST_DB}" -Atc "SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'mcp_agents' AND column_name = 'secret';" | grep -q secret; then
+    echo "ERROR: mcp_agents must not store a plaintext secret column" >&2
+    exit 1
+  fi
+  if ! psql_cmd -d "${TEST_DB}" -Atc "SELECT has_table_privilege('anon', 'public.mcp_agents', 'SELECT');" | grep -q f; then
+    echo "ERROR: anon must not read mcp_agents" >&2
+    exit 1
+  fi
+  if ! psql_cmd -d "${TEST_DB}" -Atc "SELECT has_table_privilege('authenticated', 'public.mcp_audit_log', 'SELECT');" | grep -q f; then
+    echo "ERROR: authenticated must not read mcp_audit_log" >&2
+    exit 1
+  fi
+  if ! psql_cmd -d "${TEST_DB}" -Atc "SELECT has_table_privilege('service_role', 'public.mcp_agents', 'INSERT');" | grep -q t; then
+    echo "ERROR: service_role must insert mcp_agents" >&2
+    exit 1
+  fi
+}
+
 echo "Test 1: complete migration chain on empty database"
 apply_baseline
 setup_auth_stub
@@ -352,6 +380,7 @@ assert_lead_inbox_tables
 assert_role_probes_locked
 assert_trigger_functions_have_search_path
 assert_lifecycle_transition_rpc
+assert_mcp_locked
 
 echo "Test 4: lifecycle transition RPC is atomic and returns stale without audit"
 test_lifecycle_transition_rpc

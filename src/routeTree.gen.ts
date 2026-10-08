@@ -26,6 +26,8 @@ import { Route as AuthenticatedMeasurementRouteImport } from './routes/_authenti
 import { Route as AuthenticatedModulesRouteImport } from './routes/_authenticated/modules'
 import { Route as AuthenticatedProvenanceRouteImport } from './routes/_authenticated/provenance'
 import { Route as AuthenticatedQueriesRouteImport } from './routes/_authenticated/queries'
+import { Route as ApiPublicBotRouteImport } from './routes/api/public/bot'
+import { Route as ApiPublicMcpRouteImport } from './routes/api/public/mcp'
 import { Route as ApiPublicSupabaseConfigRouteImport } from './routes/api/public/supabase-config'
 import { Route as ApiPublicCronAdsCallsRouteImport } from './routes/api/public/cron/ads-calls'
 import { Route as ApiPublicCronAdsWeeklyRouteImport } from './routes/api/public/cron/ads-weekly'
@@ -36,7 +38,6 @@ import { Route as ApiPublicCronReconcileMetaLeadsRouteImport } from './routes/ap
 import { Route as ApiPublicCronRenewSubscriptionsRouteImport } from './routes/api/public/cron/renew-subscriptions'
 import { Route as ApiPublicMetaWebhookRouteImport } from './routes/api/public/meta/webhook'
 import { Route as ApiPublicRingcentralWebhookRouteImport } from './routes/api/public/ringcentral/webhook'
-import { Route as ApiPublicBotRouteImport } from './routes/api/public/bot'
 
 const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
   id: '/_authenticated',
@@ -128,6 +129,16 @@ const AuthenticatedQueriesRoute = AuthenticatedQueriesRouteImport.update({
   path: '/queries',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const ApiPublicBotRoute = ApiPublicBotRouteImport.update({
+  id: '/api/public/bot',
+  path: '/api/public/bot',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPublicMcpRoute = ApiPublicMcpRouteImport.update({
+  id: '/api/public/mcp',
+  path: '/api/public/mcp',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicSupabaseConfigRoute = ApiPublicSupabaseConfigRouteImport.update({
   id: '/api/public/supabase-config',
   path: '/api/public/supabase-config',
@@ -184,11 +195,6 @@ const ApiPublicRingcentralWebhookRoute =
     path: '/api/public/ringcentral/webhook',
     getParentRoute: () => rootRouteImport,
   } as any)
-const ApiPublicBotRoute = ApiPublicBotRouteImport.update({
-  id: '/api/public/bot',
-  path: '/api/public/bot',
-  getParentRoute: () => rootRouteImport,
-} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedIndexRoute
@@ -207,6 +213,8 @@ export interface FileRoutesByFullPath {
   '/modules': typeof AuthenticatedModulesRoute
   '/provenance': typeof AuthenticatedProvenanceRoute
   '/queries': typeof AuthenticatedQueriesRoute
+  '/api/public/bot': typeof ApiPublicBotRoute
+  '/api/public/mcp': typeof ApiPublicMcpRoute
   '/api/public/supabase-config': typeof ApiPublicSupabaseConfigRoute
   '/api/public/cron/ads-calls': typeof ApiPublicCronAdsCallsRoute
   '/api/public/cron/ads-weekly': typeof ApiPublicCronAdsWeeklyRoute
@@ -217,7 +225,6 @@ export interface FileRoutesByFullPath {
   '/api/public/cron/renew-subscriptions': typeof ApiPublicCronRenewSubscriptionsRoute
   '/api/public/meta/webhook': typeof ApiPublicMetaWebhookRoute
   '/api/public/ringcentral/webhook': typeof ApiPublicRingcentralWebhookRoute
-  '/api/public/bot': typeof ApiPublicBotRoute
 }
 export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
@@ -236,6 +243,8 @@ export interface FileRoutesByTo {
   '/provenance': typeof AuthenticatedProvenanceRoute
   '/queries': typeof AuthenticatedQueriesRoute
   '/': typeof AuthenticatedIndexRoute
+  '/api/public/bot': typeof ApiPublicBotRoute
+  '/api/public/mcp': typeof ApiPublicMcpRoute
   '/api/public/supabase-config': typeof ApiPublicSupabaseConfigRoute
   '/api/public/cron/ads-calls': typeof ApiPublicCronAdsCallsRoute
   '/api/public/cron/ads-weekly': typeof ApiPublicCronAdsWeeklyRoute
@@ -246,7 +255,6 @@ export interface FileRoutesByTo {
   '/api/public/cron/renew-subscriptions': typeof ApiPublicCronRenewSubscriptionsRoute
   '/api/public/meta/webhook': typeof ApiPublicMetaWebhookRoute
   '/api/public/ringcentral/webhook': typeof ApiPublicRingcentralWebhookRoute
-  '/api/public/bot': typeof ApiPublicBotRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -267,6 +275,8 @@ export interface FileRoutesById {
   '/_authenticated/provenance': typeof AuthenticatedProvenanceRoute
   '/_authenticated/queries': typeof AuthenticatedQueriesRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
+  '/api/public/bot': typeof ApiPublicBotRoute
+  '/api/public/mcp': typeof ApiPublicMcpRoute
   '/api/public/supabase-config': typeof ApiPublicSupabaseConfigRoute
   '/api/public/cron/ads-calls': typeof ApiPublicCronAdsCallsRoute
   '/api/public/cron/ads-weekly': typeof ApiPublicCronAdsWeeklyRoute
@@ -277,7 +287,6 @@ export interface FileRoutesById {
   '/api/public/cron/renew-subscriptions': typeof ApiPublicCronRenewSubscriptionsRoute
   '/api/public/meta/webhook': typeof ApiPublicMetaWebhookRoute
   '/api/public/ringcentral/webhook': typeof ApiPublicRingcentralWebhookRoute
-  '/api/public/bot': typeof ApiPublicBotRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -298,6 +307,8 @@ export interface FileRouteTypes {
     | '/modules'
     | '/provenance'
     | '/queries'
+    | '/api/public/bot'
+    | '/api/public/mcp'
     | '/api/public/supabase-config'
     | '/api/public/cron/ads-calls'
     | '/api/public/cron/ads-weekly'
@@ -308,7 +319,6 @@ export interface FileRouteTypes {
     | '/api/public/cron/renew-subscriptions'
     | '/api/public/meta/webhook'
     | '/api/public/ringcentral/webhook'
-    | '/api/public/bot'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/auth'
@@ -327,6 +337,8 @@ export interface FileRouteTypes {
     | '/provenance'
     | '/queries'
     | '/'
+    | '/api/public/bot'
+    | '/api/public/mcp'
     | '/api/public/supabase-config'
     | '/api/public/cron/ads-calls'
     | '/api/public/cron/ads-weekly'
@@ -337,7 +349,6 @@ export interface FileRouteTypes {
     | '/api/public/cron/renew-subscriptions'
     | '/api/public/meta/webhook'
     | '/api/public/ringcentral/webhook'
-    | '/api/public/bot'
   id:
     | '__root__'
     | '/_authenticated'
@@ -357,6 +368,8 @@ export interface FileRouteTypes {
     | '/_authenticated/provenance'
     | '/_authenticated/queries'
     | '/_authenticated/'
+    | '/api/public/bot'
+    | '/api/public/mcp'
     | '/api/public/supabase-config'
     | '/api/public/cron/ads-calls'
     | '/api/public/cron/ads-weekly'
@@ -367,12 +380,13 @@ export interface FileRouteTypes {
     | '/api/public/cron/renew-subscriptions'
     | '/api/public/meta/webhook'
     | '/api/public/ringcentral/webhook'
-    | '/api/public/bot'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
+  ApiPublicBotRoute: typeof ApiPublicBotRoute
+  ApiPublicMcpRoute: typeof ApiPublicMcpRoute
   ApiPublicSupabaseConfigRoute: typeof ApiPublicSupabaseConfigRoute
   ApiPublicCronAdsCallsRoute: typeof ApiPublicCronAdsCallsRoute
   ApiPublicCronAdsWeeklyRoute: typeof ApiPublicCronAdsWeeklyRoute
@@ -383,7 +397,6 @@ export interface RootRouteChildren {
   ApiPublicCronRenewSubscriptionsRoute: typeof ApiPublicCronRenewSubscriptionsRoute
   ApiPublicMetaWebhookRoute: typeof ApiPublicMetaWebhookRoute
   ApiPublicRingcentralWebhookRoute: typeof ApiPublicRingcentralWebhookRoute
-  ApiPublicBotRoute: typeof ApiPublicBotRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -507,6 +520,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedQueriesRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/api/public/bot': {
+      id: '/api/public/bot'
+      path: '/api/public/bot'
+      fullPath: '/api/public/bot'
+      preLoaderRoute: typeof ApiPublicBotRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/mcp': {
+      id: '/api/public/mcp'
+      path: '/api/public/mcp'
+      fullPath: '/api/public/mcp'
+      preLoaderRoute: typeof ApiPublicMcpRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/supabase-config': {
       id: '/api/public/supabase-config'
       path: '/api/public/supabase-config'
@@ -577,13 +604,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicRingcentralWebhookRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/public/bot': {
-      id: '/api/public/bot'
-      path: '/api/public/bot'
-      fullPath: '/api/public/bot'
-      preLoaderRoute: typeof ApiPublicBotRouteImport
-      parentRoute: typeof rootRouteImport
-    }
   }
 }
 
@@ -629,6 +649,8 @@ const AuthenticatedRouteRouteWithChildren =
 const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
+  ApiPublicBotRoute: ApiPublicBotRoute,
+  ApiPublicMcpRoute: ApiPublicMcpRoute,
   ApiPublicSupabaseConfigRoute: ApiPublicSupabaseConfigRoute,
   ApiPublicCronAdsCallsRoute: ApiPublicCronAdsCallsRoute,
   ApiPublicCronAdsWeeklyRoute: ApiPublicCronAdsWeeklyRoute,
@@ -639,7 +661,6 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicCronRenewSubscriptionsRoute: ApiPublicCronRenewSubscriptionsRoute,
   ApiPublicMetaWebhookRoute: ApiPublicMetaWebhookRoute,
   ApiPublicRingcentralWebhookRoute: ApiPublicRingcentralWebhookRoute,
-  ApiPublicBotRoute: ApiPublicBotRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
