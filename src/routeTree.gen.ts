@@ -27,9 +27,13 @@ import { Route as AuthenticatedModulesRouteImport } from './routes/_authenticate
 import { Route as AuthenticatedProvenanceRouteImport } from './routes/_authenticated/provenance'
 import { Route as AuthenticatedQueriesRouteImport } from './routes/_authenticated/queries'
 import { Route as AuthenticatedSquareRouteImport } from './routes/_authenticated/square'
+import { Route as AuthenticatedDeskIndexRouteImport } from './routes/_authenticated/desk/index'
+import { Route as AuthenticatedDeskNewRouteImport } from './routes/_authenticated/desk/new'
 import { Route as ApiPublicBotRouteImport } from './routes/api/public/bot'
 import { Route as ApiPublicMcpRouteImport } from './routes/api/public/mcp'
 import { Route as ApiPublicSupabaseConfigRouteImport } from './routes/api/public/supabase-config'
+import { Route as AuthenticatedDeskLeadsIndexRouteImport } from './routes/_authenticated/desk/leads/index'
+import { Route as AuthenticatedDeskLeadsLeadIdRouteImport } from './routes/_authenticated/desk/leads/$leadId'
 import { Route as ApiPublicCronAdsCallsRouteImport } from './routes/api/public/cron/ads-calls'
 import { Route as ApiPublicCronAdsWeeklyRouteImport } from './routes/api/public/cron/ads-weekly'
 import { Route as ApiPublicCronIngestLeadsRouteImport } from './routes/api/public/cron/ingest-leads'
@@ -137,6 +141,16 @@ const AuthenticatedSquareRoute = AuthenticatedSquareRouteImport.update({
   path: '/square',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedDeskIndexRoute = AuthenticatedDeskIndexRouteImport.update({
+  id: '/desk/',
+  path: '/desk/',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedDeskNewRoute = AuthenticatedDeskNewRouteImport.update({
+  id: '/desk/new',
+  path: '/desk/new',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const ApiPublicBotRoute = ApiPublicBotRouteImport.update({
   id: '/api/public/bot',
   path: '/api/public/bot',
@@ -152,6 +166,18 @@ const ApiPublicSupabaseConfigRoute = ApiPublicSupabaseConfigRouteImport.update({
   path: '/api/public/supabase-config',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthenticatedDeskLeadsIndexRoute =
+  AuthenticatedDeskLeadsIndexRouteImport.update({
+    id: '/desk/leads/',
+    path: '/desk/leads/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedDeskLeadsLeadIdRoute =
+  AuthenticatedDeskLeadsLeadIdRouteImport.update({
+    id: '/desk/leads/$leadId',
+    path: '/desk/leads/$leadId',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const ApiPublicCronAdsCallsRoute = ApiPublicCronAdsCallsRouteImport.update({
   id: '/api/public/cron/ads-calls',
   path: '/api/public/cron/ads-calls',
@@ -232,9 +258,12 @@ export interface FileRoutesByFullPath {
   '/provenance': typeof AuthenticatedProvenanceRoute
   '/queries': typeof AuthenticatedQueriesRoute
   '/square': typeof AuthenticatedSquareRoute
+  '/desk/new': typeof AuthenticatedDeskNewRoute
   '/api/public/bot': typeof ApiPublicBotRoute
   '/api/public/mcp': typeof ApiPublicMcpRoute
   '/api/public/supabase-config': typeof ApiPublicSupabaseConfigRoute
+  '/desk/': typeof AuthenticatedDeskIndexRoute
+  '/desk/leads/$leadId': typeof AuthenticatedDeskLeadsLeadIdRoute
   '/api/public/cron/ads-calls': typeof ApiPublicCronAdsCallsRoute
   '/api/public/cron/ads-weekly': typeof ApiPublicCronAdsWeeklyRoute
   '/api/public/cron/ingest-leads': typeof ApiPublicCronIngestLeadsRoute
@@ -246,6 +275,7 @@ export interface FileRoutesByFullPath {
   '/api/public/meta/webhook': typeof ApiPublicMetaWebhookRoute
   '/api/public/ringcentral/webhook': typeof ApiPublicRingcentralWebhookRoute
   '/api/public/square/webhook': typeof ApiPublicSquareWebhookRoute
+  '/desk/leads/': typeof AuthenticatedDeskLeadsIndexRoute
 }
 export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
@@ -265,9 +295,12 @@ export interface FileRoutesByTo {
   '/queries': typeof AuthenticatedQueriesRoute
   '/square': typeof AuthenticatedSquareRoute
   '/': typeof AuthenticatedIndexRoute
+  '/desk/new': typeof AuthenticatedDeskNewRoute
   '/api/public/bot': typeof ApiPublicBotRoute
   '/api/public/mcp': typeof ApiPublicMcpRoute
   '/api/public/supabase-config': typeof ApiPublicSupabaseConfigRoute
+  '/desk': typeof AuthenticatedDeskIndexRoute
+  '/desk/leads/$leadId': typeof AuthenticatedDeskLeadsLeadIdRoute
   '/api/public/cron/ads-calls': typeof ApiPublicCronAdsCallsRoute
   '/api/public/cron/ads-weekly': typeof ApiPublicCronAdsWeeklyRoute
   '/api/public/cron/ingest-leads': typeof ApiPublicCronIngestLeadsRoute
@@ -279,6 +312,7 @@ export interface FileRoutesByTo {
   '/api/public/meta/webhook': typeof ApiPublicMetaWebhookRoute
   '/api/public/ringcentral/webhook': typeof ApiPublicRingcentralWebhookRoute
   '/api/public/square/webhook': typeof ApiPublicSquareWebhookRoute
+  '/desk/leads': typeof AuthenticatedDeskLeadsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -300,9 +334,12 @@ export interface FileRoutesById {
   '/_authenticated/queries': typeof AuthenticatedQueriesRoute
   '/_authenticated/square': typeof AuthenticatedSquareRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
+  '/_authenticated/desk/new': typeof AuthenticatedDeskNewRoute
   '/api/public/bot': typeof ApiPublicBotRoute
   '/api/public/mcp': typeof ApiPublicMcpRoute
   '/api/public/supabase-config': typeof ApiPublicSupabaseConfigRoute
+  '/_authenticated/desk/': typeof AuthenticatedDeskIndexRoute
+  '/_authenticated/desk/leads/$leadId': typeof AuthenticatedDeskLeadsLeadIdRoute
   '/api/public/cron/ads-calls': typeof ApiPublicCronAdsCallsRoute
   '/api/public/cron/ads-weekly': typeof ApiPublicCronAdsWeeklyRoute
   '/api/public/cron/ingest-leads': typeof ApiPublicCronIngestLeadsRoute
@@ -314,6 +351,7 @@ export interface FileRoutesById {
   '/api/public/meta/webhook': typeof ApiPublicMetaWebhookRoute
   '/api/public/ringcentral/webhook': typeof ApiPublicRingcentralWebhookRoute
   '/api/public/square/webhook': typeof ApiPublicSquareWebhookRoute
+  '/_authenticated/desk/leads/': typeof AuthenticatedDeskLeadsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -335,9 +373,12 @@ export interface FileRouteTypes {
     | '/provenance'
     | '/queries'
     | '/square'
+    | '/desk/new'
     | '/api/public/bot'
     | '/api/public/mcp'
     | '/api/public/supabase-config'
+    | '/desk/'
+    | '/desk/leads/$leadId'
     | '/api/public/cron/ads-calls'
     | '/api/public/cron/ads-weekly'
     | '/api/public/cron/ingest-leads'
@@ -349,6 +390,7 @@ export interface FileRouteTypes {
     | '/api/public/meta/webhook'
     | '/api/public/ringcentral/webhook'
     | '/api/public/square/webhook'
+    | '/desk/leads/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/auth'
@@ -368,9 +410,12 @@ export interface FileRouteTypes {
     | '/queries'
     | '/square'
     | '/'
+    | '/desk/new'
     | '/api/public/bot'
     | '/api/public/mcp'
     | '/api/public/supabase-config'
+    | '/desk'
+    | '/desk/leads/$leadId'
     | '/api/public/cron/ads-calls'
     | '/api/public/cron/ads-weekly'
     | '/api/public/cron/ingest-leads'
@@ -382,6 +427,7 @@ export interface FileRouteTypes {
     | '/api/public/meta/webhook'
     | '/api/public/ringcentral/webhook'
     | '/api/public/square/webhook'
+    | '/desk/leads'
   id:
     | '__root__'
     | '/_authenticated'
@@ -402,9 +448,12 @@ export interface FileRouteTypes {
     | '/_authenticated/queries'
     | '/_authenticated/square'
     | '/_authenticated/'
+    | '/_authenticated/desk/new'
     | '/api/public/bot'
     | '/api/public/mcp'
     | '/api/public/supabase-config'
+    | '/_authenticated/desk/'
+    | '/_authenticated/desk/leads/$leadId'
     | '/api/public/cron/ads-calls'
     | '/api/public/cron/ads-weekly'
     | '/api/public/cron/ingest-leads'
@@ -416,6 +465,7 @@ export interface FileRouteTypes {
     | '/api/public/meta/webhook'
     | '/api/public/ringcentral/webhook'
     | '/api/public/square/webhook'
+    | '/_authenticated/desk/leads/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -565,6 +615,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSquareRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/desk/': {
+      id: '/_authenticated/desk/'
+      path: '/desk'
+      fullPath: '/desk/'
+      preLoaderRoute: typeof AuthenticatedDeskIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/desk/new': {
+      id: '/_authenticated/desk/new'
+      path: '/desk/new'
+      fullPath: '/desk/new'
+      preLoaderRoute: typeof AuthenticatedDeskNewRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/api/public/bot': {
       id: '/api/public/bot'
       path: '/api/public/bot'
@@ -585,6 +649,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/api/public/supabase-config'
       preLoaderRoute: typeof ApiPublicSupabaseConfigRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/desk/leads/': {
+      id: '/_authenticated/desk/leads/'
+      path: '/desk/leads'
+      fullPath: '/desk/leads/'
+      preLoaderRoute: typeof AuthenticatedDeskLeadsIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/desk/leads/$leadId': {
+      id: '/_authenticated/desk/leads/$leadId'
+      path: '/desk/leads/$leadId'
+      fullPath: '/desk/leads/$leadId'
+      preLoaderRoute: typeof AuthenticatedDeskLeadsLeadIdRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
     '/api/public/cron/ads-calls': {
       id: '/api/public/cron/ads-calls'
@@ -683,6 +761,10 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedQueriesRoute: typeof AuthenticatedQueriesRoute
   AuthenticatedSquareRoute: typeof AuthenticatedSquareRoute
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
+  AuthenticatedDeskNewRoute: typeof AuthenticatedDeskNewRoute
+  AuthenticatedDeskIndexRoute: typeof AuthenticatedDeskIndexRoute
+  AuthenticatedDeskLeadsLeadIdRoute: typeof AuthenticatedDeskLeadsLeadIdRoute
+  AuthenticatedDeskLeadsIndexRoute: typeof AuthenticatedDeskLeadsIndexRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
@@ -702,6 +784,10 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedQueriesRoute: AuthenticatedQueriesRoute,
   AuthenticatedSquareRoute: AuthenticatedSquareRoute,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
+  AuthenticatedDeskNewRoute: AuthenticatedDeskNewRoute,
+  AuthenticatedDeskIndexRoute: AuthenticatedDeskIndexRoute,
+  AuthenticatedDeskLeadsLeadIdRoute: AuthenticatedDeskLeadsLeadIdRoute,
+  AuthenticatedDeskLeadsIndexRoute: AuthenticatedDeskLeadsIndexRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =
