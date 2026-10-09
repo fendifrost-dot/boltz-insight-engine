@@ -4,6 +4,11 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* The published shop tool uses Boltz branding only. */
+html body #lovable-badge {
+  display: none !important;
+}
+
 /*
  * Boltz SEO/GEO Ops — internal operations design system.
  * Dark, utilitarian, automotive. Dense tables, strong typography.
