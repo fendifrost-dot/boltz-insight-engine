@@ -39,7 +39,7 @@ Invite a receptionist:
 3. They open `/auth`, choose **Shop agent**, and sign in. Then open `/desk`.
 4. The shared shop-computer login (`agents@boltzautoinc.com`, documented in `docs/handoffs/2026-09-05-agent-password-login.md`) is also `staff`. A named receptionist is better so `leads.created_by` is that person.
 
-`created_by`, `intake_path = 'desk'`, and `google_ads_call_id` can be written only by the service role (the desk server). A staff JWT cannot set them, and cannot move a lead to Paid. Square and the lifecycle RPC run as `service_role`.
+`created_by`, `intake_path = 'desk'`, `desk_idempotency_key`, and `google_ads_call_id` can be written only by the service role (the desk server). A staff JWT cannot set them, and cannot move a lead to Paid. The guard reads the role the same way `auth.role()` does: `request.jwt.claim.role`, then `request.jwt.claims`. Square and the lifecycle RPC run as `service_role`.
 
 ## Recording a lead
 
@@ -115,13 +115,15 @@ Square's weekly view groups completed payment gross by `leads.lead_source` (`squ
 
 `intake_path = 'desk'` separates counter entry from online entry without changing the source rollup. `created_by` is the staff user id.
 
-The desk does not send SMS. Threads on the detail screen are read-only. Texts stay on **Lead Inbox**. Status changes use the existing lifecycle rules (`transitionLeadLifecycle`): staff can move to Contacted, No-show, and the other allowed steps, and cannot mark Paid. The database trigger rejects a staff JWT that sets `lifecycle` to Paid. Square's service role still can.
+The desk does not send SMS. Threads on the detail screen are read-only. Texts stay on **Lead Inbox**. Status changes use the existing lifecycle rules (`transitionLeadLifecycle`): staff can move to Contacted, No-show, and the other allowed steps, and cannot mark Paid. The database trigger rejects a staff JWT that sets `lifecycle` to Paid, including when the role is only in `request.jwt.claims`. Square's service role still can.
 
 ## Migration
 
 `supabase/migrations/20261009183000_shop_desk.sql`
 
-Apply it with the usual Supabase migration path before using the desk against production. Publishing the Lovable app is a separate step.
+`supabase/migrations/20261009193000_protect_desk_columns_jwt_claims.sql` replaces `protect_lead_desk_columns()` so an authenticated session is still blocked when Supabase sends the role only in `request.jwt.claims`.
+
+Apply both with the usual Supabase migration path before using the desk against production. Publishing the Lovable app is a separate step.
 
 ## PII
 
