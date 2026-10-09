@@ -1,6 +1,6 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { ClipboardList, LogOut, MessageCircle, Moon, Search, Settings2, Sun } from "lucide-react";
+import { BookOpen, ClipboardList, LogOut, MessageCircle, Moon, Search, Settings2, Sun } from "lucide-react";
 import type { ReactNode } from "react";
 import { signOutOwnerSession } from "@/lib/owner-session.browser";
 import { useIsOwner } from "@/components/ops/Shell";
@@ -43,6 +43,10 @@ export function DeskShell({
           <Link to="/desk/chat" activeProps={{ className: "is-active" }}>
             <MessageCircle size={18} />
             Grok chat
+          </Link>
+          <Link to="/desk/tutorial" activeProps={{ className: "is-active" }}>
+            <BookOpen size={18} />
+            Tutorial
           </Link>
         </nav>
         <div className="desk-account">

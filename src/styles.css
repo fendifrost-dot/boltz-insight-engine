@@ -1364,3 +1364,30 @@ textarea.desk-field {
     transition: none !important;
   }
 }
+
+/* Short staff lessons, with one native player for desktop and iPhone. */
+.desk-training-player { border: 1px solid var(--desk-line); border-radius: 18px; overflow: hidden; background: var(--card); }
+.desk-training-screen { aspect-ratio: 910 / 512; background: #080b07; color: #fff; display: grid; place-items: center; }
+.desk-training-screen video { display: block; width: 100%; height: 100%; aspect-ratio: 910 / 512; }
+.desk-training-caption { padding: 23px; }
+.desk-training-kicker { color: var(--desk-muted); font-size: 11px; font-weight: 700; letter-spacing: .1em; }
+.desk-training-caption h2 { margin: 8px 0; font-size: 23px; font-weight: 650; line-height: 1.25; }
+.desk-training-caption p { color: var(--desk-muted); font-size: 14px; line-height: 1.6; }
+.desk-training-next { display: inline-flex; align-items: center; justify-content: center; gap: 10px; min-height: 44px; margin-top: 18px; padding: 10px 16px; border-radius: 9px; background: var(--desk-yellow); color: #191e17; font-size: 14px; font-weight: 600; cursor: pointer; }
+.desk-training-lessons { display: grid; gap: 10px; margin-top: 20px; }
+.desk-training-lesson { display: flex; align-items: center; gap: 14px; width: 100%; padding: 16px; border: 1px solid var(--desk-line); border-radius: 12px; background: var(--card); text-align: left; cursor: pointer; }
+.desk-training-lesson.is-selected { border-color: #b6a200; box-shadow: inset 4px 0 0 var(--desk-yellow); background: var(--surface-2); }
+.desk-training-number { display: grid; place-items: center; flex: 0 0 36px; height: 36px; background: var(--surface-2); border-radius: 50%; font-weight: 700; }
+.is-selected .desk-training-number { background: var(--desk-yellow); color: #191e17; }
+.desk-training-lesson strong { display: block; font-size: 14px; font-weight: 600; }
+.desk-training-lesson small { display: block; margin-top: 5px; color: var(--desk-muted); font-size: 12px; }
+.desk-training-lesson > svg { margin-left: auto; flex-shrink: 0; }
+.desk-training-help { display: flex; align-items: center; gap: 12px; margin-top: 22px; color: var(--desk-muted); font-size: 14px; line-height: 1.6; }
+.desk-training-help > svg { flex-shrink: 0; }
+.desk-training-help a { color: var(--foreground); text-decoration: underline; text-underline-offset: 3px; }
+@media (max-width: 650px) {
+  .desk-nav { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .desk-nav a { justify-content: center; min-height: 44px; font-size: 12px; }
+  .desk-training-caption { padding: 18px; }
+  .desk-training-caption h2 { font-size: 21px; }
+}
