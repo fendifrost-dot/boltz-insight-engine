@@ -1366,7 +1366,7 @@ textarea.desk-field {
 }
 
 /* Short staff lessons, with one native player for desktop and iPhone. */
-.desk-training-player { border: 1px solid var(--desk-line); border-radius: 18px; overflow: hidden; background: var(--card); }
+.desk-training-player { scroll-margin-top: 24px; border: 1px solid var(--desk-line); border-radius: 18px; overflow: hidden; background: var(--card); }
 .desk-training-screen { aspect-ratio: 910 / 512; background: #080b07; color: #fff; display: grid; place-items: center; }
 .desk-training-screen video { display: block; width: 100%; height: 100%; aspect-ratio: 910 / 512; }
 .desk-training-caption { padding: 23px; }

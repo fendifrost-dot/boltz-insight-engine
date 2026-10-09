@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { ArrowRight, Play, MessageCircle } from "lucide-react";
 import { DeskShell } from "@/components/desk/DeskShell";
 import { getTrainingVideo } from "@/lib/desk-tutorial.functions";
@@ -18,6 +18,7 @@ const lessons = [
 ];
 
 function DeskTutorial() {
+  const player = useRef<HTMLElement>(null);
   const [part, setPart] = useState(1);
   const [playbackError, setPlaybackError] = useState(false);
   const getVideo = useServerFn(getTrainingVideo);
@@ -32,6 +33,7 @@ function DeskTutorial() {
   function selectPart(next: number) {
     setPlaybackError(false);
     setPart(next);
+    player.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
   return (
     <DeskShell>
@@ -40,12 +42,12 @@ function DeskTutorial() {
         <h1>A confident start. In four minutes.</h1>
         <p>Three quick lessons for the counter, the phone, and everything in between. Watch on the shop computer or your iPhone.</p>
       </header>
-      <section className="desk-training-player" aria-labelledby="lesson-title">
+      <section ref={player} className="desk-training-player" aria-labelledby="lesson-title">
         <div className="desk-training-screen">
           {video.isPending ? <p role="status">Loading your lesson…</p> : video.isError || playbackError ? (
             <div role="alert"><p>We couldn’t load this video.</p><button className="desk-training-next" onClick={() => { setPlaybackError(false); void video.refetch(); }}>Try again</button></div>
           ) : (
-            <video key={`${part}-${video.data.url}`} src={video.data.url} controls playsInline preload="metadata" aria-label={`Part ${part}: ${lesson.title}`} onError={() => setPlaybackError(true)} />
+            <video key={`${part}-${video.data.url}`} src={video.data.url} poster="/training/poster.svg" controls playsInline preload="metadata" aria-label={`Part ${part}: ${lesson.title}`} onError={() => setPlaybackError(true)} />
           )}
         </div>
         <div className="desk-training-caption">
