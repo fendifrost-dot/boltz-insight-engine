@@ -163,7 +163,7 @@ function DeskLeadDetail() {
   const lead = detail.data?.lead;
   const lifecycle = lead && isLifecycle(lead.lifecycle) ? lead.lifecycle : null;
   const choices = lifecycle ? deskLifecycleChoices(lifecycle) : [];
-  const sourceMissing = lead ? !lead.leadSource || !lead.heardAbout : false;
+  const sourceMissing = lead ? !lead.leadSource : false;
   const vehicle = lead
     ? [lead.vehicleYear, lead.vehicleMake, lead.vehicleModel].filter(Boolean).join(" ")
     : "";
