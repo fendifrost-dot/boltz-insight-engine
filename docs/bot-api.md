@@ -73,7 +73,14 @@ curl -sS -X POST "https://boltz-insight-engine.lovable.app/api/public/bot" \
 Success:
 
 ```json
-{ "ok": true, "duplicate": false, "reason": null, "leadId": "...", "threadId": "...", "messageId": "..." }
+{
+  "ok": true,
+  "duplicate": false,
+  "reason": null,
+  "leadId": "...",
+  "threadId": "...",
+  "messageId": "..."
+}
 ```
 
 The same gates as owner send apply:
@@ -149,3 +156,25 @@ curl -sS -X POST "https://boltz-insight-engine.lovable.app/api/public/bot" \
 ```
 
 Each row has `id`, `leadId`, `threadId`, `body`, `createdAt`, `from`, `status`. `truncated: true` means the limit cut off more rows; call again with the last `createdAt`.
+
+## Square reads
+
+`square_revenue` and `square_payments` read stored Square data. They do not create payments or invoices, and the response has no customer names, phones, or emails. Amounts are cents. When `SQUARE_ACCESS_TOKEN` is missing the route returns **503** `{ "configured": false, "reason": "..." }`. A storage problem is **503** `{ "configured": true, "error": "..." }`.
+
+```bash
+curl -sS -X POST "https://boltz-insight-engine.lovable.app/api/public/bot" \
+  -H "Content-Type: application/json" \
+  -H "X-Bot-Api-Secret: $BOT_API_SECRET" \
+  -d '{"action":"square_revenue","since":"2026-01-05","until":"2026-03-02"}'
+```
+
+`since` and `until` are optional YYYY-MM-DD week starts (America/Chicago Mondays). Omit both for every stored week.
+
+```bash
+curl -sS -X POST "https://boltz-insight-engine.lovable.app/api/public/bot" \
+  -H "Content-Type: application/json" \
+  -H "X-Bot-Api-Secret: $BOT_API_SECRET" \
+  -d '{"action":"square_payments","leadId":"LEAD_UUID","limit":20}'
+```
+
+`leadId` is optional. `limit` is 1–50 and defaults to 20. Each payment has `squareId`, `status`, `amountCents`, `refundedCents`, `currency`, `createdAt`, `leadId`, `matchStatus`, `cardBrand`, `cardLast4`, and `orderId`.

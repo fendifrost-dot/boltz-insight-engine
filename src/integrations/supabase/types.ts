@@ -382,6 +382,9 @@ export type Database = {
           photo_urls: Json | null
           symptoms: string | null
           unread_count: number
+          square_gross_cents: number
+          square_net_cents: number
+          square_paid_at: string | null
           updated_at: string
           vehicle_make: string | null
           vehicle_mileage: number | null
@@ -409,6 +412,9 @@ export type Database = {
           phone_e164?: string | null
           photo_urls?: Json | null
           symptoms?: string | null
+          square_gross_cents?: number
+          square_net_cents?: number
+          square_paid_at?: string | null
           unread_count?: number
           updated_at?: string
           vehicle_make?: string | null
@@ -437,6 +443,9 @@ export type Database = {
           phone_e164?: string | null
           photo_urls?: Json | null
           symptoms?: string | null
+          square_gross_cents?: number
+          square_net_cents?: number
+          square_paid_at?: string | null
           unread_count?: number
           updated_at?: string
           vehicle_make?: string | null
@@ -891,7 +900,13 @@ export type Database = {
           created_at: string | null
           notes: string | null
           reported_by: string | null
+          square_attributed: Json | null
+          square_avg_ticket: number | null
           square_gross: number | null
+          square_net: number | null
+          square_refunds: number | null
+          square_synced_at: string | null
+          square_ticket_count: number | null
           stripe_gross: number | null
           updated_at: string | null
           week_start: string
@@ -900,7 +915,13 @@ export type Database = {
           created_at?: string | null
           notes?: string | null
           reported_by?: string | null
+          square_attributed?: Json | null
+          square_avg_ticket?: number | null
           square_gross?: number | null
+          square_net?: number | null
+          square_refunds?: number | null
+          square_synced_at?: string | null
+          square_ticket_count?: number | null
           stripe_gross?: number | null
           updated_at?: string | null
           week_start: string
@@ -909,7 +930,13 @@ export type Database = {
           created_at?: string | null
           notes?: string | null
           reported_by?: string | null
+          square_attributed?: Json | null
+          square_avg_ticket?: number | null
           square_gross?: number | null
+          square_net?: number | null
+          square_refunds?: number | null
+          square_synced_at?: string | null
+          square_ticket_count?: number | null
           stripe_gross?: number | null
           updated_at?: string | null
           week_start?: string

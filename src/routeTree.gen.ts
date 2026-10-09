@@ -26,6 +26,7 @@ import { Route as AuthenticatedMeasurementRouteImport } from './routes/_authenti
 import { Route as AuthenticatedModulesRouteImport } from './routes/_authenticated/modules'
 import { Route as AuthenticatedProvenanceRouteImport } from './routes/_authenticated/provenance'
 import { Route as AuthenticatedQueriesRouteImport } from './routes/_authenticated/queries'
+import { Route as AuthenticatedSquareRouteImport } from './routes/_authenticated/square'
 import { Route as ApiPublicBotRouteImport } from './routes/api/public/bot'
 import { Route as ApiPublicMcpRouteImport } from './routes/api/public/mcp'
 import { Route as ApiPublicSupabaseConfigRouteImport } from './routes/api/public/supabase-config'
@@ -36,8 +37,10 @@ import { Route as ApiPublicCronProcessJobsRouteImport } from './routes/api/publi
 import { Route as ApiPublicCronReconcileMessagesRouteImport } from './routes/api/public/cron/reconcile-messages'
 import { Route as ApiPublicCronReconcileMetaLeadsRouteImport } from './routes/api/public/cron/reconcile-meta-leads'
 import { Route as ApiPublicCronRenewSubscriptionsRouteImport } from './routes/api/public/cron/renew-subscriptions'
+import { Route as ApiPublicCronSquareSyncRouteImport } from './routes/api/public/cron/square-sync'
 import { Route as ApiPublicMetaWebhookRouteImport } from './routes/api/public/meta/webhook'
 import { Route as ApiPublicRingcentralWebhookRouteImport } from './routes/api/public/ringcentral/webhook'
+import { Route as ApiPublicSquareWebhookRouteImport } from './routes/api/public/square/webhook'
 
 const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
   id: '/_authenticated',
@@ -129,6 +132,11 @@ const AuthenticatedQueriesRoute = AuthenticatedQueriesRouteImport.update({
   path: '/queries',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedSquareRoute = AuthenticatedSquareRouteImport.update({
+  id: '/square',
+  path: '/square',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const ApiPublicBotRoute = ApiPublicBotRouteImport.update({
   id: '/api/public/bot',
   path: '/api/public/bot',
@@ -184,6 +192,11 @@ const ApiPublicCronRenewSubscriptionsRoute =
     path: '/api/public/cron/renew-subscriptions',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicCronSquareSyncRoute = ApiPublicCronSquareSyncRouteImport.update({
+  id: '/api/public/cron/square-sync',
+  path: '/api/public/cron/square-sync',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicMetaWebhookRoute = ApiPublicMetaWebhookRouteImport.update({
   id: '/api/public/meta/webhook',
   path: '/api/public/meta/webhook',
@@ -195,6 +208,11 @@ const ApiPublicRingcentralWebhookRoute =
     path: '/api/public/ringcentral/webhook',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicSquareWebhookRoute = ApiPublicSquareWebhookRouteImport.update({
+  id: '/api/public/square/webhook',
+  path: '/api/public/square/webhook',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedIndexRoute
@@ -213,6 +231,7 @@ export interface FileRoutesByFullPath {
   '/modules': typeof AuthenticatedModulesRoute
   '/provenance': typeof AuthenticatedProvenanceRoute
   '/queries': typeof AuthenticatedQueriesRoute
+  '/square': typeof AuthenticatedSquareRoute
   '/api/public/bot': typeof ApiPublicBotRoute
   '/api/public/mcp': typeof ApiPublicMcpRoute
   '/api/public/supabase-config': typeof ApiPublicSupabaseConfigRoute
@@ -223,8 +242,10 @@ export interface FileRoutesByFullPath {
   '/api/public/cron/reconcile-messages': typeof ApiPublicCronReconcileMessagesRoute
   '/api/public/cron/reconcile-meta-leads': typeof ApiPublicCronReconcileMetaLeadsRoute
   '/api/public/cron/renew-subscriptions': typeof ApiPublicCronRenewSubscriptionsRoute
+  '/api/public/cron/square-sync': typeof ApiPublicCronSquareSyncRoute
   '/api/public/meta/webhook': typeof ApiPublicMetaWebhookRoute
   '/api/public/ringcentral/webhook': typeof ApiPublicRingcentralWebhookRoute
+  '/api/public/square/webhook': typeof ApiPublicSquareWebhookRoute
 }
 export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
@@ -242,6 +263,7 @@ export interface FileRoutesByTo {
   '/modules': typeof AuthenticatedModulesRoute
   '/provenance': typeof AuthenticatedProvenanceRoute
   '/queries': typeof AuthenticatedQueriesRoute
+  '/square': typeof AuthenticatedSquareRoute
   '/': typeof AuthenticatedIndexRoute
   '/api/public/bot': typeof ApiPublicBotRoute
   '/api/public/mcp': typeof ApiPublicMcpRoute
@@ -253,8 +275,10 @@ export interface FileRoutesByTo {
   '/api/public/cron/reconcile-messages': typeof ApiPublicCronReconcileMessagesRoute
   '/api/public/cron/reconcile-meta-leads': typeof ApiPublicCronReconcileMetaLeadsRoute
   '/api/public/cron/renew-subscriptions': typeof ApiPublicCronRenewSubscriptionsRoute
+  '/api/public/cron/square-sync': typeof ApiPublicCronSquareSyncRoute
   '/api/public/meta/webhook': typeof ApiPublicMetaWebhookRoute
   '/api/public/ringcentral/webhook': typeof ApiPublicRingcentralWebhookRoute
+  '/api/public/square/webhook': typeof ApiPublicSquareWebhookRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -274,6 +298,7 @@ export interface FileRoutesById {
   '/_authenticated/modules': typeof AuthenticatedModulesRoute
   '/_authenticated/provenance': typeof AuthenticatedProvenanceRoute
   '/_authenticated/queries': typeof AuthenticatedQueriesRoute
+  '/_authenticated/square': typeof AuthenticatedSquareRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
   '/api/public/bot': typeof ApiPublicBotRoute
   '/api/public/mcp': typeof ApiPublicMcpRoute
@@ -285,8 +310,10 @@ export interface FileRoutesById {
   '/api/public/cron/reconcile-messages': typeof ApiPublicCronReconcileMessagesRoute
   '/api/public/cron/reconcile-meta-leads': typeof ApiPublicCronReconcileMetaLeadsRoute
   '/api/public/cron/renew-subscriptions': typeof ApiPublicCronRenewSubscriptionsRoute
+  '/api/public/cron/square-sync': typeof ApiPublicCronSquareSyncRoute
   '/api/public/meta/webhook': typeof ApiPublicMetaWebhookRoute
   '/api/public/ringcentral/webhook': typeof ApiPublicRingcentralWebhookRoute
+  '/api/public/square/webhook': typeof ApiPublicSquareWebhookRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -307,6 +334,7 @@ export interface FileRouteTypes {
     | '/modules'
     | '/provenance'
     | '/queries'
+    | '/square'
     | '/api/public/bot'
     | '/api/public/mcp'
     | '/api/public/supabase-config'
@@ -317,8 +345,10 @@ export interface FileRouteTypes {
     | '/api/public/cron/reconcile-messages'
     | '/api/public/cron/reconcile-meta-leads'
     | '/api/public/cron/renew-subscriptions'
+    | '/api/public/cron/square-sync'
     | '/api/public/meta/webhook'
     | '/api/public/ringcentral/webhook'
+    | '/api/public/square/webhook'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/auth'
@@ -336,6 +366,7 @@ export interface FileRouteTypes {
     | '/modules'
     | '/provenance'
     | '/queries'
+    | '/square'
     | '/'
     | '/api/public/bot'
     | '/api/public/mcp'
@@ -347,8 +378,10 @@ export interface FileRouteTypes {
     | '/api/public/cron/reconcile-messages'
     | '/api/public/cron/reconcile-meta-leads'
     | '/api/public/cron/renew-subscriptions'
+    | '/api/public/cron/square-sync'
     | '/api/public/meta/webhook'
     | '/api/public/ringcentral/webhook'
+    | '/api/public/square/webhook'
   id:
     | '__root__'
     | '/_authenticated'
@@ -367,6 +400,7 @@ export interface FileRouteTypes {
     | '/_authenticated/modules'
     | '/_authenticated/provenance'
     | '/_authenticated/queries'
+    | '/_authenticated/square'
     | '/_authenticated/'
     | '/api/public/bot'
     | '/api/public/mcp'
@@ -378,8 +412,10 @@ export interface FileRouteTypes {
     | '/api/public/cron/reconcile-messages'
     | '/api/public/cron/reconcile-meta-leads'
     | '/api/public/cron/renew-subscriptions'
+    | '/api/public/cron/square-sync'
     | '/api/public/meta/webhook'
     | '/api/public/ringcentral/webhook'
+    | '/api/public/square/webhook'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -395,8 +431,10 @@ export interface RootRouteChildren {
   ApiPublicCronReconcileMessagesRoute: typeof ApiPublicCronReconcileMessagesRoute
   ApiPublicCronReconcileMetaLeadsRoute: typeof ApiPublicCronReconcileMetaLeadsRoute
   ApiPublicCronRenewSubscriptionsRoute: typeof ApiPublicCronRenewSubscriptionsRoute
+  ApiPublicCronSquareSyncRoute: typeof ApiPublicCronSquareSyncRoute
   ApiPublicMetaWebhookRoute: typeof ApiPublicMetaWebhookRoute
   ApiPublicRingcentralWebhookRoute: typeof ApiPublicRingcentralWebhookRoute
+  ApiPublicSquareWebhookRoute: typeof ApiPublicSquareWebhookRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -520,6 +558,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedQueriesRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/square': {
+      id: '/_authenticated/square'
+      path: '/square'
+      fullPath: '/square'
+      preLoaderRoute: typeof AuthenticatedSquareRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/api/public/bot': {
       id: '/api/public/bot'
       path: '/api/public/bot'
@@ -590,6 +635,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicCronRenewSubscriptionsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/cron/square-sync': {
+      id: '/api/public/cron/square-sync'
+      path: '/api/public/cron/square-sync'
+      fullPath: '/api/public/cron/square-sync'
+      preLoaderRoute: typeof ApiPublicCronSquareSyncRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/meta/webhook': {
       id: '/api/public/meta/webhook'
       path: '/api/public/meta/webhook'
@@ -602,6 +654,13 @@ declare module '@tanstack/react-router' {
       path: '/api/public/ringcentral/webhook'
       fullPath: '/api/public/ringcentral/webhook'
       preLoaderRoute: typeof ApiPublicRingcentralWebhookRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/square/webhook': {
+      id: '/api/public/square/webhook'
+      path: '/api/public/square/webhook'
+      fullPath: '/api/public/square/webhook'
+      preLoaderRoute: typeof ApiPublicSquareWebhookRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -622,6 +681,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedModulesRoute: typeof AuthenticatedModulesRoute
   AuthenticatedProvenanceRoute: typeof AuthenticatedProvenanceRoute
   AuthenticatedQueriesRoute: typeof AuthenticatedQueriesRoute
+  AuthenticatedSquareRoute: typeof AuthenticatedSquareRoute
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
 }
 
@@ -640,6 +700,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedModulesRoute: AuthenticatedModulesRoute,
   AuthenticatedProvenanceRoute: AuthenticatedProvenanceRoute,
   AuthenticatedQueriesRoute: AuthenticatedQueriesRoute,
+  AuthenticatedSquareRoute: AuthenticatedSquareRoute,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
 }
 
@@ -659,8 +720,10 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicCronReconcileMessagesRoute: ApiPublicCronReconcileMessagesRoute,
   ApiPublicCronReconcileMetaLeadsRoute: ApiPublicCronReconcileMetaLeadsRoute,
   ApiPublicCronRenewSubscriptionsRoute: ApiPublicCronRenewSubscriptionsRoute,
+  ApiPublicCronSquareSyncRoute: ApiPublicCronSquareSyncRoute,
   ApiPublicMetaWebhookRoute: ApiPublicMetaWebhookRoute,
   ApiPublicRingcentralWebhookRoute: ApiPublicRingcentralWebhookRoute,
+  ApiPublicSquareWebhookRoute: ApiPublicSquareWebhookRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

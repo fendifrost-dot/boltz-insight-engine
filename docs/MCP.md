@@ -72,21 +72,25 @@ Browser roles cannot read these tables. RLS is enabled and forced, `anon` and `a
 
 ## Tools
 
-| Tool                       | Scope                   | What it does                                                                                                   |
-| -------------------------- | ----------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `boltz_whoami`             | any authenticated agent | Agent name and scopes. No token.                                                                               |
-| `boltz_lookup_lead`        | `read`                  | One lead by `phone`, `email`, or `leadId`, plus its thread.                                                    |
-| `boltz_list_leads`         | `read`                  | Recent leads. `source`, `status` (lifecycle), `since`, `limit` (1–100, default 25). Default `since` is 7 days. |
-| `boltz_thread_messages`    | `read`                  | Messages on a thread (`phone`, `leadId`, or `threadId`).                                                       |
-| `boltz_inbound_since`      | `read`                  | Inbound SMS since an ISO timestamp, at most 30 days back.                                                      |
-| `boltz_lead_status`        | `read`                  | Lifecycle, consent, and `optedOut` (consent or a latest inbound STOP / UNSUBSCRIBE / CANCEL / END / QUIT).     |
-| `boltz_integration_health` | `read`                  | Which secrets are configured (never the values), recent checks, SMS capability.                                |
-| `boltz_ads_weekly`         | `read`                  | The existing read-only Google Ads weekly report. `days` is 1–90, default 7.                                    |
-| `boltz_ads_calls`          | `read`                  | The existing Google Ads call report. Omit dates for the last full Monday–Sunday week in America/Chicago.       |
-| `boltz_send_sms`           | `send`                  | One SMS through the bot send path.                                                                             |
-| `boltz_update_lead`        | `leads.write`           | Replace notes and/or move lifecycle under the staff rules. Cannot mark Paid.                                   |
+| Tool                       | Scope                   | What it does                                                                                                                                                                                         |
+| -------------------------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `boltz_whoami`             | any authenticated agent | Agent name and scopes. No token.                                                                                                                                                                     |
+| `boltz_lookup_lead`        | `read`                  | One lead by `phone`, `email`, or `leadId`, plus its thread.                                                                                                                                          |
+| `boltz_list_leads`         | `read`                  | Recent leads. `source`, `status` (lifecycle), `since`, `limit` (1–100, default 25). Default `since` is 7 days.                                                                                       |
+| `boltz_thread_messages`    | `read`                  | Messages on a thread (`phone`, `leadId`, or `threadId`).                                                                                                                                             |
+| `boltz_inbound_since`      | `read`                  | Inbound SMS since an ISO timestamp, at most 30 days back.                                                                                                                                            |
+| `boltz_lead_status`        | `read`                  | Lifecycle, consent, and `optedOut` (consent or a latest inbound STOP / UNSUBSCRIBE / CANCEL / END / QUIT).                                                                                           |
+| `boltz_integration_health` | `read`                  | Which secrets are configured (never the values), recent checks, SMS capability.                                                                                                                      |
+| `boltz_ads_weekly`         | `read`                  | The existing read-only Google Ads weekly report. `days` is 1–90, default 7.                                                                                                                          |
+| `boltz_ads_calls`          | `read`                  | The existing Google Ads call report. Omit dates for the last full Monday–Sunday week in America/Chicago.                                                                                             |
+| `boltz_square_revenue`     | `read`                  | Square weekly revenue. `since` and `until` are YYYY-MM-DD week starts. Gross, net, refunds, ticket count, average ticket, and lead-attributed gross by source. No customer names, phones, or emails. |
+| `boltz_square_payments`    | `read`                  | Recent Square payments, or the payments linked to one `leadId`. Amount, status, match, card brand, and last 4.                                                                                       |
+| `boltz_send_sms`           | `send`                  | One SMS through the bot send path.                                                                                                                                                                   |
+| `boltz_update_lead`        | `leads.write`           | Replace notes and/or move lifecycle under the staff rules. Cannot mark Paid.                                                                                                                         |
 
 `boltz_ads_calls` stores the weekly aggregate the same way `POST /api/public/cron/ads-calls` does. It does not send a text.
+
+`boltz_square_revenue` and `boltz_square_payments` read stored Square data. They do not create payments or invoices, and they do not mark a lead Paid. A `read` scope still cannot mark Paid. Setup and the webhook are in `docs/SQUARE.md`.
 
 ### Send
 

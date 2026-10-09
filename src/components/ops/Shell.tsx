@@ -6,7 +6,7 @@ import { signOutOwnerSession } from "@/lib/owner-session.browser";
 import { cn } from "@/lib/utils";
 
 /** Owner-only screens (capability: integrations.manage). */
-const OWNER_ONLY = new Set(["/integration-health", "/ads"]);
+const OWNER_ONLY = new Set(["/integration-health", "/ads", "/square"]);
 
 function useIsOwner(): boolean | null {
   const [isOwner, setIsOwner] = useState<boolean | null>(null);
@@ -26,7 +26,6 @@ function useIsOwner(): boolean | null {
   return isOwner;
 }
 
-
 const NAV: { to: string; label: string; group: string }[] = [
   { to: "/", label: "Dashboard", group: "Operate" },
   { to: "/context", label: "Context Lock", group: "Operate" },
@@ -36,6 +35,7 @@ const NAV: { to: string; label: string; group: string }[] = [
   { to: "/leads", label: "Lead Inbox", group: "Leads" },
   { to: "/escalations", label: "Escalations", group: "Leads" },
   { to: "/integration-health", label: "Integration Health", group: "Leads" },
+  { to: "/square", label: "Square", group: "Leads" },
   { to: "/ads", label: "Google Ads", group: "Research" },
   { to: "/queries", label: "Query Universe", group: "Research" },
   { to: "/ai-visibility", label: "AI Visibility", group: "Research" },
@@ -64,7 +64,6 @@ export function Shell({ children }: { children: ReactNode }) {
     <div className="min-h-screen bg-background lg:grid lg:grid-cols-[15rem_1fr]">
       <aside className="border-b border-sidebar-border bg-sidebar lg:sticky lg:top-0 lg:h-screen lg:overflow-y-auto lg:border-r lg:border-b-0">
         <div className="px-4 py-4">
-
           <div className="font-mono text-xs tracking-[0.18em] text-primary">BOLTZ</div>
           <div className="text-sm font-semibold text-sidebar-foreground">SEO / GEO Ops</div>
           <div className="label-caps mt-1">
@@ -75,21 +74,22 @@ export function Shell({ children }: { children: ReactNode }) {
           {GROUPS.map((group) => (
             <div key={group} className="flex gap-1 lg:block lg:space-y-0.5">
               <div className="label-caps hidden px-2 pt-2 pb-1 lg:block">{group}</div>
-              {visibleNav.filter((n) => n.group === group).map((item) => (
-
-                <Link
-                  key={item.to}
-                  to={item.to}
-                  activeOptions={{ exact: item.to === "/" }}
-                  className="block rounded-md px-2 py-1.5 text-sm text-sidebar-foreground/75 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                  activeProps={{
-                    className:
-                      "bg-sidebar-accent text-sidebar-accent-foreground font-medium border-l-2 border-sidebar-primary",
-                  }}
-                >
-                  {item.label}
-                </Link>
-              ))}
+              {visibleNav
+                .filter((n) => n.group === group)
+                .map((item) => (
+                  <Link
+                    key={item.to}
+                    to={item.to}
+                    activeOptions={{ exact: item.to === "/" }}
+                    className="block rounded-md px-2 py-1.5 text-sm text-sidebar-foreground/75 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                    activeProps={{
+                      className:
+                        "bg-sidebar-accent text-sidebar-accent-foreground font-medium border-l-2 border-sidebar-primary",
+                    }}
+                  >
+                    {item.label}
+                  </Link>
+                ))}
             </div>
           ))}
         </nav>
@@ -104,7 +104,6 @@ export function Shell({ children }: { children: ReactNode }) {
         <div className="hidden px-4 pb-4 text-[11px] leading-relaxed text-muted-foreground lg:block">
           Public site stays on Durable. No production changes ship from here.
         </div>
-
       </aside>
       <main className="min-w-0 px-4 py-6 sm:px-6 lg:px-8">{children}</main>
     </div>

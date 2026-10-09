@@ -16,6 +16,11 @@ import { getAdsWeeklyReport } from "@/server/google-ads/reports.server";
 import { pullAdsCallReport } from "@/server/google-ads/call-report.server";
 import { isCallWindow, resolveCallWindow } from "@/server/google-ads/call-report";
 import {
+  readSquarePayments,
+  readSquareRevenue,
+  squareMcpHealth,
+} from "@/server/square/read.server";
+import {
   executeMcpSend,
   publicSecretFlags,
   redactDigits,
@@ -419,11 +424,24 @@ async function integrationHealth(): Promise<ToolOutcome> {
     };
   }
 
+  const square = await squareMcpHealth().catch(() => ({
+    configured: false,
+    environment: null,
+    applicationId: null,
+    signatureConfigured: false,
+    locationMode: null,
+    resolvedLocationId: null,
+    activeLocationCount: 0,
+    lastSyncAt: null,
+    secrets: [] as { name: string; configured: boolean }[],
+  }));
+
   return {
     resultCode: "ok",
     isError: false,
     value: {
-      secrets: publicSecretFlags(secretStatus()),
+      secrets: [...publicSecretFlags(secretStatus()), ...square.secrets],
+      square,
       circuit: {
         paused: circuit.paused,
         detail: circuit.detail ? redactDigits(circuit.detail) : null,
@@ -508,6 +526,73 @@ async function adsCalls(args: unknown, now: Date): Promise<ToolOutcome> {
       value: { error: redactDigits(error instanceof Error ? error.message : "ads calls failed") },
     };
   }
+}
+
+const squareRevenueArgs = z
+  .object({
+    since: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .optional(),
+    until: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .optional(),
+  })
+  .strict();
+
+const squarePaymentArgs = z
+  .object({
+    leadId: z.string().uuid().optional(),
+    limit: z.number().int().min(1).max(50).optional(),
+  })
+  .strict();
+
+async function squareRevenueTool(args: unknown): Promise<ToolOutcome> {
+  const parsed = squareRevenueArgs.safeParse(args);
+  if (!parsed.success) return invalid(parsed.error);
+  if (parsed.data.since && parsed.data.until && parsed.data.since > parsed.data.until) {
+    return {
+      resultCode: "invalid",
+      isError: true,
+      value: { error: "since must be on or before until" },
+    };
+  }
+  const result = await readSquareRevenue({
+    since: parsed.data.since ?? null,
+    until: parsed.data.until ?? null,
+  });
+  if (!result.configured) {
+    return {
+      resultCode: "unavailable",
+      isError: true,
+      value: { configured: false, error: result.reason },
+    };
+  }
+  if ("error" in result) {
+    return { resultCode: "error", isError: true, value: { error: result.error } };
+  }
+  return { resultCode: "ok", isError: false, value: result };
+}
+
+async function squarePaymentsTool(args: unknown): Promise<ToolOutcome> {
+  const parsed = squarePaymentArgs.safeParse(args);
+  if (!parsed.success) return invalid(parsed.error);
+  const result = await readSquarePayments({
+    leadId: parsed.data.leadId ?? null,
+    limit: parsed.data.limit ?? 20,
+  });
+  if (!result.configured) {
+    return {
+      resultCode: "unavailable",
+      isError: true,
+      value: { configured: false, error: result.reason },
+    };
+  }
+  if ("error" in result) {
+    return { resultCode: "error", isError: true, value: { error: result.error } };
+  }
+  return { resultCode: "ok", isError: false, value: result };
 }
 
 const updateSchema = z
@@ -646,6 +731,10 @@ export function createBoltzMcpTools(): McpToolRunner {
           return adsWeekly(ctx.args);
         case "boltz_ads_calls":
           return adsCalls(ctx.args, ctx.now);
+        case "boltz_square_revenue":
+          return squareRevenueTool(ctx.args);
+        case "boltz_square_payments":
+          return squarePaymentsTool(ctx.args);
         case "boltz_send_sms":
           return executeMcpSend({
             agentName: ctx.agent.name,
