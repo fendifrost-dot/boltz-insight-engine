@@ -1,11 +1,14 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { ArrowLeft, Check, Footprints, Phone } from "lucide-react";
+import { DeskShell } from "@/components/desk/DeskShell";
+import { deskSourceLabel, deskStatusLabel } from "@/lib/desk-display";
 import { useServerFn } from "@tanstack/react-start";
 import { HeardAboutPicker } from "@/components/desk/HeardAboutPicker";
-import { PageHeader, Panel, Shell } from "@/components/ops/Shell";
 import { addDeskNote, createDeskLead } from "@/lib/desk.functions";
 import { displayPhone } from "@/lib/lead-inbox-thread-sync";
-import { HEARD_ABOUT_LABEL, type DeskChannel, type DeskHeardAbout } from "@/lib/desk-intake";
+import { type DeskChannel, type DeskHeardAbout } from "@/lib/desk-intake";
 
 export const Route = createFileRoute("/_authenticated/desk/new")({
   validateSearch: (search: Record<string, unknown>) => ({
@@ -17,11 +20,11 @@ export const Route = createFileRoute("/_authenticated/desk/new")({
   component: NewDeskLeadPage,
 });
 
-const fieldClass =
-  "min-h-14 w-full rounded-md border border-border bg-input px-3 text-lg text-foreground";
+const fieldClass = "desk-field";
 
 function NewDeskLeadPage() {
   const search = Route.useSearch();
+  const queryClient = useQueryClient();
   const navigate = useNavigate();
   const createFn = useServerFn(createDeskLead);
   const noteFn = useServerFn(addDeskNote);
@@ -86,6 +89,18 @@ function NewDeskLeadPage() {
         return;
       }
       if (result.status === "duplicate" || result.status === "existing") {
+        setFollowUp(
+          [
+            `New ${channel === "phone" ? "phone call" : "walk-in"}.`,
+            name && `Name: ${name}`,
+            [year, make, model].filter(Boolean).join(" "),
+            concern && `Needs: ${concern}`,
+            appointment && "Would like a visit",
+            notes,
+          ]
+            .filter(Boolean)
+            .join("\n"),
+        );
         setDuplicate({
           leadId: result.leadId,
           status: result.status,
@@ -96,6 +111,7 @@ function NewDeskLeadPage() {
         });
         return;
       }
+      await queryClient.invalidateQueries({ queryKey: ["desk-leads"] });
       await navigate({ to: "/desk/leads/$leadId", params: { leadId: result.leadId } });
     } catch {
       setError("Could not save the lead. Try again.");
@@ -114,6 +130,8 @@ function NewDeskLeadPage() {
         setError(result.reason);
         return;
       }
+      await queryClient.invalidateQueries({ queryKey: ["desk-lead", duplicate.leadId] });
+      await queryClient.invalidateQueries({ queryKey: ["desk-leads"] });
       setNoteSaved(true);
       setFollowUp("");
     } catch {
@@ -124,198 +142,239 @@ function NewDeskLeadPage() {
   }
 
   return (
-    <Shell>
-      <PageHeader
-        kicker="Counter"
-        title={channel === "phone" ? "New phone lead" : "New walk-in"}
-        description="Ask how they heard about the shop before you save."
-        actions={
-          <Link to="/desk" className="text-sm font-medium text-primary">
-            Desk home
-          </Link>
-        }
-      />
-      <form onSubmit={onSubmit} className="mx-auto max-w-xl space-y-5">
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            aria-pressed={channel === "walk_in"}
-            onClick={() => setChannel("walk_in")}
-            className={
-              channel === "walk_in"
-                ? "min-h-14 rounded-md border-2 border-primary bg-primary text-base font-semibold text-primary-foreground"
-                : "min-h-14 rounded-md border border-border bg-card text-base font-semibold"
-            }
-          >
-            Walk-in
-          </button>
-          <button
-            type="button"
-            aria-pressed={channel === "phone"}
-            onClick={() => setChannel("phone")}
-            className={
-              channel === "phone"
-                ? "min-h-14 rounded-md border-2 border-primary bg-primary text-base font-semibold text-primary-foreground"
-                : "min-h-14 rounded-md border border-border bg-card text-base font-semibold"
-            }
-          >
-            Phone
-          </button>
-        </div>
-
-        <label className="block">
-          <span className="mb-1 block text-sm font-medium">Name</span>
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            autoComplete="name"
-            className={fieldClass}
-          />
-        </label>
-        <label className="block">
-          <span className="mb-1 block text-sm font-medium">Phone</span>
-          <input
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            inputMode="tel"
-            autoComplete="tel"
-            placeholder="312 555 0100"
-            className={fieldClass}
-          />
-          <span className="mt-1 block text-xs text-muted-foreground">
-            Used later for Square matching and texts. A repeat number opens the existing lead.
-          </span>
-        </label>
-        <div className="grid gap-3 sm:grid-cols-3">
-          <label className="block">
-            <span className="mb-1 block text-sm font-medium">Year</span>
-            <input
-              value={year}
-              onChange={(e) => setYear(e.target.value)}
-              inputMode="numeric"
-              className={fieldClass}
-            />
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-sm font-medium">Make</span>
-            <input value={make} onChange={(e) => setMake(e.target.value)} className={fieldClass} />
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-sm font-medium">Model</span>
-            <input
-              value={model}
-              onChange={(e) => setModel(e.target.value)}
-              className={fieldClass}
-            />
-          </label>
-        </div>
-        <label className="block">
-          <span className="mb-1 block text-sm font-medium">Concern</span>
-          <textarea
-            value={concern}
-            onChange={(e) => setConcern(e.target.value)}
-            rows={3}
-            className="w-full rounded-md border border-border bg-input px-3 py-3 text-lg"
-          />
-        </label>
-
-        <fieldset>
-          <legend className="mb-2 text-sm font-medium">How did you hear about us?</legend>
-          <HeardAboutPicker value={heard} onChange={setHeard} />
-          {heard === "other" && (
-            <input
-              value={other}
-              onChange={(e) => setOther(e.target.value)}
-              placeholder="Short answer"
-              className={`${fieldClass} mt-2`}
-            />
-          )}
-          {heard && (
-            <p className="mt-2 text-xs text-muted-foreground">
-              Saved as the shop&apos;s existing source for {HEARD_ABOUT_LABEL[heard]}.
-            </p>
-          )}
-        </fieldset>
-
-        <label className="flex min-h-14 items-center gap-3 rounded-md border border-border px-3 text-base">
-          <input
-            type="checkbox"
-            checked={appointment}
-            onChange={(e) => setAppointment(e.target.checked)}
-            className="size-5"
-          />
-          Wants an appointment
-        </label>
-        <label className="block">
-          <span className="mb-1 block text-sm font-medium">Notes</span>
-          <textarea
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            rows={2}
-            className="w-full rounded-md border border-border bg-input px-3 py-3 text-lg"
-          />
-        </label>
-
-        {error && (
-          <p role="alert" className="text-sm text-destructive">
-            {error}
+    <DeskShell>
+      <Link to="/desk" className="desk-back">
+        <ArrowLeft size={16} /> Front desk
+      </Link>
+      <header className="desk-page-heading">
+        <div className="desk-eyebrow">LET’S GET THE DETAILS</div>
+        <h1>{channel === "phone" ? "A good call starts here." : "Welcome to Boltz."}</h1>
+        <p>
+          {duplicate
+            ? "We already know this customer. Keep everything in one place."
+            : "A few details now. A better follow-up later."}
+        </p>
+      </header>
+      {duplicate ? (
+        <section className="desk-form-card">
+          <div className="desk-success-icon">
+            <Check size={26} />
+          </div>
+          <h2>We found their customer card.</h2>
+          <p className="desk-muted">
+            {duplicate.name || "Name not recorded"} · {displayPhone(phone)}
           </p>
-        )}
-
-        <button
-          type="submit"
-          disabled={busy}
-          className="min-h-16 w-full rounded-lg bg-primary text-lg font-semibold text-primary-foreground disabled:opacity-60"
-        >
-          {busy ? "Saving…" : "Save lead"}
-        </button>
-      </form>
-
-      {duplicate && (
-        <Panel title="Already a lead" className="mx-auto mt-6 max-w-xl">
-          <p className="text-base">
-            {duplicate.status === "duplicate"
-              ? "This phone was logged in the last 12 hours. Add a note instead of a second card."
-              : "This phone is already a lead. The shop keeps one card per number. Add a note."}
-          </p>
-          <p className="mt-2 text-sm text-muted-foreground">
-            {duplicate.name || "No name"} · {displayPhone(phone)} ·{" "}
-            {duplicate.leadSource || "No source"} · {duplicate.lifecycle || "New"}
+          <p className="desk-note">
+            {deskSourceLabel(duplicate.leadSource)} ·{" "}
+            {deskStatusLabel(duplicate.lifecycle || "New")}
           </p>
           {duplicate.ads && (
-            <p className="mt-2 text-sm">
-              This number matches a recent Google Ads call. The lead is linked.
+            <p className="desk-note">Their recent Google call is already linked.</p>
+          )}
+          {!noteSaved ? (
+            <>
+              <label className="desk-label">
+                Add today’s conversation
+                <textarea
+                  className="desk-field"
+                  value={followUp}
+                  onChange={(event) => setFollowUp(event.target.value)}
+                  rows={5}
+                  maxLength={2000}
+                />
+              </label>
+              <p className="desk-note">
+                We kept what you just entered here. Save it as a note on their existing card.
+              </p>
+              <button
+                type="button"
+                className="desk-button"
+                disabled={busy || !followUp.trim()}
+                onClick={() => void saveNote()}
+              >
+                {busy ? "Saving…" : "Save conversation"}
+              </button>
+            </>
+          ) : (
+            <p role="status" className="desk-success">
+              Today’s conversation is saved.
             </p>
           )}
-          <label className="mt-4 block">
-            <span className="mb-1 block text-sm font-medium">Add a note</span>
-            <textarea
-              value={followUp}
-              onChange={(e) => setFollowUp(e.target.value)}
-              rows={3}
-              className="w-full rounded-md border border-border bg-input px-3 py-3 text-lg"
-            />
-          </label>
-          <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+          <Link
+            to="/desk/leads/$leadId"
+            params={{ leadId: duplicate.leadId }}
+            className="desk-button secondary"
+          >
+            Open customer card
+          </Link>
+          {error && (
+            <p role="alert" className="desk-error">
+              {error}
+            </p>
+          )}
+        </section>
+      ) : (
+        <form onSubmit={onSubmit} className="desk-form-card">
+          <div className="desk-channel-switch" aria-label="How they reached us">
             <button
               type="button"
-              disabled={busy || !followUp.trim()}
-              onClick={() => void saveNote()}
-              className="min-h-14 flex-1 rounded-md bg-primary px-4 text-base font-semibold text-primary-foreground disabled:opacity-60"
+              aria-pressed={channel === "walk_in"}
+              onClick={() => setChannel("walk_in")}
             >
-              Add note
+              <Footprints size={18} />
+              Walk-in
             </button>
-            <Link
-              to="/desk/leads/$leadId"
-              params={{ leadId: duplicate.leadId }}
-              className="flex min-h-14 flex-1 items-center justify-center rounded-md border border-border px-4 text-base font-semibold"
+            <button
+              type="button"
+              aria-pressed={channel === "phone"}
+              onClick={() => setChannel("phone")}
             >
-              Open lead
-            </Link>
+              <Phone size={18} />
+              Phone call
+            </button>
           </div>
-          {noteSaved && <p className="mt-2 text-sm">Note saved on the existing lead.</p>}
-        </Panel>
+          <div className="desk-form-section">
+            <div className="desk-form-step">
+              <span>01</span>
+              <h2>The customer</h2>
+            </div>
+            <div className="desk-field-row">
+              <label className="desk-label">
+                Customer name
+                <input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  autoComplete="off"
+                  placeholder="First and last name"
+                  maxLength={120}
+                  className={fieldClass}
+                />
+              </label>
+              <label className="desk-label">
+                Phone number
+                <input
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  type="tel"
+                  inputMode="tel"
+                  autoComplete="off"
+                  placeholder="(773) 555-0100"
+                  maxLength={40}
+                  className={fieldClass}
+                />
+              </label>
+            </div>
+            <p className="desk-note">
+              A name or phone number is enough to start. Repeat numbers stay on one customer card.
+            </p>
+          </div>
+          <div className="desk-form-section">
+            <div className="desk-form-step">
+              <span>02</span>
+              <h2>What brings them in?</h2>
+            </div>
+            <div className="desk-vehicle-fields">
+              <label className="desk-label">
+                Year
+                <input
+                  value={year}
+                  onChange={(e) => setYear(e.target.value)}
+                  inputMode="numeric"
+                  placeholder="2018"
+                  maxLength={4}
+                  className={fieldClass}
+                />
+              </label>
+              <label className="desk-label">
+                Make
+                <input
+                  value={make}
+                  onChange={(e) => setMake(e.target.value)}
+                  placeholder="Toyota"
+                  maxLength={40}
+                  className={fieldClass}
+                />
+              </label>
+              <label className="desk-label">
+                Model
+                <input
+                  value={model}
+                  onChange={(e) => setModel(e.target.value)}
+                  placeholder="Camry"
+                  maxLength={40}
+                  className={fieldClass}
+                />
+              </label>
+            </div>
+            <label className="desk-label">
+              What does the vehicle need?
+              <textarea
+                value={concern}
+                onChange={(e) => setConcern(e.target.value)}
+                rows={2}
+                maxLength={2000}
+                placeholder="Brake noise, engine light, collision repair…"
+                className={fieldClass}
+              />
+            </label>
+          </div>
+          <div className="desk-form-section">
+            <div className="desk-form-step">
+              <span>03</span>
+              <h2>How did they find us?</h2>
+            </div>
+            <HeardAboutPicker value={heard} onChange={setHeard} />
+            {heard === "other" && (
+              <label className="desk-label">
+                Their answer
+                <input
+                  value={other}
+                  onChange={(e) => setOther(e.target.value)}
+                  placeholder="Where did they hear about Boltz?"
+                  maxLength={80}
+                  required
+                  className={fieldClass}
+                />
+              </label>
+            )}
+            <label className="desk-checkbox">
+              <input
+                type="checkbox"
+                checked={appointment}
+                onChange={(e) => setAppointment(e.target.checked)}
+              />
+              They’d like to book a visit
+            </label>
+            <details className="desk-disclosure">
+              <summary>
+                Anything else to remember? <span>Optional notes</span>
+              </summary>
+              <label className="desk-label">
+                Notes
+                <textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  rows={2}
+                  maxLength={2000}
+                  className={fieldClass}
+                />
+              </label>
+            </details>
+          </div>
+          {error && (
+            <p role="alert" className="desk-error">
+              {error}
+            </p>
+          )}
+          <button type="submit" disabled={busy} className="desk-button desk-save">
+            {busy ? "Saving customer…" : "Save customer"}
+            <Check size={19} />
+          </button>
+          <p className="desk-note desk-centered">
+            You can add a confirmed visit on their customer card.
+          </p>
+        </form>
       )}
-    </Shell>
+    </DeskShell>
   );
 }

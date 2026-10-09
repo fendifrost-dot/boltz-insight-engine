@@ -297,12 +297,12 @@ export const listDeskLeads = createServerFn({ method: "GET" })
         .limit(40);
       if (error || !rows) {
         console.error("listDeskLeads failed");
-        return [];
+        throw new Error("Could not load customers.");
       }
       return rows.map((row) => toDeskLeadCard(row));
     } catch {
       console.error("listDeskLeads failed");
-      return [];
+      throw new Error("Could not load customers.");
     }
   });
 

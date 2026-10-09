@@ -40,6 +40,7 @@ export const INSTRUCTIONS = [
   "Sends refuse opted-out numbers, keep the 20-text daily cap, and refuse texts outside 8:00 AM-9:00 PM America/Chicago.",
   "botName must match this credential's agent name. idempotencyKey is required.",
   "A read scope cannot send or change a lead. leads.write cannot send SMS and cannot mark a lead Paid.",
+  "The shared shop chat is the receptionist conversation, separate from customer SMS. Read boltz_shop_chat using its cursor and reply with boltz_post_shop_message. Use boltz_shop_schedule for dated visits; do not infer times from lifecycle. Do not claim a desktop agent is online unless observed.",
   "Square revenue and payment reads are under the read scope. They do not create payments or invoices.",
 ].join(" ");
 
@@ -284,6 +285,21 @@ export const TOOLS: readonly ToolDef[] = [
         },
       },
     },
+  },
+  {
+    name: "boltz_shop_chat", scope: "read",
+    description: "Read the shared receptionist chat. With after, returns messages in ascending sequence; save nextCursor and continue while hasMore. Without after, returns the latest messages. This is not customer SMS.",
+    inputSchema: { type: "object", additionalProperties: false, properties: { after: { type: "integer", minimum: 0 }, limit: { type: "integer", minimum: 1, maximum: 100 } } },
+  },
+  {
+    name: "boltz_post_shop_message", scope: "leads.write",
+    description: "Ask the shop a question or reply to the receptionist in their live desk chat. Does NOT send customer SMS. Supply a unique idempotencyKey; retries with the same key do not duplicate the message.",
+    inputSchema: { type: "object", additionalProperties: false, required: ["text", "idempotencyKey"], properties: { text: { type: "string", minLength: 1, maxLength: 2000 }, idempotencyKey: uuidSchema, replyTo: uuidSchema, leadId: uuidSchema } },
+  },
+  {
+    name: "boltz_shop_schedule", scope: "read",
+    description: "Confirmed shop visits on a Chicago calendar date, default today. Includes count of undated scheduled leads. Appointment interest is not a confirmed booking.",
+    inputSchema: { type: "object", additionalProperties: false, properties: { date: { type: "string", description: "YYYY-MM-DD in America/Chicago" } } },
   },
 ];
 
