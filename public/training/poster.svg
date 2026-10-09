@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="910" height="512" viewBox="0 0 910 512">
+<rect width="910" height="512" fill="#141a12"/>
+<path d="M740 0H910V512H620Z" fill="#20281c"/>
+<path d="M820 0H868L748 512H700Z" fill="#f7e43f" opacity=".12"/>
+<rect x="58" y="54" width="56" height="56" rx="15" fill="#f7e43f"/>
+<path d="M89 65L73 85H84L80 101L101 77H89Z" fill="#191e17"/>
+<text x="133" y="79" font-family="Arial,sans-serif" font-size="22" font-weight="bold" fill="#fff">BOLTZ AUTOMOTIVE</text>
+<text x="133" y="102" font-family="Arial,sans-serif" font-size="12" letter-spacing="3" fill="#b0b8a7">SHOP DESK TRAINING</text>
+<text x="58" y="234" font-family="Arial,sans-serif" font-size="48" font-weight="bold" fill="#fff">Great service starts here.</text>
+<text x="60" y="279" font-family="Arial,sans-serif" font-size="22" fill="#b0b8a7">Your quick guide to the front desk.</text>
+<circle cx="82" cy="365" r="25" fill="#f7e43f"/><path d="M76 353L94 365L76 377Z" fill="#191e17"/>
+<text x="122" y="373" font-family="Arial,sans-serif" font-size="20" font-weight="bold" fill="#f7e43f">Press play to begin</text>
+</svg>
