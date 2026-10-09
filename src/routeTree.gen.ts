@@ -30,6 +30,7 @@ import { Route as AuthenticatedSquareRouteImport } from './routes/_authenticated
 import { Route as AuthenticatedDeskIndexRouteImport } from './routes/_authenticated/desk/index'
 import { Route as AuthenticatedDeskChatRouteImport } from './routes/_authenticated/desk/chat'
 import { Route as AuthenticatedDeskNewRouteImport } from './routes/_authenticated/desk/new'
+import { Route as AuthenticatedDeskTutorialRouteImport } from './routes/_authenticated/desk/tutorial'
 import { Route as ApiPublicBotRouteImport } from './routes/api/public/bot'
 import { Route as ApiPublicMcpRouteImport } from './routes/api/public/mcp'
 import { Route as ApiPublicSupabaseConfigRouteImport } from './routes/api/public/supabase-config'
@@ -157,6 +158,12 @@ const AuthenticatedDeskNewRoute = AuthenticatedDeskNewRouteImport.update({
   path: '/desk/new',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedDeskTutorialRoute =
+  AuthenticatedDeskTutorialRouteImport.update({
+    id: '/desk/tutorial',
+    path: '/desk/tutorial',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const ApiPublicBotRoute = ApiPublicBotRouteImport.update({
   id: '/api/public/bot',
   path: '/api/public/bot',
@@ -266,6 +273,7 @@ export interface FileRoutesByFullPath {
   '/square': typeof AuthenticatedSquareRoute
   '/desk/chat': typeof AuthenticatedDeskChatRoute
   '/desk/new': typeof AuthenticatedDeskNewRoute
+  '/desk/tutorial': typeof AuthenticatedDeskTutorialRoute
   '/api/public/bot': typeof ApiPublicBotRoute
   '/api/public/mcp': typeof ApiPublicMcpRoute
   '/api/public/supabase-config': typeof ApiPublicSupabaseConfigRoute
@@ -304,6 +312,7 @@ export interface FileRoutesByTo {
   '/': typeof AuthenticatedIndexRoute
   '/desk/chat': typeof AuthenticatedDeskChatRoute
   '/desk/new': typeof AuthenticatedDeskNewRoute
+  '/desk/tutorial': typeof AuthenticatedDeskTutorialRoute
   '/api/public/bot': typeof ApiPublicBotRoute
   '/api/public/mcp': typeof ApiPublicMcpRoute
   '/api/public/supabase-config': typeof ApiPublicSupabaseConfigRoute
@@ -344,6 +353,7 @@ export interface FileRoutesById {
   '/_authenticated/': typeof AuthenticatedIndexRoute
   '/_authenticated/desk/chat': typeof AuthenticatedDeskChatRoute
   '/_authenticated/desk/new': typeof AuthenticatedDeskNewRoute
+  '/_authenticated/desk/tutorial': typeof AuthenticatedDeskTutorialRoute
   '/api/public/bot': typeof ApiPublicBotRoute
   '/api/public/mcp': typeof ApiPublicMcpRoute
   '/api/public/supabase-config': typeof ApiPublicSupabaseConfigRoute
@@ -384,6 +394,7 @@ export interface FileRouteTypes {
     | '/square'
     | '/desk/chat'
     | '/desk/new'
+    | '/desk/tutorial'
     | '/api/public/bot'
     | '/api/public/mcp'
     | '/api/public/supabase-config'
@@ -422,6 +433,7 @@ export interface FileRouteTypes {
     | '/'
     | '/desk/chat'
     | '/desk/new'
+    | '/desk/tutorial'
     | '/api/public/bot'
     | '/api/public/mcp'
     | '/api/public/supabase-config'
@@ -461,6 +473,7 @@ export interface FileRouteTypes {
     | '/_authenticated/'
     | '/_authenticated/desk/chat'
     | '/_authenticated/desk/new'
+    | '/_authenticated/desk/tutorial'
     | '/api/public/bot'
     | '/api/public/mcp'
     | '/api/public/supabase-config'
@@ -648,6 +661,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedDeskNewRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/desk/tutorial': {
+      id: '/_authenticated/desk/tutorial'
+      path: '/desk/tutorial'
+      fullPath: '/desk/tutorial'
+      preLoaderRoute: typeof AuthenticatedDeskTutorialRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/api/public/bot': {
       id: '/api/public/bot'
       path: '/api/public/bot'
@@ -782,6 +802,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
   AuthenticatedDeskChatRoute: typeof AuthenticatedDeskChatRoute
   AuthenticatedDeskNewRoute: typeof AuthenticatedDeskNewRoute
+  AuthenticatedDeskTutorialRoute: typeof AuthenticatedDeskTutorialRoute
   AuthenticatedDeskIndexRoute: typeof AuthenticatedDeskIndexRoute
   AuthenticatedDeskLeadsLeadIdRoute: typeof AuthenticatedDeskLeadsLeadIdRoute
   AuthenticatedDeskLeadsIndexRoute: typeof AuthenticatedDeskLeadsIndexRoute
@@ -806,6 +827,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
   AuthenticatedDeskChatRoute: AuthenticatedDeskChatRoute,
   AuthenticatedDeskNewRoute: AuthenticatedDeskNewRoute,
+  AuthenticatedDeskTutorialRoute: AuthenticatedDeskTutorialRoute,
   AuthenticatedDeskIndexRoute: AuthenticatedDeskIndexRoute,
   AuthenticatedDeskLeadsLeadIdRoute: AuthenticatedDeskLeadsLeadIdRoute,
   AuthenticatedDeskLeadsIndexRoute: AuthenticatedDeskLeadsIndexRoute,
