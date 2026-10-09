@@ -31,3 +31,30 @@ test("shop desk migration forces RLS on caller numbers and blocks staff from Pai
   assert.doesNotMatch(sql, /INSERT INTO public\.google_ads_call_numbers/i);
   assert.doesNotMatch(sql, /shop_assistant/);
 });
+
+const claimsSql = readFileSync(
+  join(root, "supabase/migrations/20261009193000_protect_desk_columns_jwt_claims.sql"),
+  "utf8",
+);
+
+test("desk guard reads the JWT role from request.jwt.claims and the legacy GUC", () => {
+  const compact = claimsSql.replace(/\s+/g, " ");
+  assert.match(compact, /CREATE OR REPLACE FUNCTION public\.protect_lead_desk_columns\(\)/);
+  assert.match(
+    compact,
+    /coalesce\(\s*nullif\(current_setting\('request\.jwt\.claim\.role', true\), ''\),\s*nullif\(current_setting\('request\.jwt\.claims', true\), ''\)::jsonb->>'role'\s*\)/,
+  );
+  assert.match(compact, /jwt_role IS NULL OR jwt_role = 'service_role'/);
+  assert.match(compact, /Only the system payment path may mark a lead Paid/);
+  assert.match(compact, /Desk leads are recorded by the shop desk/);
+  assert.match(compact, /created_by is assigned by the shop desk/);
+  assert.match(compact, /Google Ads call links are assigned by the shop desk/);
+  assert.match(compact, /Desk idempotency is assigned by the shop desk/);
+  assert.match(compact, /SET search_path = public/);
+  assert.match(
+    compact,
+    /REVOKE ALL ON FUNCTION public\.protect_lead_desk_columns\(\) FROM PUBLIC, anon, authenticated/,
+  );
+  assert.doesNotMatch(claimsSql, /TO authenticated/i);
+  assert.doesNotMatch(claimsSql, /shop_assistant/);
+});

@@ -36,6 +36,7 @@ MIGRATIONS=(
   "supabase/migrations/20261002150000_ads_call_weekly.sql"
   "supabase/migrations/20261008170000_mcp_agents.sql"
   "supabase/migrations/20261009183000_shop_desk.sql"
+  "supabase/migrations/20261009193000_protect_desk_columns_jwt_claims.sql"
 )
 
 psql_cmd() {
@@ -418,6 +419,178 @@ END $$;
 SQL
 }
 
+# Sets only request.jwt.claims. The legacy request.jwt.claim.role GUC stays unset.
+test_desk_jwt_claims_guard() {
+  psql_cmd -d "${TEST_DB}" <<'SQL'
+DO $$
+DECLARE
+  v_lead uuid;
+  v_user uuid;
+  v_call uuid;
+BEGIN
+  IF nullif(current_setting('request.jwt.claim.role', true), '') IS NOT NULL THEN
+    RAISE EXCEPTION 'legacy jwt role GUC must start unset';
+  END IF;
+
+  -- No JWT: owner and migration sessions may still mark Paid.
+  INSERT INTO public.leads (phone_e164, lifecycle)
+  VALUES ('+15555550196', 'Paid');
+  DELETE FROM public.leads WHERE phone_e164 = '+15555550196';
+
+  PERFORM set_config('request.jwt.claims', '{"role":"authenticated"}', true);
+  IF nullif(current_setting('request.jwt.claim.role', true), '') IS NOT NULL THEN
+    RAISE EXCEPTION 'claims-only test must not set the legacy role GUC';
+  END IF;
+  IF nullif(current_setting('request.jwt.claims', true), '')::jsonb->>'role' IS DISTINCT FROM 'authenticated' THEN
+    RAISE EXCEPTION 'request.jwt.claims role was not authenticated';
+  END IF;
+
+  BEGIN
+    INSERT INTO public.leads (lifecycle) VALUES ('Paid');
+    RAISE EXCEPTION 'authenticated claims insert of Paid must fail';
+  EXCEPTION
+    WHEN insufficient_privilege THEN
+      IF SQLERRM NOT LIKE '%system payment path%' THEN
+        RAISE;
+      END IF;
+  END;
+
+  INSERT INTO public.leads (phone_e164, lifecycle)
+  VALUES ('+15555550196', 'New')
+  RETURNING id INTO v_lead;
+
+  BEGIN
+    UPDATE public.leads SET lifecycle = 'Paid' WHERE id = v_lead;
+    RAISE EXCEPTION 'authenticated claims update to Paid must fail';
+  EXCEPTION
+    WHEN insufficient_privilege THEN
+      IF SQLERRM NOT LIKE '%system payment path%' THEN
+        RAISE;
+      END IF;
+  END;
+
+  BEGIN
+    UPDATE public.leads
+    SET intake_path = 'desk', intake_channel = 'walk_in', heard_about = 'google'
+    WHERE id = v_lead;
+    RAISE EXCEPTION 'authenticated claims must not set intake_path desk';
+  EXCEPTION
+    WHEN insufficient_privilege THEN
+      IF SQLERRM NOT LIKE '%shop desk%' THEN
+        RAISE;
+      END IF;
+  END;
+
+  INSERT INTO auth.users (id) VALUES (gen_random_uuid()) RETURNING id INTO v_user;
+  BEGIN
+    UPDATE public.leads SET created_by = v_user WHERE id = v_lead;
+    RAISE EXCEPTION 'authenticated claims must not set created_by';
+  EXCEPTION
+    WHEN insufficient_privilege THEN
+      IF SQLERRM NOT LIKE '%created_by%' THEN
+        RAISE;
+      END IF;
+  END;
+
+  BEGIN
+    UPDATE public.leads
+    SET desk_idempotency_key = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
+    WHERE id = v_lead;
+    RAISE EXCEPTION 'authenticated claims must not set desk_idempotency_key';
+  EXCEPTION
+    WHEN insufficient_privilege THEN
+      IF SQLERRM NOT LIKE '%idempotency%' THEN
+        RAISE;
+      END IF;
+  END;
+
+  PERFORM set_config('request.jwt.claims', '', true);
+  INSERT INTO public.google_ads_call_numbers (phone_e164, started_at, week_start, customer_id)
+  VALUES ('+15555550196', timestamptz '2026-10-09 15:04:00+00', DATE '2026-10-05', '1234567890')
+  RETURNING id INTO v_call;
+  PERFORM set_config('request.jwt.claims', '{"role":"authenticated"}', true);
+
+  BEGIN
+    UPDATE public.leads SET google_ads_call_id = v_call WHERE id = v_lead;
+    RAISE EXCEPTION 'authenticated claims must not set google_ads_call_id';
+  EXCEPTION
+    WHEN insufficient_privilege THEN
+      IF SQLERRM NOT LIKE '%Google Ads%' THEN
+        RAISE;
+      END IF;
+  END;
+
+  IF (SELECT lifecycle FROM public.leads WHERE id = v_lead) <> 'New'::public.lead_lifecycle THEN
+    RAISE EXCEPTION 'rejected Paid update must leave lifecycle unchanged';
+  END IF;
+  IF (SELECT intake_path FROM public.leads WHERE id = v_lead) IS NOT NULL
+     OR (SELECT created_by FROM public.leads WHERE id = v_lead) IS NOT NULL
+     OR (SELECT google_ads_call_id FROM public.leads WHERE id = v_lead) IS NOT NULL
+     OR (SELECT desk_idempotency_key FROM public.leads WHERE id = v_lead) IS NOT NULL THEN
+    RAISE EXCEPTION 'rejected desk markers must stay unset';
+  END IF;
+
+  -- service_role carried only in the claims JSON remains the payment and desk path.
+  PERFORM set_config('request.jwt.claims', '{"role":"service_role"}', true);
+  IF nullif(current_setting('request.jwt.claim.role', true), '') IS NOT NULL THEN
+    RAISE EXCEPTION 'service_role claims test must leave the legacy GUC unset';
+  END IF;
+  UPDATE public.leads
+  SET lifecycle = 'Paid',
+      intake_path = 'desk',
+      intake_channel = 'phone',
+      heard_about = 'google',
+      created_by = v_user,
+      google_ads_call_id = v_call,
+      desk_idempotency_key = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
+  WHERE id = v_lead;
+  IF (SELECT lifecycle FROM public.leads WHERE id = v_lead) <> 'Paid'::public.lead_lifecycle THEN
+    RAISE EXCEPTION 'service_role claims must mark Paid';
+  END IF;
+  IF (SELECT intake_path FROM public.leads WHERE id = v_lead) IS DISTINCT FROM 'desk' THEN
+    RAISE EXCEPTION 'service_role claims must record a desk lead';
+  END IF;
+
+  DELETE FROM public.leads WHERE id = v_lead;
+  DELETE FROM public.google_ads_call_numbers WHERE id = v_call;
+  DELETE FROM auth.users WHERE id = v_user;
+END $$;
+SQL
+
+  # Legacy GUC still wins when both sources are set, matching auth.role().
+  psql_cmd -d "${TEST_DB}" <<'SQL'
+DO $$
+DECLARE
+  v_lead uuid;
+BEGIN
+  INSERT INTO public.leads (phone_e164, lifecycle)
+  VALUES ('+15555550195', 'New')
+  RETURNING id INTO v_lead;
+
+  PERFORM set_config('request.jwt.claim.role', 'authenticated', true);
+  PERFORM set_config('request.jwt.claims', '{"role":"service_role"}', true);
+  BEGIN
+    UPDATE public.leads SET lifecycle = 'Paid' WHERE id = v_lead;
+    RAISE EXCEPTION 'legacy authenticated role must still block Paid';
+  EXCEPTION
+    WHEN insufficient_privilege THEN
+      IF SQLERRM NOT LIKE '%system payment path%' THEN
+        RAISE;
+      END IF;
+  END;
+
+  PERFORM set_config('request.jwt.claim.role', 'service_role', true);
+  PERFORM set_config('request.jwt.claims', '{"role":"authenticated"}', true);
+  UPDATE public.leads SET lifecycle = 'Paid' WHERE id = v_lead;
+  IF (SELECT lifecycle FROM public.leads WHERE id = v_lead) <> 'Paid'::public.lead_lifecycle THEN
+    RAISE EXCEPTION 'legacy service_role must still mark Paid';
+  END IF;
+
+  DELETE FROM public.leads WHERE id = v_lead;
+END $$;
+SQL
+}
+
 echo "Test 1: complete migration chain on empty database"
 apply_baseline
 setup_auth_stub
@@ -431,11 +604,19 @@ assert_lifecycle_transition_rpc
 assert_mcp_locked
 assert_shop_desk
 
-echo "Test 7: staff JWT cannot mark Paid; service role can"
+echo "Test 7: legacy staff JWT cannot mark Paid; service role can"
 test_desk_paid_guard
+
+echo "Test 7b: request.jwt.claims alone rejects Paid and desk markers for authenticated"
+test_desk_jwt_claims_guard
 
 echo "Test 8: shop desk migration is idempotent"
 apply_file "supabase/migrations/20261009183000_shop_desk.sql"
+
+echo "Test 8b: jwt claims migration restores the guard after shop desk is reapplied"
+apply_file "supabase/migrations/20261009193000_protect_desk_columns_jwt_claims.sql"
+apply_file "supabase/migrations/20261009193000_protect_desk_columns_jwt_claims.sql"
+test_desk_jwt_claims_guard
 
 echo "Test 4: lifecycle transition RPC is atomic and returns stale without audit"
 test_lifecycle_transition_rpc
