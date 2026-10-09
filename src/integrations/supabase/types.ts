@@ -447,6 +447,71 @@ export type Database = {
         }
         Relationships: []
       }
+      mcp_agents: {
+        Row: {
+          created_at: string
+          expires_at: string | null
+          id: string
+          name: string
+          revoked_at: string | null
+          scopes: string[]
+          secret_hash: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          name: string
+          revoked_at?: string | null
+          scopes: string[]
+          secret_hash: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          name?: string
+          revoked_at?: string | null
+          scopes?: string[]
+          secret_hash?: string
+        }
+        Relationships: []
+      }
+      mcp_audit_log: {
+        Row: {
+          agent_id: string
+          args_summary: Json
+          created_at: string
+          id: string
+          result_code: string
+          tool: string
+        }
+        Insert: {
+          agent_id: string
+          args_summary?: Json
+          created_at?: string
+          id?: string
+          result_code: string
+          tool: string
+        }
+        Update: {
+          agent_id?: string
+          args_summary?: Json
+          created_at?: string
+          id?: string
+          result_code?: string
+          tool?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mcp_audit_log_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "mcp_agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       message_jobs: {
         Row: {
           attempts: number
