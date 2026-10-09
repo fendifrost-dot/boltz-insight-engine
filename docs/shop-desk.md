@@ -2,6 +2,8 @@
 
 `/desk` is the receptionist entrance. It has three destinations: Front desk, Find a customer, and Grok chat. The separate operations console remains available to owners through Manage shop. The desk uses the Boltz logo from the existing public website, yellow/black/white brand colors, customer cards, and plain-language display labels. Stored lead-source and lifecycle values are unchanged.
 
+The moon/sun button in the top bar switches the entire desk between light and dark mode, including intake and Grok chat. Light remains the initial default. The choice is stored in `boltz:desk-theme` in that browser, persists across desk navigation and reloads, and synchronizes between tabs on the same device. Each shop iPhone and computer can choose independently. If browser storage is unavailable, the toggle still works for the current visit. Owner-console styling is unchanged.
+
 Walk-in and phone intake continue through `createDeskLead`: canonical `leads`, phone duplicate checks, retry keys, Google call attribution, notes, and Square matching. For a repeat phone number, the entered conversation is offered as a note on the existing customer. Notes, texts, source correction, progress changes, payments and history remain available on the customer card. No customer SMS is sent by saving a lead or using internal chat.
 
 ## Chat on the existing agent connections
