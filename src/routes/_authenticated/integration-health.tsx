@@ -4,6 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { PageHeader, Panel, Shell } from "@/components/ops/Shell";
 import { Tag, TableWrap, Td, Th } from "@/components/ops/Bits";
 import { MetaHealthPanel } from "@/components/meta/MetaHealthPanel";
+import { SquareHealthPanel } from "@/components/square/SquareHealthPanel";
 import {
   ensureSubscription,
   getIntegrationHealth,
@@ -17,7 +18,7 @@ export const Route = createFileRoute("/_authenticated/integration-health")({
       {
         name: "description",
         content:
-          "RingCentral, Meta Lead Ads, Gmail lead intake and Grok connection status, webhook subscriptions, and job queue state.",
+          "RingCentral, Meta Lead Ads, Square, Gmail lead intake and Grok connection status, webhook subscriptions, and job queue state.",
       },
       { name: "robots", content: "noindex, nofollow" },
     ],
@@ -69,8 +70,18 @@ function HealthPage() {
                 >
                   <span className="font-mono">{secret.name}</span>
                   <span className="flex items-center gap-2">
-                    {secret.masked && <span className="text-muted-foreground">{secret.masked}</span>}
-                    <Tag tone={secret.configured ? "success" : "danger"}>
+                    {secret.masked && (
+                      <span className="text-muted-foreground">{secret.masked}</span>
+                    )}
+                    <Tag
+                      tone={
+                        secret.configured
+                          ? "success"
+                          : "optional" in secret && secret.optional
+                            ? "warning"
+                            : "danger"
+                      }
+                    >
                       {secret.configured ? "Configured" : "Missing"}
                     </Tag>
                   </span>
@@ -141,11 +152,15 @@ function HealthPage() {
                   {data?.subscriptions.map((sub) => (
                     <tr key={sub.id}>
                       <Td>
-                        <Tag tone={sub.status === "Active" ? "success" : "warning"}>{sub.status}</Tag>
+                        <Tag tone={sub.status === "Active" ? "success" : "warning"}>
+                          {sub.status}
+                        </Tag>
                       </Td>
                       <Td className="text-xs">{fmt(sub.expires_at)}</Td>
                       <Td className="text-xs">{fmt(sub.last_renewed_at)}</Td>
-                      <Td className="max-w-xs truncate font-mono text-xs">{sub.delivery_address}</Td>
+                      <Td className="max-w-xs truncate font-mono text-xs">
+                        {sub.delivery_address}
+                      </Td>
                       <Td className="max-w-xs text-xs text-destructive">
                         {sub.last_renewal_error ?? ""}
                       </Td>
@@ -159,6 +174,8 @@ function HealthPage() {
             <p className="mt-2 text-xs text-destructive">{ensureMutation.data.error}</p>
           )}
         </Panel>
+
+        <SquareHealthPanel />
 
         <MetaHealthPanel />
 

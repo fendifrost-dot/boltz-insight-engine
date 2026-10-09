@@ -79,7 +79,7 @@ const OWNER_EVIDENCE_BASIS: readonly LifecycleEvidenceBasis[] = [
   "payment_record",
 ];
 
-const SYSTEM_EVIDENCE_BASIS: readonly LifecycleEvidenceBasis[] = ["system_rule"];
+const SYSTEM_EVIDENCE_BASIS: readonly LifecycleEvidenceBasis[] = ["system_rule", "payment_record"];
 
 function funnelIndex(state: Lifecycle): number {
   return LIFECYCLE_FUNNEL.indexOf(state);
@@ -156,6 +156,7 @@ export function isAllowedLifecycleTransition(args: {
 
   if (actor === "system") {
     if (from === "New" && to === "New") return true;
+    if (to === "Paid" && isFunnelState(from) && from !== "Paid") return true;
     return false;
   }
 
@@ -214,17 +215,29 @@ function validateDestinationEvidence(args: {
   }
 
   if (to === "Paid") {
-    if (actor !== "owner") {
-      return { ok: false, reason: "Only owners may mark a lead Paid" };
-    }
-    if (from !== "Completed") {
-      return { ok: false, reason: "Paid requires a Completed lead" };
-    }
-    if (evidence.basis !== "payment_record") {
-      return { ok: false, reason: "Paid requires payment_record evidence" };
-    }
-    if (!hasEvidenceRef(evidence)) {
-      return { ok: false, reason: "Paid requires evidence_ref" };
+    if (actor === "system") {
+      if (evidence.basis !== "payment_record") {
+        return { ok: false, reason: "System Paid requires payment_record evidence" };
+      }
+      if (!hasEvidenceRef(evidence)) {
+        return { ok: false, reason: "Paid requires evidence_ref" };
+      }
+      if (!isFunnelState(from) || from === "Paid") {
+        return { ok: false, reason: "System Paid applies only from an open funnel stage" };
+      }
+    } else {
+      if (actor !== "owner") {
+        return { ok: false, reason: "Only owners may mark a lead Paid" };
+      }
+      if (from !== "Completed") {
+        return { ok: false, reason: "Paid requires a Completed lead" };
+      }
+      if (evidence.basis !== "payment_record") {
+        return { ok: false, reason: "Paid requires payment_record evidence" };
+      }
+      if (!hasEvidenceRef(evidence)) {
+        return { ok: false, reason: "Paid requires evidence_ref" };
+      }
     }
   }
 
@@ -266,14 +279,20 @@ export function validateLifecycleEvidence(args: {
       return { ok: false, reason: "Agent lifecycle transitions require agent_run_id evidence" };
     }
     if (!evidence.inboundMessageId) {
-      return { ok: false, reason: "Agent lifecycle transitions require inbound_message_id evidence" };
+      return {
+        ok: false,
+        reason: "Agent lifecycle transitions require inbound_message_id evidence",
+      };
     }
     return { ok: true };
   }
 
   if (args.actor === "staff") {
     if (!STAFF_EVIDENCE_BASIS.includes(evidence.basis)) {
-      return { ok: false, reason: "Staff lifecycle transitions require operational evidence basis" };
+      return {
+        ok: false,
+        reason: "Staff lifecycle transitions require operational evidence basis",
+      };
     }
     if (evidence.basis === "payment_record") {
       return { ok: false, reason: "Staff may not use payment_record evidence" };
@@ -286,7 +305,10 @@ export function validateLifecycleEvidence(args: {
 
   if (args.actor === "owner") {
     if (!OWNER_EVIDENCE_BASIS.includes(evidence.basis)) {
-      return { ok: false, reason: "Owner lifecycle transitions require operational evidence basis" };
+      return {
+        ok: false,
+        reason: "Owner lifecycle transitions require operational evidence basis",
+      };
     }
     if (!evidence.assertedBy) {
       return { ok: false, reason: "Owner lifecycle transitions require asserted_by user id" };

@@ -2,9 +2,17 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { Constants } from "@/integrations/supabase/types";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { CONSENT_BASIS, buildConsentLeadUpdate, validateConsentOptIn } from "@/lib/start-owner-sms-policy";
+import {
+  CONSENT_BASIS,
+  buildConsentLeadUpdate,
+  validateConsentOptIn,
+} from "@/lib/start-owner-sms-policy";
 import { LIFECYCLE_EVIDENCE_BASIS, requiresFinancialConfirm } from "@/lib/lifecycle-transitions";
-import { checkCapability, requireCapability, requireOwner } from "@/server/authz/require-capability.server";
+import {
+  checkCapability,
+  requireCapability,
+  requireOwner,
+} from "@/server/authz/require-capability.server";
 
 /**
  * Server-fn authorization audit (createServerFn handlers in this module):
@@ -30,7 +38,9 @@ export const listLeads = createServerFn({ method: "GET" })
       let query =
         input.source === "all"
           ? context.supabase.from("leads").select(`${columns}, meta_lead_submissions(platform)`)
-          : context.supabase.from("leads").select(`${columns}, meta_lead_submissions!inner(platform)`);
+          : context.supabase
+              .from("leads")
+              .select(`${columns}, meta_lead_submissions!inner(platform)`);
       if (input.source === "facebook" || input.source === "instagram") {
         query = query.eq("meta_lead_submissions.platform", input.source);
       }
@@ -175,7 +185,10 @@ export const sendOwnerMessage = createServerFn({ method: "POST" })
     const thread = threadRes.data;
 
     if (thread.lead_id !== lead.id) {
-      return { ok: false as const, reason: "Thread does not belong to the selected lead — send blocked" };
+      return {
+        ok: false as const,
+        reason: "Thread does not belong to the selected lead — send blocked",
+      };
     }
     if (!lead.phone_e164) return { ok: false as const, reason: "Lead has no phone number" };
     if (lead.consent_status === "opted_out") {
@@ -207,7 +220,6 @@ export const sendOwnerMessage = createServerFn({ method: "POST" })
       ? { ok: true as const, reason: null }
       : { ok: false as const, reason: outcome.reason };
   });
-
 
 export const listEscalations = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
@@ -255,22 +267,24 @@ export const getIntegrationHealth = createServerFn({ method: "GET" })
       const { agentCircuitState } = await import("@/server/lead-inbox/jobs.server");
 
       const [snapshotsRes, subsRes, jobsRes] = await Promise.all([
-      context.supabase
-        .from("integration_health_snapshots")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(40),
-      context.supabase
-        .from("ringcentral_subscriptions")
-        .select("id, provider_subscription_id, status, expires_at, delivery_address, last_renewed_at, last_renewal_error, sms_capability")
-        .order("created_at", { ascending: false })
-        .limit(5),
-      context.supabase
-        .from("message_jobs")
-        .select("id, job_type, status, attempts, last_error, run_after, created_at")
-        .order("created_at", { ascending: false })
-        .limit(30),
-    ]);
+        context.supabase
+          .from("integration_health_snapshots")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .limit(40),
+        context.supabase
+          .from("ringcentral_subscriptions")
+          .select(
+            "id, provider_subscription_id, status, expires_at, delivery_address, last_renewed_at, last_renewal_error, sms_capability",
+          )
+          .order("created_at", { ascending: false })
+          .limit(5),
+        context.supabase
+          .from("message_jobs")
+          .select("id, job_type, status, attempts, last_error, run_after, created_at")
+          .order("created_at", { ascending: false })
+          .limit(30),
+      ]);
 
       let capability: { capability: string; detail: string } | null = null;
       try {
@@ -284,8 +298,9 @@ export const getIntegrationHealth = createServerFn({ method: "GET" })
         };
       }
 
+      const { squareSecretStatus } = await import("@/server/square/env.server");
       return {
-        secrets: secretStatus(),
+        secrets: [...secretStatus(), ...squareSecretStatus()],
         circuit: await agentCircuitState(),
         capability,
         snapshots: snapshotsRes.data ?? [],
@@ -342,7 +357,8 @@ export const startOwnerSms = createServerFn({ method: "POST" })
       return { ok: false as const, reason: consentCheck.reason, leadId: null };
     }
 
-    const { getOrCreateLeadThread, toE164, addEvent } = await import("@/server/lead-inbox/store.server");
+    const { getOrCreateLeadThread, toE164, addEvent } =
+      await import("@/server/lead-inbox/store.server");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { sendOutbound } = await import("@/server/lead-inbox/outbound.server");
 

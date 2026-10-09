@@ -295,7 +295,14 @@ export async function handleBotRequest(request: Request): Promise<Response> {
   if (action === "messages") return handleMessages(payload);
   if (action === "inbound") return handleInbound(payload);
   if (action === "send") return handleSend(payload);
-  return json({ error: "action must be lookup, messages, inbound, or send" }, 400);
+  if (action === "square_revenue" || action === "square_payments") {
+    const { handleSquareBotAction } = await import("@/server/square/read.server");
+    return handleSquareBotAction(payload);
+  }
+  return json(
+    { error: "action must be lookup, messages, inbound, send, square_revenue, or square_payments" },
+    400,
+  );
 }
 
 async function handleLookup(payload: unknown): Promise<Response> {

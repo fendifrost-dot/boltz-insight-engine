@@ -15,7 +15,10 @@ import {
   validateLifecycleTransition,
 } from "./lifecycle-transitions.ts";
 
-const jobsPath = join(dirname(fileURLToPath(import.meta.url)), "../server/lead-inbox/jobs.server.ts");
+const jobsPath = join(
+  dirname(fileURLToPath(import.meta.url)),
+  "../server/lead-inbox/jobs.server.ts",
+);
 
 const grokEvidence = {
   basis: "agent_decision" as const,
@@ -30,10 +33,7 @@ const staffEvidence = (basis: "appointment_record", ref: string) => ({
 });
 
 test("grok may advance only New to Contacted and Contacted to Qualified", () => {
-  assert.equal(
-    isAllowedLifecycleTransition({ from: "New", to: "Contacted", actor: "grok" }),
-    true,
-  );
+  assert.equal(isAllowedLifecycleTransition({ from: "New", to: "Contacted", actor: "grok" }), true);
   assert.equal(
     isAllowedLifecycleTransition({ from: "Contacted", to: "Qualified", actor: "grok" }),
     true,
@@ -84,7 +84,11 @@ test("grok may not transition from post-intake funnel stages", () => {
 
 test("staff may move adjacent funnel steps and to terminal states but never Paid", () => {
   assert.equal(
-    isAllowedLifecycleTransition({ from: "Qualified", to: "Appointment Scheduled", actor: "staff" }),
+    isAllowedLifecycleTransition({
+      from: "Qualified",
+      to: "Appointment Scheduled",
+      actor: "staff",
+    }),
     true,
   );
   assert.equal(
@@ -233,7 +237,53 @@ test("destination-specific evidence is required for operational funnel stages", 
 test("resolveTransitionActorKind maps owner and staff separately", () => {
   assert.equal(resolveTransitionActorKind("owner:abc"), "owner");
   assert.equal(resolveTransitionActorKind("staff:abc"), "staff");
+  assert.equal(resolveTransitionActorKind("staff:mcp:lead-follow-up"), "staff");
   assert.equal(resolveTransitionActorKind("grok"), "grok");
+  assert.equal(resolveTransitionActorKind("system"), "system");
+});
+
+test("system may mark an open funnel lead Paid from a Square payment record", () => {
+  const paid = validateLifecycleTransition({
+    from: "New",
+    to: "Paid",
+    actor: "system",
+    evidence: { basis: "payment_record", evidenceRef: "sq-payment-1" },
+  });
+  assert.equal(paid.ok, true);
+
+  const fromEstimate = validateLifecycleTransition({
+    from: "Estimate Sent",
+    to: "Paid",
+    actor: "system",
+    evidence: { basis: "payment_record", evidenceRef: "sq-payment-2" },
+  });
+  assert.equal(fromEstimate.ok, true);
+});
+
+test("system cannot mark Paid without a payment record, and cannot mark a terminal lead", () => {
+  const wrongBasis = validateLifecycleTransition({
+    from: "Completed",
+    to: "Paid",
+    actor: "system",
+    evidence: { basis: "system_rule", evidenceRef: "rule-1" },
+  });
+  assert.equal(wrongBasis.ok, false);
+
+  const terminal = validateLifecycleTransition({
+    from: "Spam",
+    to: "Paid",
+    actor: "system",
+    evidence: { basis: "payment_record", evidenceRef: "sq-payment-3" },
+  });
+  assert.equal(terminal.ok, false);
+
+  const staff = validateLifecycleTransition({
+    from: "Completed",
+    to: "Paid",
+    actor: "staff",
+    evidence: { basis: "payment_record", evidenceRef: "sq-payment-4", assertedBy: "staff-1" },
+  });
+  assert.equal(staff.ok, false);
 });
 
 test("agent lifecycle transitions require agent_decision evidence", () => {

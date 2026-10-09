@@ -39,7 +39,8 @@ export const INSTRUCTIONS = [
   "Every authenticated call is audited before it runs. Audit rows do not store message bodies or phone numbers.",
   "Sends refuse opted-out numbers, keep the 20-text daily cap, and refuse texts outside 8:00 AM-9:00 PM America/Chicago.",
   "botName must match this credential's agent name. idempotencyKey is required.",
-  "A read scope cannot send or change a lead. leads.write cannot send SMS.",
+  "A read scope cannot send or change a lead. leads.write cannot send SMS and cannot mark a lead Paid.",
+  "Square revenue and payment reads are under the read scope. They do not create payments or invoices.",
 ].join(" ");
 
 export interface McpAgent {
@@ -200,6 +201,34 @@ export const TOOLS: readonly ToolDef[] = [
       properties: {
         since: { type: "string" },
         until: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "boltz_square_revenue",
+    scope: "read",
+    description:
+      "Square revenue rollups for a date range. Dates are YYYY-MM-DD week starts. Returns gross, net, refunds, ticket count, average ticket, and lead-attributed gross by source. Does not return customer names, phones, or emails.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        since: { type: "string", description: "Inclusive YYYY-MM-DD week start." },
+        until: { type: "string", description: "Inclusive YYYY-MM-DD week start." },
+      },
+    },
+  },
+  {
+    name: "boltz_square_payments",
+    scope: "read",
+    description:
+      "Recent Square payments, or the payments linked to one leadId. Amounts, status, match, card brand, and last 4 only.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        leadId: uuidSchema,
+        limit: { type: "integer", minimum: 1, maximum: 50 },
       },
     },
   },
