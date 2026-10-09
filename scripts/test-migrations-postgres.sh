@@ -35,6 +35,7 @@ MIGRATIONS=(
   "supabase/migrations/20261001190000_email_intake_receipts.sql"
   "supabase/migrations/20261002150000_ads_call_weekly.sql"
   "supabase/migrations/20261008170000_mcp_agents.sql"
+  "supabase/migrations/20261009183000_shop_desk.sql"
 )
 
 psql_cmd() {
@@ -370,6 +371,53 @@ assert_mcp_locked() {
   fi
 }
 
+assert_shop_desk() {
+  if ! psql_cmd -d "${TEST_DB}" -Atc "SELECT relrowsecurity AND relforcerowsecurity FROM pg_class WHERE oid = 'public.google_ads_call_numbers'::regclass;" | grep -q t; then
+    echo "ERROR: google_ads_call_numbers must enable and force row level security" >&2
+    exit 1
+  fi
+  if ! psql_cmd -d "${TEST_DB}" -Atc "SELECT has_table_privilege('anon', 'public.google_ads_call_numbers', 'SELECT');" | grep -q f; then
+    echo "ERROR: anon must not read google_ads_call_numbers" >&2
+    exit 1
+  fi
+  if ! psql_cmd -d "${TEST_DB}" -Atc "SELECT has_table_privilege('authenticated', 'public.google_ads_call_numbers', 'SELECT');" | grep -q f; then
+    echo "ERROR: authenticated must not read google_ads_call_numbers" >&2
+    exit 1
+  fi
+  if ! psql_cmd -d "${TEST_DB}" -Atc "SELECT has_table_privilege('service_role', 'public.google_ads_call_numbers', 'INSERT');" | grep -q t; then
+    echo "ERROR: service_role must insert google_ads_call_numbers" >&2
+    exit 1
+  fi
+}
+
+test_desk_paid_guard() {
+  psql_cmd -d "${TEST_DB}" <<'SQL'
+DO $$
+BEGIN
+  PERFORM set_config('request.jwt.claim.role', 'authenticated', true);
+  BEGIN
+    INSERT INTO public.leads (lifecycle) VALUES ('Paid');
+    RAISE EXCEPTION 'authenticated insert of Paid must fail';
+  EXCEPTION
+    WHEN insufficient_privilege THEN
+      IF SQLERRM NOT LIKE '%system payment path%' THEN
+        RAISE;
+      END IF;
+  END;
+
+  PERFORM set_config('request.jwt.claim.role', 'service_role', true);
+  INSERT INTO public.leads (phone_e164, lifecycle)
+  VALUES ('+15555550199', 'Paid');
+  IF NOT EXISTS (
+    SELECT 1 FROM public.leads WHERE phone_e164 = '+15555550199' AND lifecycle = 'Paid'
+  ) THEN
+    RAISE EXCEPTION 'service_role must be able to mark Paid';
+  END IF;
+  DELETE FROM public.leads WHERE phone_e164 = '+15555550199';
+END $$;
+SQL
+}
+
 echo "Test 1: complete migration chain on empty database"
 apply_baseline
 setup_auth_stub
@@ -381,6 +429,13 @@ assert_role_probes_locked
 assert_trigger_functions_have_search_path
 assert_lifecycle_transition_rpc
 assert_mcp_locked
+assert_shop_desk
+
+echo "Test 7: staff JWT cannot mark Paid; service role can"
+test_desk_paid_guard
+
+echo "Test 8: shop desk migration is idempotent"
+apply_file "supabase/migrations/20261009183000_shop_desk.sql"
 
 echo "Test 4: lifecycle transition RPC is atomic and returns stale without audit"
 test_lifecycle_transition_rpc

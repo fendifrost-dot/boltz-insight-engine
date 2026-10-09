@@ -83,6 +83,44 @@ export type Database = {
         }
         Relationships: []
       }
+      google_ads_call_numbers: {
+        Row: {
+          ads_call_weekly_id: string | null
+          created_at: string
+          customer_id: string
+          id: string
+          phone_e164: string
+          started_at: string
+          week_start: string
+        }
+        Insert: {
+          ads_call_weekly_id?: string | null
+          created_at?: string
+          customer_id: string
+          id?: string
+          phone_e164: string
+          started_at: string
+          week_start: string
+        }
+        Update: {
+          ads_call_weekly_id?: string | null
+          created_at?: string
+          customer_id?: string
+          id?: string
+          phone_e164?: string
+          started_at?: string
+          week_start?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "google_ads_call_numbers_ads_call_weekly_id_fkey"
+            columns: ["ads_call_weekly_id"]
+            isOneToOne: false
+            referencedRelation: "ads_call_weekly"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       agent_runs: {
         Row: {
           action: Database["public"]["Enums"]["agent_action"]
@@ -362,15 +400,22 @@ export type Database = {
       }
       leads: {
         Row: {
+          appointment_interest: boolean
           assigned_owner: string | null
           attachment_urls: Json | null
           consent_evidence: Json | null
           consent_status: Database["public"]["Enums"]["consent_status"]
           consent_updated_at: string | null
           created_at: string
+          created_by: string | null
+          desk_idempotency_key: string | null
           email: string | null
           follow_up_at: string | null
+          google_ads_call_id: string | null
+          heard_about: string | null
           id: string
+          intake_channel: string | null
+          intake_path: string | null
           last_inbound_at: string | null
           last_message_at: string | null
           last_outbound_at: string | null
@@ -393,15 +438,22 @@ export type Database = {
           vin: string | null
         }
         Insert: {
+          appointment_interest?: boolean
           assigned_owner?: string | null
           attachment_urls?: Json | null
           consent_evidence?: Json | null
           consent_status?: Database["public"]["Enums"]["consent_status"]
           consent_updated_at?: string | null
           created_at?: string
+          created_by?: string | null
+          desk_idempotency_key?: string | null
           email?: string | null
           follow_up_at?: string | null
+          google_ads_call_id?: string | null
+          heard_about?: string | null
           id?: string
+          intake_channel?: string | null
+          intake_path?: string | null
           last_inbound_at?: string | null
           last_message_at?: string | null
           last_outbound_at?: string | null
@@ -424,15 +476,22 @@ export type Database = {
           vin?: string | null
         }
         Update: {
+          appointment_interest?: boolean
           assigned_owner?: string | null
           attachment_urls?: Json | null
           consent_evidence?: Json | null
           consent_status?: Database["public"]["Enums"]["consent_status"]
           consent_updated_at?: string | null
           created_at?: string
+          created_by?: string | null
+          desk_idempotency_key?: string | null
           email?: string | null
           follow_up_at?: string | null
+          google_ads_call_id?: string | null
+          heard_about?: string | null
           id?: string
+          intake_channel?: string | null
+          intake_path?: string | null
           last_inbound_at?: string | null
           last_message_at?: string | null
           last_outbound_at?: string | null
