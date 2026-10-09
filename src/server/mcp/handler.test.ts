@@ -225,6 +225,25 @@ test("an audit insert failure refuses the tool", async () => {
   assert.equal(calls.length, 0);
 });
 
+test("shop chat posting requires write scope and retains the credential identity", async () => {
+  const input = { jsonrpc: "2.0", id: 10, method: "tools/call", params: {
+    name: "boltz_post_shop_message", arguments: { text: "Internal shop question", idempotencyKey: "00000000-0000-4000-8000-000000000001" },
+  } };
+  const readOnly = harness([agent({ scopes: ["read"] })]);
+  const denied = await handleMcpRequest(post(input, TOKEN), readOnly.deps);
+  const body = await denied.json() as { result: { isError: boolean } };
+  assert.equal(body.result.isError, true);
+  assert.equal(readOnly.calls.length, 0);
+  const writer = harness([agent({ scopes: ["leads.write"] })], async ctx => {
+    assert.equal(ctx.agent.name, "lead-follow-up");
+    return { resultCode: "ok", isError: false, value: { channel: "internal_shop_chat", customerSmsSent: false } };
+  });
+  await handleMcpRequest(post(input, TOKEN), writer.deps);
+  assert.deepEqual(writer.calls, ["boltz_post_shop_message"]);
+  assert.equal(writer.audits[0]?.resultCode, "ok");
+  assert.ok(!JSON.stringify(writer.audits).includes("Internal shop question"));
+});
+
 test("the route does not accept the bot API secret", () => {
   const route = readFileSync(join(here, "../../routes/api/public/mcp.ts"), "utf8");
   assert.match(route, /handleMcpRequest/);

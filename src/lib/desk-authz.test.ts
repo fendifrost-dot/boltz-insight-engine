@@ -58,7 +58,7 @@ test("desk writes and reads use staff capabilities and never mark Paid", () => {
   assert.doesNotMatch(source, /error\.message/);
   assert.doesNotMatch(detail, /sendOwnerMessage|startOwnerSms/);
   assert.doesNotMatch(form, /sendOwnerMessage|startOwnerSms/);
-  assert.match(detail, /Staff cannot mark Paid/);
+  assert.match(detail, /Payments update automatically/);
 });
 
 test("staff can record leads and an anonymous probe cannot", async () => {

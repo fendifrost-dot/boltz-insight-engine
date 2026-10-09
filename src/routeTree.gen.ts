@@ -28,6 +28,7 @@ import { Route as AuthenticatedProvenanceRouteImport } from './routes/_authentic
 import { Route as AuthenticatedQueriesRouteImport } from './routes/_authenticated/queries'
 import { Route as AuthenticatedSquareRouteImport } from './routes/_authenticated/square'
 import { Route as AuthenticatedDeskIndexRouteImport } from './routes/_authenticated/desk/index'
+import { Route as AuthenticatedDeskChatRouteImport } from './routes/_authenticated/desk/chat'
 import { Route as AuthenticatedDeskNewRouteImport } from './routes/_authenticated/desk/new'
 import { Route as ApiPublicBotRouteImport } from './routes/api/public/bot'
 import { Route as ApiPublicMcpRouteImport } from './routes/api/public/mcp'
@@ -146,6 +147,11 @@ const AuthenticatedDeskIndexRoute = AuthenticatedDeskIndexRouteImport.update({
   path: '/desk/',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedDeskChatRoute = AuthenticatedDeskChatRouteImport.update({
+  id: '/desk/chat',
+  path: '/desk/chat',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedDeskNewRoute = AuthenticatedDeskNewRouteImport.update({
   id: '/desk/new',
   path: '/desk/new',
@@ -258,6 +264,7 @@ export interface FileRoutesByFullPath {
   '/provenance': typeof AuthenticatedProvenanceRoute
   '/queries': typeof AuthenticatedQueriesRoute
   '/square': typeof AuthenticatedSquareRoute
+  '/desk/chat': typeof AuthenticatedDeskChatRoute
   '/desk/new': typeof AuthenticatedDeskNewRoute
   '/api/public/bot': typeof ApiPublicBotRoute
   '/api/public/mcp': typeof ApiPublicMcpRoute
@@ -295,6 +302,7 @@ export interface FileRoutesByTo {
   '/queries': typeof AuthenticatedQueriesRoute
   '/square': typeof AuthenticatedSquareRoute
   '/': typeof AuthenticatedIndexRoute
+  '/desk/chat': typeof AuthenticatedDeskChatRoute
   '/desk/new': typeof AuthenticatedDeskNewRoute
   '/api/public/bot': typeof ApiPublicBotRoute
   '/api/public/mcp': typeof ApiPublicMcpRoute
@@ -334,6 +342,7 @@ export interface FileRoutesById {
   '/_authenticated/queries': typeof AuthenticatedQueriesRoute
   '/_authenticated/square': typeof AuthenticatedSquareRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
+  '/_authenticated/desk/chat': typeof AuthenticatedDeskChatRoute
   '/_authenticated/desk/new': typeof AuthenticatedDeskNewRoute
   '/api/public/bot': typeof ApiPublicBotRoute
   '/api/public/mcp': typeof ApiPublicMcpRoute
@@ -373,6 +382,7 @@ export interface FileRouteTypes {
     | '/provenance'
     | '/queries'
     | '/square'
+    | '/desk/chat'
     | '/desk/new'
     | '/api/public/bot'
     | '/api/public/mcp'
@@ -410,6 +420,7 @@ export interface FileRouteTypes {
     | '/queries'
     | '/square'
     | '/'
+    | '/desk/chat'
     | '/desk/new'
     | '/api/public/bot'
     | '/api/public/mcp'
@@ -448,6 +459,7 @@ export interface FileRouteTypes {
     | '/_authenticated/queries'
     | '/_authenticated/square'
     | '/_authenticated/'
+    | '/_authenticated/desk/chat'
     | '/_authenticated/desk/new'
     | '/api/public/bot'
     | '/api/public/mcp'
@@ -622,6 +634,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedDeskIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/desk/chat': {
+      id: '/_authenticated/desk/chat'
+      path: '/desk/chat'
+      fullPath: '/desk/chat'
+      preLoaderRoute: typeof AuthenticatedDeskChatRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/desk/new': {
       id: '/_authenticated/desk/new'
       path: '/desk/new'
@@ -761,6 +780,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedQueriesRoute: typeof AuthenticatedQueriesRoute
   AuthenticatedSquareRoute: typeof AuthenticatedSquareRoute
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
+  AuthenticatedDeskChatRoute: typeof AuthenticatedDeskChatRoute
   AuthenticatedDeskNewRoute: typeof AuthenticatedDeskNewRoute
   AuthenticatedDeskIndexRoute: typeof AuthenticatedDeskIndexRoute
   AuthenticatedDeskLeadsLeadIdRoute: typeof AuthenticatedDeskLeadsLeadIdRoute
@@ -784,6 +804,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedQueriesRoute: AuthenticatedQueriesRoute,
   AuthenticatedSquareRoute: AuthenticatedSquareRoute,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
+  AuthenticatedDeskChatRoute: AuthenticatedDeskChatRoute,
   AuthenticatedDeskNewRoute: AuthenticatedDeskNewRoute,
   AuthenticatedDeskIndexRoute: AuthenticatedDeskIndexRoute,
   AuthenticatedDeskLeadsLeadIdRoute: AuthenticatedDeskLeadsLeadIdRoute,

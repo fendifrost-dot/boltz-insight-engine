@@ -1,9 +1,13 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { HeardAboutPicker } from "@/components/desk/HeardAboutPicker";
-import { EmptyState, PageHeader, Panel, Shell } from "@/components/ops/Shell";
+import { DeskShell } from "@/components/desk/DeskShell";
+import { ArrowLeft, CalendarDays, MessageCircle, Phone, CarFront } from "lucide-react";
+import { saveShopAppointment } from "@/lib/desk-chat.functions";
+import { appointmentLocal, appointmentLabel } from "@/lib/desk-schedule";
+import { deskSourceLabel, deskStatusLabel } from "@/lib/desk-display";
 import {
   addDeskNote,
   getDeskLead,
@@ -44,6 +48,9 @@ function DeskLeadDetail() {
   const attributeFn = useServerFn(setDeskAttribution);
   const linkFn = useServerFn(linkDeskGoogleAdsCall);
   const transitionFn = useServerFn(transitionLeadLifecycle);
+  const appointmentFn = useServerFn(saveShopAppointment);
+  const [visitTime, setVisitTime] = useState("");
+  const [nextStatus, setNextStatus] = useState("");
   const [note, setNote] = useState("");
   const [heard, setHeard] = useState<DeskHeardAbout | null>(null);
   const [other, setOther] = useState("");
@@ -58,6 +65,7 @@ function DeskLeadDetail() {
   function refresh() {
     void queryClient.invalidateQueries({ queryKey: ["desk-lead", leadId] });
     void queryClient.invalidateQueries({ queryKey: ["desk-leads"] });
+    void queryClient.invalidateQueries({ queryKey: ["shop-schedule"] });
   }
 
   const saveNote = useMutation({
@@ -91,7 +99,7 @@ function DeskLeadDetail() {
         setMessage(result.reason);
         return;
       }
-      setMessage(`Source saved as ${result.leadSource}.`);
+      setMessage(`Saved: ${deskSourceLabel(result.leadSource)}.`);
       refresh();
     },
     onError: () => setMessage("Could not save the source."),
@@ -134,6 +142,24 @@ function DeskLeadDetail() {
     onError: () => setMessage("Could not update the status."),
   });
 
+  const saveVisit = useMutation({
+    mutationFn: (cancel: boolean) =>
+      appointmentFn({
+        data: {
+          leadId,
+          localTime: cancel ? null : visitTime,
+          expectedAppointmentAt: detail.data?.lead.appointmentAt ?? null,
+        },
+      }),
+    onSuccess: (result) => {
+      setMessage(result.ok ? "Visit updated." : result.reason || "Could not save the visit.");
+      if (result.ok) refresh();
+    },
+    onError: () => setMessage("Could not save the visit. Please try again."),
+  });
+  useEffect(() => {
+    setVisitTime(appointmentLocal(detail.data?.lead.appointmentAt ?? null));
+  }, [detail.data?.lead.appointmentAt]);
   const lead = detail.data?.lead;
   const lifecycle = lead && isLifecycle(lead.lifecycle) ? lead.lifecycle : null;
   const choices = lifecycle ? deskLifecycleChoices(lifecycle) : [];
@@ -143,220 +169,260 @@ function DeskLeadDetail() {
     : "";
 
   return (
-    <Shell>
-      <PageHeader
-        kicker="Counter"
-        title={lead?.name || "Lead"}
-        description={lead ? displayPhone(lead.phone) : "Loading the lead."}
-        actions={
-          <Link to="/desk/leads" className="text-sm font-medium text-primary">
-            All leads
-          </Link>
-        }
-      />
+    <DeskShell>
+      <Link to="/desk/leads" className="desk-back">
+        <ArrowLeft size={16} /> Find a customer
+      </Link>
       {detail.isError ? (
-        <EmptyState label="Could not load this lead" />
+        <div className="desk-empty">
+          Could not load this customer.{" "}
+          <button onClick={() => void detail.refetch()}>Try again</button>
+        </div>
       ) : !lead ? (
-        <EmptyState label={detail.isPending ? "Loading…" : "Lead not found"} />
+        <div className="desk-empty">
+          {detail.isPending ? "Opening customer card…" : "Customer not found."}
+        </div>
       ) : (
-        <div className="mx-auto max-w-xl space-y-4">
-          <Panel title="Lead">
-            <dl className="space-y-2 text-sm">
-              <div className="flex justify-between gap-3">
-                <dt className="text-muted-foreground">Status</dt>
-                <dd className="font-medium">{lead.lifecycle}</dd>
-              </div>
-              <div className="flex justify-between gap-3">
-                <dt className="text-muted-foreground">Source</dt>
-                <dd className="text-right font-medium">{lead.leadSource || "Not entered"}</dd>
-              </div>
-              <div className="flex justify-between gap-3">
-                <dt className="text-muted-foreground">Heard about us</dt>
-                <dd>
-                  {lead.heardAbout && isDeskHeardAbout(lead.heardAbout)
-                    ? HEARD_ABOUT_LABEL[lead.heardAbout]
-                    : "Not entered"}
-                </dd>
-              </div>
-              <div className="flex justify-between gap-3">
-                <dt className="text-muted-foreground">Path</dt>
-                <dd>
-                  {lead.intakePath === "desk"
-                    ? lead.intakeChannel === "phone"
-                      ? "Desk phone"
-                      : "Desk walk-in"
-                    : "Online"}
-                </dd>
-              </div>
+        <>
+          <header className="desk-page-heading">
+            <div className="desk-eyebrow">CUSTOMER CARD</div>
+            <h1>{lead.name || "Name not recorded"}</h1>
+            <p className="desk-customer-subtitle">
+              <Phone size={16} />
+              {displayPhone(lead.phone)}
               {vehicle && (
-                <div className="flex justify-between gap-3">
-                  <dt className="text-muted-foreground">Vehicle</dt>
-                  <dd className="text-right">{vehicle}</dd>
-                </div>
+                <>
+                  <CarFront size={18} />
+                  {vehicle}
+                </>
               )}
-              {lead.concern && (
-                <div>
-                  <dt className="text-muted-foreground">Concern</dt>
-                  <dd className="mt-1 whitespace-pre-wrap">{lead.concern}</dd>
-                </div>
-              )}
-              <div className="flex justify-between gap-3">
-                <dt className="text-muted-foreground">Square</dt>
-                <dd>
-                  {lead.squarePaidAt || lead.squareGrossCents > 0
-                    ? `Payment matched · ${money(lead.squareGrossCents)}`
-                    : "No payment match"}
-                </dd>
-              </div>
-            </dl>
-          </Panel>
-
-          {detail.data?.googleAdsCall && (
-            <Panel title="Google Ads call">
-              <p className="text-sm">
-                {detail.data.googleAdsCall.linked
-                  ? "This phone is linked to a Google Ads call"
-                  : "This phone matches a recent Google Ads call"}
-                {detail.data.googleAdsCall.weekStart
-                  ? ` from the week of ${detail.data.googleAdsCall.weekStart}`
-                  : ""}
-                .
-              </p>
-              {!detail.data.googleAdsCall.linked && (
-                <button
-                  type="button"
-                  onClick={() => linkCall.mutate()}
-                  disabled={linkCall.isPending}
-                  className="mt-3 min-h-14 w-full rounded-md bg-primary text-base font-semibold text-primary-foreground disabled:opacity-60"
-                >
-                  Link Google Ads call
-                </button>
-              )}
-            </Panel>
-          )}
-
-          <Panel title="Status">
-            <div className="flex flex-wrap gap-2">
-              {choices.map((choice) => (
-                <button
-                  key={choice}
-                  type="button"
-                  disabled={moveStatus.isPending}
-                  onClick={() => moveStatus.mutate(choice)}
-                  className="min-h-12 rounded-md border border-border px-3 text-sm font-medium"
-                >
-                  {choice}
-                </button>
-              ))}
-            </div>
-            <p className="mt-3 text-xs text-muted-foreground">
-              Staff cannot mark Paid. Square does that when a payment matches.
             </p>
-          </Panel>
-
-          <Panel title={sourceMissing ? "How did they hear about us?" : "Source"}>
-            {sourceMissing ? (
-              <p className="mb-3 text-sm text-muted-foreground">This lead has no source yet.</p>
-            ) : (
-              <p className="mb-3 text-sm text-muted-foreground">
-                Correcting the source changes how Square groups this lead.
-              </p>
+            <span className="desk-status-pill">{deskStatusLabel(lead.lifecycle)}</span>
+          </header>
+          {message && (
+            <p role="status" className="desk-feedback">
+              {message}
+            </p>
+          )}
+          <section className="desk-form-card">
+            <div className="desk-section-heading">
+              <h2>What they need</h2>
+              <Link to="/desk/chat" search={{ leadId }}>
+                <MessageCircle size={16} /> Ask Grok
+              </Link>
+            </div>
+            <p className="desk-concern">{lead.concern || "No repair details recorded yet."}</p>
+            <div className="desk-inline-status">
+              <label className="desk-label">
+                Update progress
+                <select
+                  className="desk-field"
+                  value={nextStatus}
+                  onChange={(event) => setNextStatus(event.target.value)}
+                >
+                  <option value="">Choose the next step</option>
+                  {choices.map((choice) => (
+                    <option
+                      key={choice}
+                      value={choice}
+                      disabled={choice === "Appointment Scheduled" && !lead.appointmentAt}
+                    >
+                      {deskStatusLabel(choice)}
+                      {choice === "Appointment Scheduled" && !lead.appointmentAt
+                        ? " — add a visit date first"
+                        : ""}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button
+                type="button"
+                className="desk-button secondary"
+                disabled={!nextStatus || moveStatus.isPending}
+                onClick={() => {
+                  if (isLifecycle(nextStatus)) {
+                    moveStatus.mutate(nextStatus);
+                    setNextStatus("");
+                  }
+                }}
+              >
+                Update
+              </button>
+            </div>
+          </section>
+          <section className="desk-form-card">
+            <div className="desk-section-heading">
+              <h2>
+                <CalendarDays size={19} /> Next visit
+              </h2>
+              <span>Chicago time</span>
+            </div>
+            <p className="desk-muted">
+              {lead.appointmentAt
+                ? appointmentLabel(lead.appointmentAt)
+                : lead.appointmentInterest
+                  ? "They’d like a visit. Confirm a time with them, then add it here."
+                  : "No visit booked. Add a time once it’s confirmed with the customer."}
+            </p>
+            <div className="desk-inline-status">
+              <label className="desk-label">
+                Confirmed date and time
+                <input
+                  type="datetime-local"
+                  className="desk-field"
+                  value={visitTime}
+                  onChange={(event) => setVisitTime(event.target.value)}
+                />
+              </label>
+              <button
+                type="button"
+                className="desk-button"
+                disabled={!visitTime || saveVisit.isPending}
+                onClick={() => saveVisit.mutate(false)}
+              >
+                {saveVisit.isPending ? "Saving…" : "Save visit"}
+              </button>
+            </div>
+            {lead.appointmentAt && (
+              <button
+                type="button"
+                className="desk-text-button"
+                disabled={saveVisit.isPending}
+                onClick={() => saveVisit.mutate(true)}
+              >
+                Cancel this visit
+              </button>
             )}
-            <HeardAboutPicker value={heard} onChange={setHeard} />
-            {heard === "other" && (
-              <input
-                value={other}
-                onChange={(e) => setOther(e.target.value)}
-                placeholder="Short answer"
-                className="mt-2 min-h-14 w-full rounded-md border border-border bg-input px-3 text-lg"
+          </section>
+          <section className="desk-form-card">
+            <h2>Conversation notes</h2>
+            {lead.notes && <p className="desk-saved-notes">{lead.notes}</p>}
+            <label className="desk-label">
+              Add a note
+              <textarea
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="What did you discuss? What’s the next step?"
+                rows={3}
+                maxLength={2000}
+                className="desk-field"
               />
+            </label>
+            <button
+              type="button"
+              className="desk-button"
+              disabled={saveNote.isPending || !note.trim()}
+              onClick={() => saveNote.mutate()}
+            >
+              {saveNote.isPending ? "Saving…" : "Save note"}
+            </button>
+          </section>
+          <details className="desk-form-card desk-details">
+            <summary>
+              How they found us <span>{deskSourceLabel(lead.leadSource)}</span>
+            </summary>
+            <p className="desk-note">
+              {lead.intakePath === "desk"
+                ? lead.intakeChannel === "phone"
+                  ? "Called the shop"
+                  : "Walked into the shop"
+                : "Reached us online or by text"}
+              {lead.heardAbout && isDeskHeardAbout(lead.heardAbout)
+                ? ` · They said: ${HEARD_ABOUT_LABEL[lead.heardAbout]}`
+                : ""}
+            </p>
+            <label className="desk-label">
+              Correct their answer
+              <HeardAboutPicker value={heard} onChange={setHeard} />
+            </label>
+            {heard === "other" && (
+              <label className="desk-label">
+                Where did they hear about us?
+                <input
+                  value={other}
+                  onChange={(e) => setOther(e.target.value)}
+                  maxLength={80}
+                  className="desk-field"
+                />
+              </label>
             )}
             {!sourceMissing && (
-              <label className="mt-3 flex min-h-12 items-center gap-3 text-sm">
+              <label className="desk-checkbox">
                 <input
                   type="checkbox"
                   checked={confirmSource}
                   onChange={(e) => setConfirmSource(e.target.checked)}
-                  className="size-5"
                 />
-                Confirm source correction
+                Yes, replace the answer already on file
               </label>
             )}
             <button
               type="button"
+              className="desk-button secondary"
               disabled={!heard || saveSource.isPending}
               onClick={() => saveSource.mutate()}
-              className="mt-3 min-h-14 w-full rounded-md border border-border text-base font-semibold disabled:opacity-60"
             >
-              Save source
+              Save answer
             </button>
-          </Panel>
-
-          <Panel title="Notes">
-            {lead.notes ? (
-              <p className="mb-3 whitespace-pre-wrap text-sm">{lead.notes}</p>
-            ) : (
-              <p className="mb-3 text-sm text-muted-foreground">No desk notes yet.</p>
+            {detail.data?.googleAdsCall && (
+              <div className="desk-note">
+                <p>
+                  {detail.data.googleAdsCall.linked
+                    ? "A matching Google ad call is linked automatically."
+                    : "We found a matching call from a Google ad."}
+                </p>
+                {!detail.data.googleAdsCall.linked && (
+                  <button
+                    type="button"
+                    className="desk-text-button"
+                    disabled={linkCall.isPending}
+                    onClick={() => linkCall.mutate()}
+                  >
+                    Match this call
+                  </button>
+                )}
+              </div>
             )}
-            <textarea
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              rows={3}
-              className="w-full rounded-md border border-border bg-input px-3 py-3 text-lg"
-            />
-            <button
-              type="button"
-              disabled={saveNote.isPending || !note.trim()}
-              onClick={() => saveNote.mutate()}
-              className="mt-2 min-h-14 w-full rounded-md bg-primary text-base font-semibold text-primary-foreground disabled:opacity-60"
-            >
-              Add note
-            </button>
-          </Panel>
-
-          <Panel title="Texts">
-            {(detail.data?.messages.length ?? 0) === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No texts on this lead. Sending stays in the lead inbox.
-              </p>
+          </details>
+          <details className="desk-form-card desk-details">
+            <summary>
+              Customer texts <span>{detail.data?.messages.length || "None yet"}</span>
+            </summary>
+            {!detail.data?.messages.length ? (
+              <p className="desk-note">No customer texts yet.</p>
             ) : (
-              <ol className="space-y-3">
-                {detail.data?.messages.map((message) => (
-                  <li key={message.id} className="text-sm">
-                    <div className="text-xs text-muted-foreground">
-                      {message.direction} · {new Date(message.createdAt).toLocaleString()}
-                    </div>
-                    <p className="mt-1 whitespace-pre-wrap">{message.body || "No text"}</p>
-                  </li>
-                ))}
-              </ol>
-            )}
-          </Panel>
-
-          <Panel title="Activity">
-            {(detail.data?.events.length ?? 0) === 0 ? (
-              <p className="text-sm text-muted-foreground">No activity yet.</p>
-            ) : (
-              <ol className="space-y-2">
-                {detail.data?.events.map((event) => (
-                  <li key={event.id} className="text-sm">
-                    <span className="text-muted-foreground">
-                      {new Date(event.createdAt).toLocaleString()}
+              <ol className="desk-history">
+                {detail.data.messages.map((item) => (
+                  <li key={item.id}>
+                    <span>
+                      {item.direction === "inbound" ? "Customer" : "Boltz"} ·{" "}
+                      {appointmentLabel(item.createdAt)}
                     </span>
-                    <span className="mt-0.5 block">{event.summary || event.eventType}</span>
+                    <p>{item.body || "Attachment"}</p>
                   </li>
                 ))}
               </ol>
             )}
-          </Panel>
-
-          {message && (
-            <p role="status" className="text-sm">
-              {message}
+          </details>
+          <details className="desk-form-card desk-details">
+            <summary>Payments & history</summary>
+            <p className="desk-note">Payments update automatically when Square matches them.</p>
+            <p>
+              {lead.squarePaidAt || lead.squareGrossCents > 0
+                ? `Payment received · ${money(lead.squareGrossCents)}`
+                : "No matched payment yet."}
             </p>
-          )}
-        </div>
+            <ol className="desk-history">
+              {detail.data?.events.map((event) => (
+                <li key={event.id}>
+                  <span>{appointmentLabel(event.createdAt)}</span>
+                  <p>{event.summary || event.eventType.replace(/_/g, " ")}</p>
+                </li>
+              ))}
+            </ol>
+          </details>
+        </>
       )}
-    </Shell>
+    </DeskShell>
   );
 }

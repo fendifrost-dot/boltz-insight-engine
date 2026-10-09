@@ -30,11 +30,11 @@ export type DeskHeardAbout = (typeof DESK_HEARD_ABOUT)[number];
 export const HEARD_ABOUT_LABEL: Record<DeskHeardAbout, string> = {
   google: "Google",
   yelp: "Yelp",
-  facebook: "Facebook/Meta",
+  facebook: "Facebook",
   instagram: "Instagram",
-  referral: "Referral / friend",
+  referral: "Friend or family",
   returning: "Returning customer",
-  drive_by: "Drive-by / saw shop",
+  drive_by: "Saw the shop",
   other: "Other",
 };
 
@@ -585,7 +585,7 @@ export function deskSearchOr(plan: DeskSearchPlan): string | null {
 }
 
 export const DESK_LEAD_LIST_COLUMNS =
-  "id, name, phone_e164, vehicle_year, vehicle_make, vehicle_model, symptoms, lead_source, heard_about, lifecycle, intake_path, intake_channel, created_at, square_gross_cents, square_paid_at, notes, google_ads_call_id" as const;
+  "id, name, phone_e164, vehicle_year, vehicle_make, vehicle_model, symptoms, lead_source, heard_about, lifecycle, intake_path, intake_channel, created_at, square_gross_cents, square_paid_at, notes, google_ads_call_id, appointment_at, appointment_interest" as const;
 
 export type DeskLeadCard = {
   id: string;
@@ -605,6 +605,8 @@ export type DeskLeadCard = {
   squarePaidAt: string | null;
   notes: string | null;
   googleAdsCallId: string | null;
+  appointmentAt: string | null;
+  appointmentInterest: boolean;
 };
 
 export function toDeskLeadCard(row: {
@@ -625,6 +627,8 @@ export function toDeskLeadCard(row: {
   square_paid_at: string | null;
   notes: string | null;
   google_ads_call_id: string | null;
+  appointment_at?: string | null;
+  appointment_interest?: boolean;
 }): DeskLeadCard {
   return {
     id: row.id,
@@ -644,6 +648,8 @@ export function toDeskLeadCard(row: {
     squarePaidAt: row.square_paid_at,
     notes: row.notes,
     googleAdsCallId: row.google_ads_call_id,
+    appointmentAt: row.appointment_at ?? null,
+    appointmentInterest: row.appointment_interest ?? false,
   };
 }
 

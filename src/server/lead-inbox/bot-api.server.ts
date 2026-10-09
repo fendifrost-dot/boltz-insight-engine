@@ -292,6 +292,19 @@ export async function handleBotRequest(request: Request): Promise<Response> {
       ? (payload as { action?: unknown }).action
       : undefined;
   if (action === "lookup") return handleLookup(payload);
+  if (action === "shop_chat" || action === "shop_message" || action === "shop_schedule") {
+    const { botReadShopChat, botPostShopMessage, botShopSchedule } = await import("@/server/desk/bot-chat.server");
+    const { action: _action, botName, ...args } = payload as Record<string, unknown>;
+    try {
+      if (action === "shop_chat") return json(await botReadShopChat(args));
+      if (action === "shop_schedule") return json(await botShopSchedule(args));
+      if (typeof botName !== "string" || !BOT_NAME_PATTERN.test(botName)) return json({ error: "Valid botName required" }, 400);
+      return json(await botPostShopMessage({ name: botName }, args));
+    } catch (error) {
+      if (error instanceof z.ZodError) return json({ error: "Invalid shop chat arguments" }, 400);
+      throw error;
+    }
+  }
   if (action === "messages") return handleMessages(payload);
   if (action === "inbound") return handleInbound(payload);
   if (action === "send") return handleSend(payload);
@@ -300,7 +313,7 @@ export async function handleBotRequest(request: Request): Promise<Response> {
     return handleSquareBotAction(payload);
   }
   return json(
-    { error: "action must be lookup, messages, inbound, send, square_revenue, or square_payments" },
+    { error: "action must be lookup, messages, inbound, send, square_revenue, square_payments, shop_chat, shop_message, or shop_schedule" },
     400,
   );
 }

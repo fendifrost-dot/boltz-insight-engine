@@ -354,6 +354,12 @@ export type Database = {
         }
         Relationships: []
       }
+      desk_chat_messages: {
+        Row: { id: string; sequence: number; created_at: string; role: string; sender: string; body: string; staff_user_id: string | null; agent_id: string | null; lead_id: string | null; reply_to: string | null; idempotency_key: string; metadata: Json }
+        Insert: { id?: string; created_at?: string; role: string; sender: string; body: string; staff_user_id?: string | null; agent_id?: string | null; lead_id?: string | null; reply_to?: string | null; idempotency_key: string; metadata?: Json }
+        Update: { body?: string; metadata?: Json }
+        Relationships: []
+      }
       lead_events: {
         Row: {
           actor: string | null
@@ -400,6 +406,7 @@ export type Database = {
       }
       leads: {
         Row: {
+          appointment_at: string | null
           appointment_interest: boolean
           assigned_owner: string | null
           attachment_urls: Json | null
@@ -438,6 +445,7 @@ export type Database = {
           vin: string | null
         }
         Insert: {
+          appointment_at?: string | null
           appointment_interest?: boolean
           assigned_owner?: string | null
           attachment_urls?: Json | null
@@ -476,6 +484,7 @@ export type Database = {
           vin?: string | null
         }
         Update: {
+          appointment_at?: string | null
           appointment_interest?: boolean
           assigned_owner?: string | null
           attachment_urls?: Json | null

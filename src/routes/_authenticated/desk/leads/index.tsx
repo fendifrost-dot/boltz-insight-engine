@@ -1,105 +1,89 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { EmptyState, PageHeader, Shell } from "@/components/ops/Shell";
+import { Search, ArrowRight } from "lucide-react";
+import { DeskShell } from "@/components/desk/DeskShell";
+import { CustomerCard } from "@/components/desk/CustomerCard";
 import { listDeskLeads } from "@/lib/desk.functions";
-import { displayPhone } from "@/lib/lead-inbox-thread-sync";
 
 export const Route = createFileRoute("/_authenticated/desk/leads/")({
+  validateSearch: (search: Record<string, unknown>): { q?: string } => ({
+    q: typeof search["q"] === "string" ? search["q"].slice(0, 80) : "",
+  }),
   head: () => ({
-    meta: [{ title: "Leads · Shop desk" }, { name: "robots", content: "noindex, nofollow" }],
+    meta: [{ title: "Find a customer · Boltz" }, { name: "robots", content: "noindex, nofollow" }],
   }),
   component: DeskLeadList,
 });
 
-function vehicleLine(lead: {
-  vehicleYear: number | null;
-  vehicleMake: string | null;
-  vehicleModel: string | null;
-}): string {
-  return [lead.vehicleYear, lead.vehicleMake, lead.vehicleModel].filter(Boolean).join(" ");
-}
-
 function DeskLeadList() {
+  const { q = "" } = Route.useSearch();
+  const navigate = useNavigate();
   const listFn = useServerFn(listDeskLeads);
-  const [query, setQuery] = useState("");
-  const [submitted, setSubmitted] = useState("");
+  const [query, setQuery] = useState(q);
+  useEffect(() => setQuery(q), [q]);
   const leads = useQuery({
-    queryKey: ["desk-leads", submitted],
-    queryFn: () => listFn({ data: submitted ? { query: submitted } : {} }),
+    queryKey: ["desk-leads", q],
+    queryFn: () => listFn({ data: q ? { query: q } : {} }),
   });
-  const rows = leads.data ?? [];
-
   return (
-    <Shell>
-      <PageHeader
-        kicker="Counter"
-        title="Leads"
-        description="Search by phone, name, vehicle, or source."
-        actions={
-          <Link to="/desk" className="text-sm font-medium text-primary">
-            Desk home
-          </Link>
-        }
-      />
+    <DeskShell>
+      <header className="desk-page-heading">
+        <div className="desk-eyebrow">CUSTOMER BOOK</div>
+        <h1>Pick up where we left off.</h1>
+        <p>Find anyone who called, walked in, texted, or reached us online.</p>
+      </header>
       <form
-        className="mb-4 flex flex-col gap-2 sm:flex-row"
+        className="desk-search-bar"
         onSubmit={(event) => {
           event.preventDefault();
-          setSubmitted(query.trim());
+          void navigate({ to: "/desk/leads", search: { q: query.trim() } });
         }}
       >
-        <label className="sr-only" htmlFor="desk-search">
-          Search leads
-        </label>
+        <Search size={21} />
         <input
-          id="desk-search"
+          aria-label="Search customers"
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Phone, name, vehicle, source"
-          className="min-h-14 w-full rounded-md border border-border bg-input px-3 text-lg"
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Name, phone number, vehicle, or where they found us"
+          maxLength={80}
         />
-        <button
-          type="submit"
-          className="min-h-14 rounded-md bg-primary px-6 text-base font-semibold text-primary-foreground"
-        >
-          Search
+        <button type="submit" aria-label="Search">
+          <ArrowRight size={20} />
         </button>
       </form>
-      {leads.isError ? (
-        <EmptyState label="Could not load leads" />
-      ) : rows.length === 0 ? (
-        <EmptyState label="No matching leads" hint="Try a phone number or part of a name." />
+      <div className="desk-section-heading">
+        <h2>{q ? "Search results" : "Recent customers"}</h2>
+        {leads.data && (
+          <span>
+            {leads.data.length === 40
+              ? "Showing up to 40 · narrow your search"
+              : `${leads.data.length} customer${leads.data.length === 1 ? "" : "s"}`}
+          </span>
+        )}
+      </div>
+      {leads.isPending ? (
+        <div className="desk-empty">Looking up customers…</div>
+      ) : leads.isError ? (
+        <div className="desk-empty">
+          Could not load customers. <button onClick={() => void leads.refetch()}>Try again</button>
+        </div>
+      ) : !leads.data?.length ? (
+        <div className="desk-empty">
+          <Search size={24} />
+          <div>
+            <strong>No customers found.</strong>
+            <p>Try a full phone number or part of their name.</p>
+          </div>
+        </div>
       ) : (
-        <ul className="space-y-2">
-          {rows.map((lead) => {
-            const vehicle = vehicleLine(lead);
-            return (
-              <li key={lead.id}>
-                <Link
-                  to="/desk/leads/$leadId"
-                  params={{ leadId: lead.id }}
-                  className="block min-h-20 rounded-md border border-border bg-card px-4 py-3"
-                >
-                  <div className="flex items-baseline justify-between gap-3">
-                    <span className="text-base font-medium">{lead.name || "No name"}</span>
-                    <span className="font-mono text-xs text-muted-foreground">
-                      {lead.lifecycle}
-                    </span>
-                  </div>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    {displayPhone(lead.phone)}
-                    {lead.leadSource ? ` · ${lead.leadSource}` : ""}
-                    {lead.intakePath === "desk" ? " · Desk" : ""}
-                  </p>
-                  {vehicle && <p className="mt-1 text-sm">{vehicle}</p>}
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
+        <div className="desk-card-list">
+          {leads.data.map((lead) => (
+            <CustomerCard key={lead.id} lead={lead} />
+          ))}
+        </div>
       )}
-    </Shell>
+    </DeskShell>
   );
 }

@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 /** Owner-only screens (capability: integrations.manage). */
 const OWNER_ONLY = new Set(["/integration-health", "/ads", "/square"]);
 
-function useIsOwner(): boolean | null {
+export function useIsOwner(): boolean | null {
   const [isOwner, setIsOwner] = useState<boolean | null>(null);
   useEffect(() => {
     let cancelled = false;

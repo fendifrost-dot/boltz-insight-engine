@@ -715,6 +715,18 @@ export function createBoltzMcpTools(): McpToolRunner {
   return {
     async run(ctx) {
       switch (ctx.tool) {
+        case "boltz_shop_chat": {
+          const { botReadShopChat } = await import("@/server/desk/bot-chat.server");
+          return { resultCode: "ok", isError: false, value: await botReadShopChat(ctx.args) };
+        }
+        case "boltz_post_shop_message": {
+          const { botPostShopMessage } = await import("@/server/desk/bot-chat.server");
+          return { resultCode: "ok", isError: false, value: await botPostShopMessage(ctx.agent, ctx.args) };
+        }
+        case "boltz_shop_schedule": {
+          const { botShopSchedule } = await import("@/server/desk/bot-chat.server");
+          return { resultCode: "ok", isError: false, value: await botShopSchedule(ctx.args) };
+        }
         case "boltz_lookup_lead":
           return lookupLead(ctx.args);
         case "boltz_list_leads":
