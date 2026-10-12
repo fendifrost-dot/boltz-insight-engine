@@ -6,7 +6,7 @@ import { signOutOwnerSession } from "@/lib/owner-session.browser";
 import { cn } from "@/lib/utils";
 
 /** Owner-only screens (capability: integrations.manage). */
-const OWNER_ONLY = new Set(["/integration-health", "/ads", "/square"]);
+const OWNER_ONLY = new Set(["/integration-health", "/ads", "/square", "/disputes"]);
 
 export function useIsOwner(): boolean | null {
   const [isOwner, setIsOwner] = useState<boolean | null>(null);
@@ -37,6 +37,7 @@ const NAV: { to: string; label: string; group: string }[] = [
   { to: "/escalations", label: "Escalations", group: "Leads" },
   { to: "/integration-health", label: "Integration Health", group: "Leads" },
   { to: "/square", label: "Square", group: "Leads" },
+  { to: "/disputes", label: "Disputes", group: "Leads" },
   { to: "/ads", label: "Google Ads", group: "Research" },
   { to: "/queries", label: "Query Universe", group: "Research" },
   { to: "/ai-visibility", label: "AI Visibility", group: "Research" },

@@ -80,6 +80,20 @@ export function SquareHealthPanel() {
             {data.weeks[0] ? ` · latest week net ${usd(data.weeks[0].netCents)}` : ""}
             {` · ${data.unmatched.length} unmatched on this page`}
           </p>
+          {data.disputeAlert.count > 0 && (
+            <p className="text-sm">
+              <Link to="/disputes" className="underline">
+                {data.disputeAlert.count} {data.disputeAlert.count === 1 ? "dispute" : "disputes"}{" "}
+                due within 3 days
+              </Link>
+              {data.disputeAlert.nearestDueBy
+                ? ` · nearest ${new Date(data.disputeAlert.nearestDueBy).toLocaleString()}`
+                : ""}
+            </p>
+          )}
+          {data.disputeAlert.error && (
+            <p className="text-xs text-destructive">Disputes {data.disputeAlert.error}</p>
+          )}
           {data.storageError && (
             <p className="text-xs text-destructive">Storage {data.storageError}</p>
           )}

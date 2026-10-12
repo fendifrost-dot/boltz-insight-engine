@@ -234,6 +234,22 @@ export const TOOLS: readonly ToolDef[] = [
     },
   },
   {
+    name: "boltz_disputes",
+    scope: "read",
+    description:
+      "Stored Square disputes. Omit disputeId for a list sorted by due date. Set disputeId for one dispute, its evidence checklist, linked lead, SMS thread ids, same-card payments, and invoices. dueWithinDays (1-30) keeps disputes that still need a response and are due inside that window, including overdue. Does not submit evidence to Square and does not return phone numbers, emails, or message bodies.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        disputeId: { type: "string" },
+        limit: { type: "integer", minimum: 1, maximum: 50 },
+        dueWithinDays: { type: "integer", minimum: 1, maximum: 30 },
+        state: { type: "string" },
+      },
+    },
+  },
+  {
     name: "boltz_send_sms",
     scope: "send",
     description:
@@ -287,19 +303,46 @@ export const TOOLS: readonly ToolDef[] = [
     },
   },
   {
-    name: "boltz_shop_chat", scope: "read",
-    description: "Read the shared receptionist chat. With after, returns messages in ascending sequence; save nextCursor and continue while hasMore. Without after, returns the latest messages. This is not customer SMS.",
-    inputSchema: { type: "object", additionalProperties: false, properties: { after: { type: "integer", minimum: 0 }, limit: { type: "integer", minimum: 1, maximum: 100 } } },
+    name: "boltz_shop_chat",
+    scope: "read",
+    description:
+      "Read the shared receptionist chat. With after, returns messages in ascending sequence; save nextCursor and continue while hasMore. Without after, returns the latest messages. This is not customer SMS.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        after: { type: "integer", minimum: 0 },
+        limit: { type: "integer", minimum: 1, maximum: 100 },
+      },
+    },
   },
   {
-    name: "boltz_post_shop_message", scope: "leads.write",
-    description: "Ask the shop a question or reply to the receptionist in their live desk chat. Does NOT send customer SMS. Supply a unique idempotencyKey; retries with the same key do not duplicate the message.",
-    inputSchema: { type: "object", additionalProperties: false, required: ["text", "idempotencyKey"], properties: { text: { type: "string", minLength: 1, maxLength: 2000 }, idempotencyKey: uuidSchema, replyTo: uuidSchema, leadId: uuidSchema } },
+    name: "boltz_post_shop_message",
+    scope: "leads.write",
+    description:
+      "Ask the shop a question or reply to the receptionist in their live desk chat. Does NOT send customer SMS. Supply a unique idempotencyKey; retries with the same key do not duplicate the message.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["text", "idempotencyKey"],
+      properties: {
+        text: { type: "string", minLength: 1, maxLength: 2000 },
+        idempotencyKey: uuidSchema,
+        replyTo: uuidSchema,
+        leadId: uuidSchema,
+      },
+    },
   },
   {
-    name: "boltz_shop_schedule", scope: "read",
-    description: "Confirmed shop visits on a Chicago calendar date, default today. Includes count of undated scheduled leads. Appointment interest is not a confirmed booking.",
-    inputSchema: { type: "object", additionalProperties: false, properties: { date: { type: "string", description: "YYYY-MM-DD in America/Chicago" } } },
+    name: "boltz_shop_schedule",
+    scope: "read",
+    description:
+      "Confirmed shop visits on a Chicago calendar date, default today. Includes count of undated scheduled leads. Appointment interest is not a confirmed booking.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: { date: { type: "string", description: "YYYY-MM-DD in America/Chicago" } },
+    },
   },
 ];
 
@@ -366,6 +409,8 @@ const SUMMARY_KEYS = [
   "botName",
   "idempotencyKey",
   "markConsentOptIn",
+  "disputeId",
+  "dueWithinDays",
 ] as const;
 
 const FORBIDDEN_SUMMARY_KEYS = [

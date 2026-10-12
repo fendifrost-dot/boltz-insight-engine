@@ -85,12 +85,13 @@ Browser roles cannot read these tables. RLS is enabled and forced, `anon` and `a
 | `boltz_ads_calls`          | `read`                  | The existing Google Ads call report. Omit dates for the last full Monday–Sunday week in America/Chicago.                                                                                             |
 | `boltz_square_revenue`     | `read`                  | Square weekly revenue. `since` and `until` are YYYY-MM-DD week starts. Gross, net, refunds, ticket count, average ticket, and lead-attributed gross by source. No customer names, phones, or emails. |
 | `boltz_square_payments`    | `read`                  | Recent Square payments, or the payments linked to one `leadId`. Amount, status, match, card brand, and last 4.                                                                                       |
+| `boltz_disputes`           | `read`                  | Stored Square disputes, sorted by due date. Set `disputeId` for one dispute plus its evidence checklist, linked lead, SMS thread ids, same-card payments, and invoices. `dueWithinDays` keeps disputes that still need a response and are due inside that window, including overdue. No phones, emails, message bodies, or file URLs. Does not submit evidence to Square. |
 | `boltz_send_sms`           | `send`                  | One SMS through the bot send path.                                                                                                                                                                   |
 | `boltz_update_lead`        | `leads.write`           | Replace notes and/or move lifecycle under the staff rules. Cannot mark Paid.                                                                                                                         |
 
 `boltz_ads_calls` stores the weekly aggregate the same way `POST /api/public/cron/ads-calls` does. It does not send a text.
 
-`boltz_square_revenue` and `boltz_square_payments` read stored Square data. They do not create payments or invoices, and they do not mark a lead Paid. A `read` scope still cannot mark Paid. Setup and the webhook are in `docs/SQUARE.md`.
+`boltz_square_revenue`, `boltz_square_payments`, and `boltz_disputes` read stored Square data. They do not create payments or invoices, they do not submit dispute evidence, and they do not mark a lead Paid. A `read` scope still cannot mark Paid. `boltz_integration_health` includes `square.disputeAlert` for disputes due within 3 days. Setup and the webhook are in `docs/SQUARE.md`.
 
 ### Send
 

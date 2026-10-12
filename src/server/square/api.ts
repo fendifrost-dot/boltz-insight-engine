@@ -223,3 +223,22 @@ export async function getInvoice(http: SquareHttp, id: string): Promise<unknown>
 export async function getCustomer(http: SquareHttp, id: string): Promise<unknown> {
   return http.request("GET", `/v2/customers/${objectId(id)}`);
 }
+
+export async function listDisputes(
+  http: SquareHttp,
+  query: { cursor?: string; locationId?: string },
+): Promise<{ disputes: unknown[]; cursor: string | null }> {
+  const body = await http.request("GET", "/v2/disputes", {
+    query: {
+      cursor: query.cursor,
+      location_id: query.locationId,
+    },
+  });
+  const record = asRecord(body);
+  const disputes = record?.["disputes"];
+  return { disputes: Array.isArray(disputes) ? disputes : [], cursor: cursorOf(body) };
+}
+
+export async function getDispute(http: SquareHttp, id: string): Promise<unknown> {
+  return http.request("GET", `/v2/disputes/${objectId(id)}`);
+}

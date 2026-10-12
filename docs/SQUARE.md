@@ -32,9 +32,12 @@ Permissions (read scopes only):
 - `INVOICES_READ`
 - `CUSTOMERS_READ`
 - `ITEMS_READ`
+- `DISPUTES_READ`
 - `MERCHANT_PROFILE_READ` (List Locations)
 
-This connector does not call CreatePayment, CreateInvoice, or any other write.
+This connector does not call CreatePayment, CreateInvoice, SubmitEvidence, AcceptDispute, or any other write.
+
+`DISPUTES_READ` has to be enabled on the production application. If List Disputes returns unauthorized, regenerate that application's production access token and replace `SQUARE_ACCESS_TOKEN`. Do not create a second application. Until the scope is present, the disputes resource records an error and the rest of the sync still runs.
 
 ## Locations
 
@@ -74,6 +77,8 @@ Subscribe these events on the production subscription:
 - `customer.created`
 - `customer.updated`
 - `customer.deleted`
+- `dispute.created`
+- `dispute.state.updated`
 
 ### Signature key
 
@@ -96,8 +101,8 @@ If `PUBLIC_APP_URL` is missing, the webhook also returns **503**, because the si
 
 `GET` or `POST` `/api/public/cron/square-sync` with `Authorization: Bearer <CRON_SECRET>`.
 
-- `?mode=incremental` (default). Each resource starts 6 hours before its last `synced_through`, or 7 days back on the first run.
-- `?mode=backfill&since=YYYY-MM-DD`, or `SQUARE_BACKFILL_SINCE` when `since` is omitted.
+- `?mode=incremental` (default). Each resource starts 6 hours before its last `synced_through`, or 7 days back on the first run. Disputes are the exception: List Disputes has no updated-time filter, so both modes page the full dispute list (up to 100 pages).
+- `?mode=backfill&since=YYYY-MM-DD`, or `SQUARE_BACKFILL_SINCE` when `since` is omitted. Disputes ignore `since` and still page the full list.
 
 Missing `SQUARE_ACCESS_TOKEN` (or an invalid `SQUARE_ENVIRONMENT`) returns **503** `{ "configured": false }` and does not call Square. A thrown failure returns **500** `{ "error": "square-sync failed" }`. Logs keep error codes only.
 
@@ -157,25 +162,53 @@ Weekly buckets are Monday–Sunday in America/Chicago.
 
 Lead columns `square_gross_cents`, `square_net_cents`, and `square_paid_at` are the linked completed-payment totals. Net on the lead subtracts refunds recorded on those payments, which is not the same cash-basis week as `sales_weekly`.
 
+## Disputes
+
+Chargebacks are stored in `square_disputes`. Square's `due_at` is saved as `due_by`. The row also keeps the dispute id, payment id, amount, reason, state, card brand, created time, and updated time. Card last 4 is copied from the linked `square_payments` row, not from the dispute. The dispute does not include it.
+
+Linking uses the payment that was already matched. The dispute gets that payment's `customer_id`, `lead_id`, and match status. If the payment is not stored yet, sync and the webhook load it with `GET /v2/payments/{id}`, match it, then copy the link. A dispute does not mark a lead Paid.
+
+Each dispute gets an internal checklist in `square_dispute_evidence`:
+
+- estimate / repair approval
+- invoice
+- parts receipt
+- photos
+- pickup / release record
+- customer messages
+- notes
+
+Each item has a status (`missing`, `ready`, `not_applicable`), an https link, a private file, and a note. A later sync inserts any missing item and does not reset status, links, or files. Files go in the private `dispute-evidence` bucket (JPEG, PNG, WebP, or PDF, 5 MB). The owner page signs a 10-minute URL after `integrations.manage`. There is no browser policy on the bucket.
+
+The dispute detail also gathers what the app already knows: the linked lead, SMS thread ids and counts, other payments on the same card for that Square customer (or that lead, when there is no customer), and invoices for the customer or lead. That gather does not mark checklist rows ready.
+
+`/disputes` lists stored disputes, soonest `due_by` first. Open the row for the checklist. The page is owner-only, same as `/square`.
+
+Deadline alert: a dispute still in `EVIDENCE_REQUIRED` or `INQUIRY_EVIDENCE_REQUIRED` whose `due_by` is before now plus 3 days, including overdue. Each sync writes an `integration_health_snapshots` row with check name `dispute_deadline`. Integration Health and `boltz_integration_health` show the same count. A dispute due later than 3 days stays on `/disputes` and is not in that alert yet. On 12 Oct 2026, a deadline of 16 Oct 2026 is on the list and enters the alert once it is inside 72 hours.
+
+Nothing in this path calls Submit Evidence or Accept Dispute.
+
 ## Reads
 
 MCP, `read` scope:
 
 - `boltz_square_revenue` — `since` and `until` are optional YYYY-MM-DD week starts.
 - `boltz_square_payments` — optional `leadId`, `limit` 1–50 (default 20).
+- `boltz_disputes` — list sorted by due date, or one dispute when `disputeId` is set. Optional `limit` 1–50 (default 20), `state`, and `dueWithinDays` 1–30. Detail includes the checklist, lead, thread ids, same-card payments, and invoices. No phone, email, message body, or file URL.
 
 Bot API (`X-Bot-Api-Secret`):
 
 - `square_revenue`
 - `square_payments`
+- `square_disputes`
 
 See `docs/MCP.md` and `docs/bot-api.md`. Integration health for MCP uses the last sync row and does not call Square on each request. `/square` does call List Locations.
 
 ## Data
 
-Migration: `supabase/migrations/20261009120000_square.sql`.
+Migrations: `supabase/migrations/20261009120000_square.sql`, then `supabase/migrations/20261012180000_square_disputes.sql`.
 
-Tables: `square_sync_state`, `square_webhook_events`, `square_customers`, `square_payments`, `square_refunds`, `square_orders`, `square_order_line_items`, `square_invoices`, `square_catalog_items`.
+Tables: `square_sync_state`, `square_webhook_events`, `square_customers`, `square_payments`, `square_refunds`, `square_orders`, `square_order_line_items`, `square_invoices`, `square_catalog_items`, `square_disputes`, `square_dispute_evidence`.
 
 RLS is enabled and forced. There are no policies. `anon` and `authenticated` have no grants. `service_role` is the only reader and writer. Webhook bodies are not stored. Logs and health rows hold ids, counts, and error codes.
 
@@ -183,11 +216,13 @@ Catalog sync stores item, item variation, and category id, type, name, `updated_
 
 ## Runbook
 
-1. Apply `supabase/migrations/20261009120000_square.sql` in the Lovable SQL editor. This environment does not apply it.
+1. Apply `supabase/migrations/20261009120000_square.sql` if it is not already applied, then apply `supabase/migrations/20261012180000_square_disputes.sql` in the Lovable SQL editor. This environment does not apply them.
 2. Confirm `/square` shows the production application id and Connected. The access token is never displayed.
 3. If the locations panel lists more than one active location, set `SQUARE_LOCATION_ID` to the shop id and run sync again.
 4. Publish the app, then add the webhook subscription and `SQUARE_WEBHOOK_SIGNATURE_KEY` as above. Until the key is set, events stay rejected.
-5. Run one backfill, then schedule the hourly incremental cron.
-6. Check `/square` for last sync, the latest weeks, and unmatched payments.
+5. Enable `DISPUTES_READ` on the production Square app. Replace `SQUARE_ACCESS_TOKEN` only if List Disputes is unauthorized.
+6. Add `dispute.created` and `dispute.state.updated` to the production webhook subscription.
+7. Run one backfill, then keep the hourly incremental cron. Both modes pull disputes.
+8. Check `/square` for last sync, and `/disputes` for open chargebacks sorted by due date.
 
-Do not publish from an agent session. Publish after the migration is applied and the page looks right.
+Publish after the dispute migration is applied and `/disputes` loads. A publish before that migration makes the new page fail its storage read.

@@ -17,3 +17,19 @@ export const squarePaymentsRequest = z
     limit: z.number().int().min(1).max(50).optional(),
   })
   .strict();
+
+export const squareDisputesRequest = z
+  .object({
+    action: z.literal("square_disputes"),
+    disputeId: z
+      .string()
+      .regex(/^[A-Za-z0-9_-]{1,192}$/)
+      .optional(),
+    limit: z.number().int().min(1).max(50).optional(),
+    dueWithinDays: z.number().int().min(1).max(30).optional(),
+    state: z
+      .string()
+      .regex(/^[A-Z0-9_]{1,40}$/)
+      .optional(),
+  })
+  .strict();

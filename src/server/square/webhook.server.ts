@@ -2,9 +2,12 @@ import { SquareApiError, squareErrorCode } from "./errors.ts";
 import { readSquareConfig, webhookSettings } from "./env.server.ts";
 import { unwrapResource, type ParsedSquareEvent } from "./events.ts";
 import { createSquareHttp, type SquareHttp } from "./http.ts";
-import { getCustomer, getInvoice, getOrder, getPayment, getRefund } from "./api.ts";
+import { getCustomer, getDispute, getInvoice, getOrder, getPayment, getRefund } from "./api.ts";
+import { storeDisputeDraft } from "./dispute-sync.server.ts";
+import { recordDisputeDeadline } from "./dispute-store.server.ts";
 import {
   mapCustomer,
+  mapDispute,
   mapInvoice,
   mapOrder,
   mapPayment,
@@ -167,6 +170,22 @@ export async function applySquareEvent(event: ParsedSquareEvent): Promise<void> 
     if (!draft) throw new Error("square_customer_missing");
     await saveCustomer(draft);
     await matchCustomerIds([draft.square_id]);
+    return;
+  }
+
+  if (event.kind === "dispute") {
+    const draft = await preferFetched(
+      http,
+      event.objectId ?? event.dispute?.square_id ?? null,
+      getDispute,
+      "dispute",
+      mapDispute,
+      event.dispute,
+    );
+    if (!draft) throw new Error("square_dispute_missing");
+    const leads = await storeDisputeDraft(draft, http);
+    if (leads.length > 0) await refreshLeadMoney(leads);
+    await recordDisputeDeadline().catch(() => undefined);
   }
 }
 

@@ -1,18 +1,21 @@
 import {
   mapCustomer,
+  mapDispute,
   mapInvoice,
   mapOrder,
   mapPayment,
   mapRefund,
   isRecord,
   type CustomerDraft,
+  type DisputeDraft,
   type InvoiceDraft,
   type OrderDraft,
   type PaymentDraft,
   type RefundDraft,
 } from "./map.ts";
 
-export type SquareEventKind = "payment" | "refund" | "order" | "invoice" | "customer" | "other";
+export type SquareEventKind =
+  "payment" | "refund" | "order" | "invoice" | "customer" | "dispute" | "other";
 
 export type ParsedSquareEvent = {
   eventId: string;
@@ -25,6 +28,7 @@ export type ParsedSquareEvent = {
   order: OrderDraft | null;
   invoice: InvoiceDraft | null;
   customer: CustomerDraft | null;
+  dispute: DisputeDraft | null;
 };
 
 const KINDS: Record<string, SquareEventKind> = {
@@ -33,6 +37,7 @@ const KINDS: Record<string, SquareEventKind> = {
   order: "order",
   invoice: "invoice",
   customer: "customer",
+  dispute: "dispute",
 };
 
 function text(value: unknown, max: number): string | null {
@@ -63,6 +68,7 @@ export function parseSquareNotification(payload: unknown): ParsedSquareEvent | n
   let order: OrderDraft | null = null;
   let invoice: InvoiceDraft | null = null;
   let customer: CustomerDraft | null = null;
+  let dispute: DisputeDraft | null = null;
 
   if (object) {
     payment = mapPayment(nested(object, "payment"));
@@ -70,6 +76,8 @@ export function parseSquareNotification(payload: unknown): ParsedSquareEvent | n
     order = mapOrder(nested(object, "order"));
     invoice = mapInvoice(nested(object, "invoice"));
     customer = mapCustomer(nested(object, "customer"));
+    dispute =
+      mapDispute(nested(object, "dispute")) ?? (kind === "dispute" ? mapDispute(object) : null);
     if (!order) {
       const updated = isRecord(object["order_updated"]) ? object["order_updated"] : null;
       const created = isRecord(object["order_created"]) ? object["order_created"] : null;
@@ -101,11 +109,24 @@ export function parseSquareNotification(payload: unknown): ParsedSquareEvent | n
       order?.square_id ??
       invoice?.square_id ??
       customer?.square_id ??
+      dispute?.square_id ??
       null;
   }
   if (customer && deleted) customer = { ...customer, deleted: true, phone_e164: null, email: null };
 
-  return { eventId, eventType, objectId, kind, deleted, payment, refund, order, invoice, customer };
+  return {
+    eventId,
+    eventType,
+    objectId,
+    kind,
+    deleted,
+    payment,
+    refund,
+    order,
+    invoice,
+    customer,
+    dispute,
+  };
 }
 
 export function unwrapResource(body: unknown, key: string): unknown {
