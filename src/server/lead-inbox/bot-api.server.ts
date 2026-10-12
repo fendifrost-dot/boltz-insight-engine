@@ -293,12 +293,14 @@ export async function handleBotRequest(request: Request): Promise<Response> {
       : undefined;
   if (action === "lookup") return handleLookup(payload);
   if (action === "shop_chat" || action === "shop_message" || action === "shop_schedule") {
-    const { botReadShopChat, botPostShopMessage, botShopSchedule } = await import("@/server/desk/bot-chat.server");
+    const { botReadShopChat, botPostShopMessage, botShopSchedule } =
+      await import("@/server/desk/bot-chat.server");
     const { action: _action, botName, ...args } = payload as Record<string, unknown>;
     try {
       if (action === "shop_chat") return json(await botReadShopChat(args));
       if (action === "shop_schedule") return json(await botShopSchedule(args));
-      if (typeof botName !== "string" || !BOT_NAME_PATTERN.test(botName)) return json({ error: "Valid botName required" }, 400);
+      if (typeof botName !== "string" || !BOT_NAME_PATTERN.test(botName))
+        return json({ error: "Valid botName required" }, 400);
       return json(await botPostShopMessage({ name: botName }, args));
     } catch (error) {
       if (error instanceof z.ZodError) return json({ error: "Invalid shop chat arguments" }, 400);
@@ -308,12 +310,15 @@ export async function handleBotRequest(request: Request): Promise<Response> {
   if (action === "messages") return handleMessages(payload);
   if (action === "inbound") return handleInbound(payload);
   if (action === "send") return handleSend(payload);
-  if (action === "square_revenue" || action === "square_payments") {
+  if (action === "square_revenue" || action === "square_payments" || action === "square_disputes") {
     const { handleSquareBotAction } = await import("@/server/square/read.server");
     return handleSquareBotAction(payload);
   }
   return json(
-    { error: "action must be lookup, messages, inbound, send, square_revenue, square_payments, shop_chat, shop_message, or shop_schedule" },
+    {
+      error:
+        "action must be lookup, messages, inbound, send, square_revenue, square_payments, square_disputes, shop_chat, shop_message, or shop_schedule",
+    },
     400,
   );
 }

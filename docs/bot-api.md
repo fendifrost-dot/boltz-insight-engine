@@ -161,6 +161,8 @@ Each row has `id`, `leadId`, `threadId`, `body`, `createdAt`, `from`, `status`. 
 
 `square_revenue` and `square_payments` read stored Square data. They do not create payments or invoices, and the response has no customer names, phones, or emails. Amounts are cents. When `SQUARE_ACCESS_TOKEN` is missing the route returns **503** `{ "configured": false, "reason": "..." }`. A storage problem is **503** `{ "configured": true, "error": "..." }`.
 
+`square_disputes` reads stored disputes even when the access token is missing. A storage problem is **503** `{ "error": "..." }`. It does not submit evidence. The response has no phone, email, or message body. Omit `disputeId` for a list sorted by due date (`limit` 1–50, default 20). Set `disputeId` for one dispute, its checklist, the linked lead, SMS thread ids, same-card payments, and invoices. `dueWithinDays` (1–30) keeps disputes that still need a response and are due inside that many days, including overdue. `state` is an optional Square state such as `EVIDENCE_REQUIRED`.
+
 ```bash
 curl -sS -X POST "https://boltz-insight-engine.lovable.app/api/public/bot" \
   -H "Content-Type: application/json" \
@@ -178,3 +180,10 @@ curl -sS -X POST "https://boltz-insight-engine.lovable.app/api/public/bot" \
 ```
 
 `leadId` is optional. `limit` is 1–50 and defaults to 20. Each payment has `squareId`, `status`, `amountCents`, `refundedCents`, `currency`, `createdAt`, `leadId`, `matchStatus`, `cardBrand`, `cardLast4`, and `orderId`.
+
+```bash
+curl -sS -X POST "https://boltz-insight-engine.lovable.app/api/public/bot" \
+  -H "Content-Type: application/json" \
+  -H "X-Bot-Api-Secret: $BOT_API_SECRET" \
+  -d '{"action":"square_disputes","dueWithinDays":3}'
+```

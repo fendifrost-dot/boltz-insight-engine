@@ -31,6 +31,8 @@ import { Route as AuthenticatedDeskIndexRouteImport } from './routes/_authentica
 import { Route as AuthenticatedDeskChatRouteImport } from './routes/_authenticated/desk/chat'
 import { Route as AuthenticatedDeskNewRouteImport } from './routes/_authenticated/desk/new'
 import { Route as AuthenticatedDeskTutorialRouteImport } from './routes/_authenticated/desk/tutorial'
+import { Route as AuthenticatedDisputesIndexRouteImport } from './routes/_authenticated/disputes/index'
+import { Route as AuthenticatedDisputesDisputeIdRouteImport } from './routes/_authenticated/disputes/$disputeId'
 import { Route as ApiPublicBotRouteImport } from './routes/api/public/bot'
 import { Route as ApiPublicMcpRouteImport } from './routes/api/public/mcp'
 import { Route as ApiPublicSupabaseConfigRouteImport } from './routes/api/public/supabase-config'
@@ -164,6 +166,18 @@ const AuthenticatedDeskTutorialRoute =
     path: '/desk/tutorial',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedDisputesIndexRoute =
+  AuthenticatedDisputesIndexRouteImport.update({
+    id: '/disputes/',
+    path: '/disputes/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedDisputesDisputeIdRoute =
+  AuthenticatedDisputesDisputeIdRouteImport.update({
+    id: '/disputes/$disputeId',
+    path: '/disputes/$disputeId',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const ApiPublicBotRoute = ApiPublicBotRouteImport.update({
   id: '/api/public/bot',
   path: '/api/public/bot',
@@ -274,10 +288,12 @@ export interface FileRoutesByFullPath {
   '/desk/chat': typeof AuthenticatedDeskChatRoute
   '/desk/new': typeof AuthenticatedDeskNewRoute
   '/desk/tutorial': typeof AuthenticatedDeskTutorialRoute
+  '/disputes/$disputeId': typeof AuthenticatedDisputesDisputeIdRoute
   '/api/public/bot': typeof ApiPublicBotRoute
   '/api/public/mcp': typeof ApiPublicMcpRoute
   '/api/public/supabase-config': typeof ApiPublicSupabaseConfigRoute
   '/desk/': typeof AuthenticatedDeskIndexRoute
+  '/disputes/': typeof AuthenticatedDisputesIndexRoute
   '/desk/leads/$leadId': typeof AuthenticatedDeskLeadsLeadIdRoute
   '/api/public/cron/ads-calls': typeof ApiPublicCronAdsCallsRoute
   '/api/public/cron/ads-weekly': typeof ApiPublicCronAdsWeeklyRoute
@@ -313,10 +329,12 @@ export interface FileRoutesByTo {
   '/desk/chat': typeof AuthenticatedDeskChatRoute
   '/desk/new': typeof AuthenticatedDeskNewRoute
   '/desk/tutorial': typeof AuthenticatedDeskTutorialRoute
+  '/disputes/$disputeId': typeof AuthenticatedDisputesDisputeIdRoute
   '/api/public/bot': typeof ApiPublicBotRoute
   '/api/public/mcp': typeof ApiPublicMcpRoute
   '/api/public/supabase-config': typeof ApiPublicSupabaseConfigRoute
   '/desk': typeof AuthenticatedDeskIndexRoute
+  '/disputes': typeof AuthenticatedDisputesIndexRoute
   '/desk/leads/$leadId': typeof AuthenticatedDeskLeadsLeadIdRoute
   '/api/public/cron/ads-calls': typeof ApiPublicCronAdsCallsRoute
   '/api/public/cron/ads-weekly': typeof ApiPublicCronAdsWeeklyRoute
@@ -354,10 +372,12 @@ export interface FileRoutesById {
   '/_authenticated/desk/chat': typeof AuthenticatedDeskChatRoute
   '/_authenticated/desk/new': typeof AuthenticatedDeskNewRoute
   '/_authenticated/desk/tutorial': typeof AuthenticatedDeskTutorialRoute
+  '/_authenticated/disputes/$disputeId': typeof AuthenticatedDisputesDisputeIdRoute
   '/api/public/bot': typeof ApiPublicBotRoute
   '/api/public/mcp': typeof ApiPublicMcpRoute
   '/api/public/supabase-config': typeof ApiPublicSupabaseConfigRoute
   '/_authenticated/desk/': typeof AuthenticatedDeskIndexRoute
+  '/_authenticated/disputes/': typeof AuthenticatedDisputesIndexRoute
   '/_authenticated/desk/leads/$leadId': typeof AuthenticatedDeskLeadsLeadIdRoute
   '/api/public/cron/ads-calls': typeof ApiPublicCronAdsCallsRoute
   '/api/public/cron/ads-weekly': typeof ApiPublicCronAdsWeeklyRoute
@@ -395,10 +415,12 @@ export interface FileRouteTypes {
     | '/desk/chat'
     | '/desk/new'
     | '/desk/tutorial'
+    | '/disputes/$disputeId'
     | '/api/public/bot'
     | '/api/public/mcp'
     | '/api/public/supabase-config'
     | '/desk/'
+    | '/disputes/'
     | '/desk/leads/$leadId'
     | '/api/public/cron/ads-calls'
     | '/api/public/cron/ads-weekly'
@@ -434,10 +456,12 @@ export interface FileRouteTypes {
     | '/desk/chat'
     | '/desk/new'
     | '/desk/tutorial'
+    | '/disputes/$disputeId'
     | '/api/public/bot'
     | '/api/public/mcp'
     | '/api/public/supabase-config'
     | '/desk'
+    | '/disputes'
     | '/desk/leads/$leadId'
     | '/api/public/cron/ads-calls'
     | '/api/public/cron/ads-weekly'
@@ -474,10 +498,12 @@ export interface FileRouteTypes {
     | '/_authenticated/desk/chat'
     | '/_authenticated/desk/new'
     | '/_authenticated/desk/tutorial'
+    | '/_authenticated/disputes/$disputeId'
     | '/api/public/bot'
     | '/api/public/mcp'
     | '/api/public/supabase-config'
     | '/_authenticated/desk/'
+    | '/_authenticated/disputes/'
     | '/_authenticated/desk/leads/$leadId'
     | '/api/public/cron/ads-calls'
     | '/api/public/cron/ads-weekly'
@@ -668,6 +694,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedDeskTutorialRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/disputes/': {
+      id: '/_authenticated/disputes/'
+      path: '/disputes'
+      fullPath: '/disputes/'
+      preLoaderRoute: typeof AuthenticatedDisputesIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/disputes/$disputeId': {
+      id: '/_authenticated/disputes/$disputeId'
+      path: '/disputes/$disputeId'
+      fullPath: '/disputes/$disputeId'
+      preLoaderRoute: typeof AuthenticatedDisputesDisputeIdRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/api/public/bot': {
       id: '/api/public/bot'
       path: '/api/public/bot'
@@ -803,7 +843,9 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedDeskChatRoute: typeof AuthenticatedDeskChatRoute
   AuthenticatedDeskNewRoute: typeof AuthenticatedDeskNewRoute
   AuthenticatedDeskTutorialRoute: typeof AuthenticatedDeskTutorialRoute
+  AuthenticatedDisputesDisputeIdRoute: typeof AuthenticatedDisputesDisputeIdRoute
   AuthenticatedDeskIndexRoute: typeof AuthenticatedDeskIndexRoute
+  AuthenticatedDisputesIndexRoute: typeof AuthenticatedDisputesIndexRoute
   AuthenticatedDeskLeadsLeadIdRoute: typeof AuthenticatedDeskLeadsLeadIdRoute
   AuthenticatedDeskLeadsIndexRoute: typeof AuthenticatedDeskLeadsIndexRoute
 }
@@ -828,7 +870,9 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedDeskChatRoute: AuthenticatedDeskChatRoute,
   AuthenticatedDeskNewRoute: AuthenticatedDeskNewRoute,
   AuthenticatedDeskTutorialRoute: AuthenticatedDeskTutorialRoute,
+  AuthenticatedDisputesDisputeIdRoute: AuthenticatedDisputesDisputeIdRoute,
   AuthenticatedDeskIndexRoute: AuthenticatedDeskIndexRoute,
+  AuthenticatedDisputesIndexRoute: AuthenticatedDisputesIndexRoute,
   AuthenticatedDeskLeadsLeadIdRoute: AuthenticatedDeskLeadsLeadIdRoute,
   AuthenticatedDeskLeadsIndexRoute: AuthenticatedDeskLeadsIndexRoute,
 }

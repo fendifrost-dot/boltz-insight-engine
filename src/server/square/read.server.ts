@@ -10,7 +10,14 @@ import {
 } from "./env.server.ts";
 import { squareErrorCode } from "./errors.ts";
 import { createSquareHttp } from "./http.ts";
-import { squarePaymentsRequest, squareRevenueRequest } from "./bot-schema.ts";
+import {
+  squareDisputesRequest,
+  squarePaymentsRequest,
+  squareRevenueRequest,
+} from "./bot-schema.ts";
+import { readDisputesForAgent } from "./dispute-read.server.ts";
+import { listStoredDisputes } from "./dispute-store.server.ts";
+import { deadlineSummary, type DeadlineSummary } from "./dispute.ts";
 import { toPublicPayment, type PublicPayment } from "./public.ts";
 import { rollupSquareWeeks, type WeekRollup } from "./rollup.ts";
 import {
@@ -49,6 +56,7 @@ export type SquareDashboard = {
   weeks: WeekRollup[];
   unmatched: PublicPayment[];
   secrets: SquareSecretFlag[];
+  disputeAlert: DeadlineSummary & { error: string | null };
 };
 
 let locationCache: { at: number; tokenHash: string; locations: SquareLocation[] } | null = null;
@@ -107,14 +115,41 @@ function emptyDashboard(reason: string | null, configured: boolean): SquareDashb
     weeks: [],
     unmatched: [],
     secrets,
+    disputeAlert: { windowDays: 3, count: 0, nearestDueBy: null, disputeIds: [], error: null },
   };
+}
+
+async function loadDisputeAlert(now = new Date()): Promise<SquareDashboard["disputeAlert"]> {
+  try {
+    const rows = await listStoredDisputes();
+    return {
+      ...deadlineSummary(
+        rows.map((row) => ({ disputeId: row.square_id, state: row.state, dueBy: row.due_by })),
+        now,
+      ),
+      error: null,
+    };
+  } catch (error) {
+    return {
+      windowDays: 3,
+      count: 0,
+      nearestDueBy: null,
+      disputeIds: [],
+      error: squareErrorCode(error),
+    };
+  }
 }
 
 export async function squareDashboard(): Promise<SquareDashboard> {
   const config = readSquareConfig();
-  if (!config.configured) return emptyDashboard(config.reason, false);
+  if (!config.configured) {
+    const dashboard = emptyDashboard(config.reason, false);
+    dashboard.disputeAlert = await loadDisputeAlert();
+    return dashboard;
+  }
 
   const dashboard = emptyDashboard(null, true);
+  dashboard.disputeAlert = await loadDisputeAlert();
   dashboard.applicationId = displayApplicationId(config.applicationId, config.accessToken);
   const discovered = await discoverLocations(config);
   dashboard.locations = discovered.locations;
@@ -174,6 +209,7 @@ export async function squareMcpHealth(): Promise<{
   activeLocationCount: number;
   lastSyncAt: string | null;
   secrets: { name: string; configured: boolean }[];
+  disputeAlert: DeadlineSummary & { error: string | null };
 }> {
   const config = readSquareConfig();
   const secrets = secretFlags().map((row) => ({ name: row.name, configured: row.configured }));
@@ -192,6 +228,7 @@ export async function squareMcpHealth(): Promise<{
       activeLocationCount: 0,
       lastSyncAt: null,
       secrets,
+      disputeAlert: await loadDisputeAlert(),
     };
   }
 
@@ -225,6 +262,7 @@ export async function squareMcpHealth(): Promise<{
     activeLocationCount: locations?.last_count ?? 0,
     lastSyncAt,
     secrets,
+    disputeAlert: await loadDisputeAlert(),
   };
 }
 
@@ -323,6 +361,18 @@ export async function handleSquareBotAction(payload: unknown): Promise<Response>
     });
     if (!result.configured) return json({ configured: false, reason: result.reason }, 503);
     if ("error" in result) return json({ configured: true, error: result.error }, 503);
+    return json(result);
+  }
+  if (action === "square_disputes") {
+    const parsed = squareDisputesRequest.safeParse(payload);
+    if (!parsed.success) return json({ error: "Invalid request" }, 400);
+    const result = await readDisputesForAgent({
+      disputeId: parsed.data.disputeId ?? null,
+      limit: parsed.data.limit ?? 20,
+      dueWithinDays: parsed.data.dueWithinDays ?? null,
+      state: parsed.data.state ?? null,
+    });
+    if ("error" in result) return json({ error: result.error }, 503);
     return json(result);
   }
   if (action === "square_payments") {

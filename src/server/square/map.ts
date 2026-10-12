@@ -84,6 +84,23 @@ export type CatalogDraft = {
   is_deleted: boolean;
 };
 
+export type DisputeDraft = {
+  square_id: string;
+  payment_id: string | null;
+  location_id: string | null;
+  amount_cents: number | null;
+  currency: string | null;
+  reason: string;
+  state: string;
+  card_brand: string | null;
+  due_by: string | null;
+  brand_dispute_id: string | null;
+  square_version: number | null;
+  reported_at: string | null;
+  created_at_square: string | null;
+  updated_at_square: string | null;
+};
+
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
@@ -293,6 +310,55 @@ export function mapCatalog(raw: unknown): CatalogDraft | null {
     name,
     updated_at_square: timestamp(raw["updated_at"]),
     is_deleted: raw["is_deleted"] === true,
+  };
+}
+
+function disputeIdOf(raw: Record<string, unknown>): string | null {
+  return text(raw["id"], 192) ?? text(raw["dispute_id"], 192);
+}
+
+function paymentIdOf(raw: Record<string, unknown>): string | null {
+  const disputed = isRecord(raw["disputed_payment"]) ? raw["disputed_payment"] : null;
+  const single = disputed ? text(disputed["payment_id"], 192) : null;
+  if (single) return single;
+  const many = raw["disputed_payments"];
+  if (!Array.isArray(many)) return null;
+  for (const item of many) {
+    if (!isRecord(item)) continue;
+    const id = text(item["payment_id"], 192);
+    if (id) return id;
+  }
+  return null;
+}
+
+function versionOf(value: unknown): number | null {
+  const n = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
+  if (!Number.isInteger(n) || n < 0 || n > 1_000_000) return null;
+  return n;
+}
+
+/** Square Dispute. `due_by` is the API's `due_at`. Last 4 is not on this object. */
+export function mapDispute(raw: unknown): DisputeDraft | null {
+  if (!isRecord(raw)) return null;
+  const id = disputeIdOf(raw);
+  const state = text(raw["state"], 40);
+  const reason = text(raw["reason"], 40);
+  if (!id || !state || !reason) return null;
+  return {
+    square_id: id,
+    payment_id: paymentIdOf(raw),
+    location_id: text(raw["location_id"], 64),
+    amount_cents: moneyCents(raw["amount_money"]),
+    currency: currencyOf(raw["amount_money"]),
+    reason,
+    state,
+    card_brand: text(raw["card_brand"], 32),
+    due_by: timestamp(raw["due_at"]) ?? timestamp(raw["due_by"]),
+    brand_dispute_id: text(raw["brand_dispute_id"], 64),
+    square_version: versionOf(raw["version"]),
+    reported_at: timestamp(raw["reported_at"]),
+    created_at_square: timestamp(raw["created_at"]),
+    updated_at_square: timestamp(raw["updated_at"]),
   };
 }
 

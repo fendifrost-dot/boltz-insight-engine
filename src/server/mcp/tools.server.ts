@@ -15,6 +15,7 @@ import { adsConfigError } from "@/server/google-ads/env.server";
 import { getAdsWeeklyReport } from "@/server/google-ads/reports.server";
 import { pullAdsCallReport } from "@/server/google-ads/call-report.server";
 import { isCallWindow, resolveCallWindow } from "@/server/google-ads/call-report";
+import { readDisputesForAgent } from "@/server/square/dispute-read.server";
 import {
   readSquarePayments,
   readSquareRevenue,
@@ -434,6 +435,13 @@ async function integrationHealth(): Promise<ToolOutcome> {
     activeLocationCount: 0,
     lastSyncAt: null,
     secrets: [] as { name: string; configured: boolean }[],
+    disputeAlert: {
+      windowDays: 3,
+      count: 0,
+      nearestDueBy: null as string | null,
+      disputeIds: [] as string[],
+      error: "square_health_failed",
+    },
   }));
 
   return {
@@ -547,6 +555,44 @@ const squarePaymentArgs = z
     limit: z.number().int().min(1).max(50).optional(),
   })
   .strict();
+
+const disputeArgs = z
+  .object({
+    disputeId: z
+      .string()
+      .regex(/^[A-Za-z0-9_-]{1,192}$/)
+      .optional(),
+    limit: z.number().int().min(1).max(50).optional(),
+    dueWithinDays: z.number().int().min(1).max(30).optional(),
+    state: z
+      .string()
+      .regex(/^[A-Z0-9_]{1,40}$/)
+      .optional(),
+  })
+  .strict();
+
+async function disputesTool(args: unknown): Promise<ToolOutcome> {
+  const parsed = disputeArgs.safeParse(args);
+  if (!parsed.success) return invalid(parsed.error);
+  const result = await readDisputesForAgent({
+    disputeId: parsed.data.disputeId ?? null,
+    limit: parsed.data.limit ?? 20,
+    dueWithinDays: parsed.data.dueWithinDays ?? null,
+    state: parsed.data.state ?? null,
+  });
+  if ("error" in result) {
+    const notFound = result.error === "invalid_dispute_id" || result.error === "invalid_state";
+    return {
+      resultCode: notFound ? "invalid" : "error",
+      isError: true,
+      value: { error: result.error },
+    };
+  }
+  if (result.view === "detail" && !result.dispute) {
+    return { resultCode: "not_found", isError: true, value: { error: "Dispute not found" } };
+  }
+  return { resultCode: "ok", isError: false, value: result };
+}
 
 async function squareRevenueTool(args: unknown): Promise<ToolOutcome> {
   const parsed = squareRevenueArgs.safeParse(args);
@@ -721,7 +767,11 @@ export function createBoltzMcpTools(): McpToolRunner {
         }
         case "boltz_post_shop_message": {
           const { botPostShopMessage } = await import("@/server/desk/bot-chat.server");
-          return { resultCode: "ok", isError: false, value: await botPostShopMessage(ctx.agent, ctx.args) };
+          return {
+            resultCode: "ok",
+            isError: false,
+            value: await botPostShopMessage(ctx.agent, ctx.args),
+          };
         }
         case "boltz_shop_schedule": {
           const { botShopSchedule } = await import("@/server/desk/bot-chat.server");
@@ -747,6 +797,8 @@ export function createBoltzMcpTools(): McpToolRunner {
           return squareRevenueTool(ctx.args);
         case "boltz_square_payments":
           return squarePaymentsTool(ctx.args);
+        case "boltz_disputes":
+          return disputesTool(ctx.args);
         case "boltz_send_sms":
           return executeMcpSend({
             agentName: ctx.agent.name,

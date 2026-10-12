@@ -1,6 +1,7 @@
 import { recordHealth } from "@/server/lead-inbox/store.server";
 import {
   listCatalog,
+  listDisputes,
   listLocations,
   listPayments,
   listRefunds,
@@ -11,15 +12,19 @@ import {
   type LocationChoice,
 } from "./api.ts";
 import { createSquareHttp, collectCursorPages } from "./http.ts";
+import { storeDisputeDraft } from "./dispute-sync.server.ts";
+import { recordDisputeDeadline } from "./dispute-store.server.ts";
 import {
   mapCatalog,
   mapCustomer,
+  mapDispute,
   mapInvoice,
   mapOrder,
   mapPayment,
   mapRefund,
   type CatalogDraft,
   type CustomerDraft,
+  type DisputeDraft,
   type InvoiceDraft,
   type OrderDraft,
   type PaymentDraft,
@@ -174,6 +179,23 @@ export async function runSquareSync(args: {
     return { count: drafts.length, truncated: page.truncated };
   });
 
+  await guard("disputes", async () => {
+    // ListDisputes has no updated_at filter and sorts by creation time.
+    // Both backfill and incremental page the full list so a state change on an older dispute is stored.
+    const page = await pages(async (cursor) => {
+      const body = await listDisputes(http, {
+        ...(cursor ? { cursor } : {}),
+        ...(choice.paymentsLocationId ? { locationId: choice.paymentsLocationId } : {}),
+      });
+      return { items: body.disputes, cursor: body.cursor };
+    });
+    const drafts = page.items.map(mapDispute).filter((row): row is DisputeDraft => row !== null);
+    for (const draft of drafts) {
+      for (const leadId of await storeDisputeDraft(draft, http)) leadIds.add(leadId);
+    }
+    return { count: drafts.length, truncated: page.truncated };
+  });
+
   await guard("refunds", async () => {
     const begin = await beginFor("refunds");
     const page = await pages(async (cursor) => {
@@ -281,7 +303,11 @@ export async function runSquareSync(args: {
     errors.push({ resource: "sales_weekly", code: squareErrorCode(error) });
   }
 
-  const detail = `payments ${counts["payments"] ?? 0} refunds ${counts["refunds"] ?? 0} orders ${counts["orders"] ?? 0} invoices ${counts["invoices"] ?? 0} customers ${counts["customers"] ?? 0} catalog ${counts["catalog"] ?? 0} paid ${paidUpdates}`;
+  await recordDisputeDeadline(now).catch((error) => {
+    errors.push({ resource: "dispute_deadline", code: squareErrorCode(error) });
+  });
+
+  const detail = `payments ${counts["payments"] ?? 0} refunds ${counts["refunds"] ?? 0} disputes ${counts["disputes"] ?? 0} orders ${counts["orders"] ?? 0} invoices ${counts["invoices"] ?? 0} customers ${counts["customers"] ?? 0} catalog ${counts["catalog"] ?? 0} paid ${paidUpdates}`;
   await recordHealth({
     provider: "square",
     checkName: args.mode === "backfill" ? "backfill" : "incremental_sync",

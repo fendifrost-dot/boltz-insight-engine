@@ -40,7 +40,10 @@ test("square bot reads accept the action and reject contact fields", () => {
 
 test("SMS handling does not import the Square client until a Square action is asked for", () => {
   const source = readFileSync(join(here, "../lead-inbox/bot-api.server.ts"), "utf8");
-  assert.match(source, /action === "square_revenue" \|\| action === "square_payments"/);
+  assert.match(
+    source,
+    /action === "square_revenue" \|\| action === "square_payments" \|\| action === "square_disputes"/,
+  );
   assert.match(source, /import\("@\/server\/square\/read\.server"\)/);
   assert.equal(source.includes('from "@/server/square/'), false);
 });
