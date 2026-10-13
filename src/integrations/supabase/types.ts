@@ -1065,6 +1065,7 @@ export type Database = {
         | "unsupported_discount"
         | "human_requested"
         | "other_high_risk"
+        | "stale_inbound"
       escalation_status: "open" | "acknowledged" | "resolved"
       lead_ingestion_method: "WEBHOOK" | "RECONCILIATION" | "MANUAL_IMPORT"
       lead_lifecycle:
@@ -1248,6 +1249,7 @@ export const Constants = {
         "unsupported_discount",
         "human_requested",
         "other_high_risk",
+        "stale_inbound",
       ],
       escalation_status: ["open", "acknowledged", "resolved"],
       lead_ingestion_method: ["WEBHOOK", "RECONCILIATION", "MANUAL_IMPORT"],

@@ -7,6 +7,7 @@ import type { Database } from "@/integrations/supabase/types";
 import type { LeadRow, MessageRow } from "./store.server";
 import { shopDate } from "@/lib/desk-schedule";
 import type { ShopChatMessage } from "@/lib/desk-chat";
+import { XAI_DECISION_TIMEOUT_MS, describeXaiError } from "./job-lease";
 
 export const PROMPT_VERSION = "boltz-sms-agent-v2";
 export const META_FIRST_TOUCH_PROMPT_VERSION = "boltz-meta-first-touch-v1";
@@ -92,20 +93,26 @@ function leadSummary(lead: LeadRow): string {
   return parts.join("; ");
 }
 
-export async function decideReply(args: {
-  lead: LeadRow;
-  history: MessageRow[];
-  inboundBody: string;
-}): Promise<{ decision: AgentDecision; model: string; raw: unknown }> {
-  return chatDecision([
-    { role: "system", content: systemPrompt() },
-    { role: "system", content: `Current lead record — ${leadSummary(args.lead)}` },
-    ...args.history.map((m) => ({
-      role: m.direction === "inbound" ? "user" : "assistant",
-      content: m.body ?? "",
-    })),
-    { role: "user", content: args.inboundBody },
-  ]);
+export async function decideReply(
+  args: {
+    lead: LeadRow;
+    history: MessageRow[];
+    inboundBody: string;
+  },
+  timeoutMs = XAI_DECISION_TIMEOUT_MS,
+): Promise<{ decision: AgentDecision; model: string; raw: unknown }> {
+  return chatDecision(
+    [
+      { role: "system", content: systemPrompt() },
+      { role: "system", content: `Current lead record — ${leadSummary(args.lead)}` },
+      ...args.history.map((m) => ({
+        role: m.direction === "inbound" ? "user" : "assistant",
+        content: m.body ?? "",
+      })),
+      { role: "user", content: args.inboundBody },
+    ],
+    timeoutMs,
+  );
 }
 
 /**
@@ -136,23 +143,30 @@ export async function decideFirstTouch(args: {
 
 async function chatDecision(
   messages: { role: string; content: string }[],
+  timeoutMs = XAI_DECISION_TIMEOUT_MS,
 ): Promise<{ decision: AgentDecision; model: string; raw: unknown }> {
   const apiKey = requireSecret("XAI_API_KEY");
   const model = resolveModel();
 
-  const res = await fetch("https://api.x.ai/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model,
-      messages,
-      temperature: 0.2,
-      response_format: { type: "json_object" },
-    }),
-  });
+  let res: Response;
+  try {
+    res = await fetch("https://api.x.ai/v1/chat/completions", {
+      method: "POST",
+      signal: AbortSignal.timeout(timeoutMs),
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model,
+        messages,
+        temperature: 0.2,
+        response_format: { type: "json_object" },
+      }),
+    });
+  } catch (error) {
+    throw describeXaiError(error);
+  }
 
   if (!res.ok) {
     const text = (await res.text()).slice(0, 500);
