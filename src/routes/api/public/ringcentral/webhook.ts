@@ -77,7 +77,8 @@ async function handle(request: Request): Promise<Response> {
       },
     });
     if (job) {
-      // Bounded inline drain keeps reply latency low without unbounded fan-out.
+      // Pending work first, then expired leases. processJobs stops inside its
+      // time budget so a slow model call cannot leave a batch stuck in processing.
       await processJobs(3);
     }
   }

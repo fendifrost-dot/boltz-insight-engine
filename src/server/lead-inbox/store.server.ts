@@ -1,6 +1,7 @@
 // Supabase persistence for the lead inbox (service role, server-only).
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import type { Database } from "@/integrations/supabase/types";
+import { JOB_LEASE_MS, LEASE_EXPIRED_LAST_ERROR, decideClaim, failureUpdate } from "./job-lease";
 
 type Tables = Database["public"]["Tables"];
 export type LeadRow = Tables["leads"]["Row"];
@@ -103,7 +104,9 @@ export async function findMessageByIdempotencyKey(
   return data;
 }
 
-export async function findMessageByProviderId(providerMessageId: string): Promise<MessageRow | null> {
+export async function findMessageByProviderId(
+  providerMessageId: string,
+): Promise<MessageRow | null> {
   const { data, error } = await supabaseAdmin
     .from("messages")
     .select("*")
@@ -210,7 +213,10 @@ export async function recordOutboundMessage(args: {
     .from("leads")
     .update({ last_outbound_at: now, last_message_at: now })
     .eq("id", args.leadId);
-  await supabaseAdmin.from("message_threads").update({ last_message_at: now }).eq("id", args.threadId);
+  await supabaseAdmin
+    .from("message_threads")
+    .update({ last_message_at: now })
+    .eq("id", args.threadId);
 
   return data;
 }
@@ -256,23 +262,43 @@ export async function enqueueJob(args: {
   return data;
 }
 
-/** Bounded claim with a lease so a second concurrent run cannot double-process. */
-export async function claimJobs(limit: number, leaseMs = 120_000): Promise<JobRow[]> {
-  const nowIso = new Date().toISOString();
-  const leaseCutoff = new Date(Date.now() - leaseMs).toISOString();
+/**
+ * Claim due pending work first, then processing rows whose lease has expired.
+ * Pending-first keeps a new text ahead of the historical backlog. The lease
+ * compare-and-set stops a second worker from taking a row this one still holds.
+ */
+export async function claimJobs(
+  limit: number,
+  leaseMs = JOB_LEASE_MS,
+  now = new Date(),
+): Promise<JobRow[]> {
+  if (limit <= 0) return [];
+  const nowIso = now.toISOString();
+  const pending = await claimPendingJobs(limit, nowIso, now);
+  const remaining = limit - pending.length;
+  if (remaining <= 0) return pending;
+  const stale = await claimStaleProcessingJobs(remaining, nowIso, leaseMs, now);
+  return [...pending, ...stale];
+}
 
+async function claimPendingJobs(limit: number, nowIso: string, now: Date): Promise<JobRow[]> {
   const { data: candidates, error } = await supabaseAdmin
     .from("message_jobs")
     .select("*")
     .eq("status", "pending")
     .lte("run_after", nowIso)
-    .or(`locked_at.is.null,locked_at.lt.${leaseCutoff}`)
     .order("run_after", { ascending: true })
     .limit(limit);
   if (error) throw error;
 
   const claimed: JobRow[] = [];
   for (const job of candidates ?? []) {
+    const decision = decideClaim(job, now);
+    if (decision.action === "expire") {
+      await finalizeExhaustedJob(job, decision.reason);
+      continue;
+    }
+    if (decision.action !== "claim_pending") continue;
     const { data, error: claimError } = await supabaseAdmin
       .from("message_jobs")
       .update({ status: "processing", locked_at: nowIso, attempts: job.attempts + 1 })
@@ -282,30 +308,124 @@ export async function claimJobs(limit: number, leaseMs = 120_000): Promise<JobRo
       .maybeSingle();
     if (claimError) throw claimError;
     if (data) claimed.push(data);
+    if (claimed.length >= limit) break;
   }
   return claimed;
 }
 
-export async function completeJob(id: string): Promise<void> {
-  await supabaseAdmin
+async function claimStaleProcessingJobs(
+  limit: number,
+  nowIso: string,
+  leaseMs: number,
+  now: Date,
+): Promise<JobRow[]> {
+  const leaseCutoff = new Date(now.getTime() - leaseMs).toISOString();
+  const { data: candidates, error } = await supabaseAdmin
     .from("message_jobs")
-    .update({ status: "succeeded", completed_at: new Date().toISOString(), locked_at: null, last_error: null })
-    .eq("id", id);
+    .select("*")
+    .eq("status", "processing")
+    .or(`locked_at.is.null,locked_at.lt.${leaseCutoff}`)
+    .order("locked_at", { ascending: true })
+    .limit(Math.max(limit, 1));
+  if (error) throw error;
+
+  const claimed: JobRow[] = [];
+  for (const job of candidates ?? []) {
+    const decision = decideClaim(job, now, leaseMs);
+    if (decision.action === "expire") {
+      await finalizeExhaustedJob(job, decision.reason);
+      continue;
+    }
+    if (decision.action !== "claim_stale") continue;
+    let update = supabaseAdmin
+      .from("message_jobs")
+      .update({
+        status: "processing",
+        locked_at: nowIso,
+        attempts: job.attempts + 1,
+        last_error: LEASE_EXPIRED_LAST_ERROR,
+      })
+      .eq("id", job.id)
+      .eq("status", "processing");
+    update = job.locked_at ? update.eq("locked_at", job.locked_at) : update.is("locked_at", null);
+    const { data, error: claimError } = await update.select("*").maybeSingle();
+    if (claimError) throw claimError;
+    if (data) claimed.push(data);
+    if (claimed.length >= limit) break;
+  }
+  return claimed;
+}
+
+async function finalizeExhaustedJob(job: JobRow, reason: string): Promise<void> {
+  let update = supabaseAdmin
+    .from("message_jobs")
+    .update({
+      status: "dead",
+      last_error: reason.slice(0, 600),
+      locked_at: null,
+      completed_at: new Date().toISOString(),
+    })
+    .eq("id", job.id)
+    .eq("status", job.status);
+  if (job.status === "processing") {
+    update = job.locked_at ? update.eq("locked_at", job.locked_at) : update.is("locked_at", null);
+  }
+  const { error } = await update;
+  if (error) throw error;
+}
+
+/** Gives an unstarted claim back to the queue without burning the attempt. */
+export async function releaseClaimedJob(job: JobRow): Promise<void> {
+  if (!job.locked_at) return;
+  const { error } = await supabaseAdmin
+    .from("message_jobs")
+    .update({
+      status: "pending",
+      locked_at: null,
+      attempts: Math.max(0, job.attempts - 1),
+      run_after: new Date().toISOString(),
+    })
+    .eq("id", job.id)
+    .eq("status", "processing")
+    .eq("locked_at", job.locked_at);
+  if (error) throw error;
+}
+
+export async function completeJob(id: string, lockedAt: string): Promise<boolean> {
+  const { data, error } = await supabaseAdmin
+    .from("message_jobs")
+    .update({
+      status: "succeeded",
+      completed_at: new Date().toISOString(),
+      locked_at: null,
+      last_error: null,
+    })
+    .eq("id", id)
+    .eq("status", "processing")
+    .eq("locked_at", lockedAt)
+    .select("id")
+    .maybeSingle();
+  if (error) throw error;
+  return Boolean(data);
 }
 
 export async function failJob(job: JobRow, message: string): Promise<void> {
-  const dead = job.attempts >= job.max_attempts;
-  const backoffMs = Math.min(30 * 60_000, 60_000 * 2 ** Math.max(0, job.attempts - 1));
-  await supabaseAdmin
+  const outcome = failureUpdate(job);
+  const lastError = (message.trim() || "Job failed").slice(0, 600);
+  let update = supabaseAdmin
     .from("message_jobs")
     .update({
-      status: dead ? "dead" : "pending",
-      last_error: message.slice(0, 600),
+      status: outcome.status,
+      last_error: lastError,
       locked_at: null,
-      run_after: new Date(Date.now() + backoffMs).toISOString(),
-      completed_at: dead ? new Date().toISOString() : null,
+      run_after: new Date(Date.now() + outcome.backoffMs).toISOString(),
+      completed_at: outcome.terminal ? new Date().toISOString() : null,
     })
-    .eq("id", job.id);
+    .eq("id", job.id)
+    .eq("status", "processing");
+  update = job.locked_at ? update.eq("locked_at", job.locked_at) : update.is("locked_at", null);
+  const { error } = await update;
+  if (error) throw error;
 }
 
 export async function recordHealth(args: {
@@ -330,6 +450,8 @@ export async function openEscalation(args: {
   category: Database["public"]["Enums"]["escalation_category"];
   reason: string;
   agentRunId?: string | null;
+  /** Safety escalations pause the thread. Stale inbound stays on the current mode. */
+  takeThreadControl?: boolean;
 }): Promise<void> {
   const { data: open, error } = await supabaseAdmin
     .from("escalations")
@@ -351,7 +473,12 @@ export async function openEscalation(args: {
     if (insertError) throw insertError;
   }
 
-  await supabaseAdmin.from("message_threads").update({ control_mode: "human" }).eq("id", args.threadId);
+  if (args.takeThreadControl !== false) {
+    await supabaseAdmin
+      .from("message_threads")
+      .update({ control_mode: "human" })
+      .eq("id", args.threadId);
+  }
   await addEvent(args.leadId, "escalated", args.reason.slice(0, 300), "system", {
     category: args.category,
   });
