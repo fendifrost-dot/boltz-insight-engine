@@ -14,14 +14,17 @@ import {
   botActor,
   botIdempotencyKey,
   classifyIdempotencyHit,
+  emailLookupPattern,
   evaluateSendGates,
   isSendableE164,
   normalizeEmail,
   parseInboundSince,
+  prepareSendPayload,
   resolveStartLeadSource,
   screenOutboundText,
   type ConsentStatus,
 } from "./bot-api.policy";
+import { markContactedAfterOutboundSms } from "./lifecycle.server";
 import { sendOutbound } from "./outbound.server";
 import {
   addEvent,
@@ -330,15 +333,16 @@ async function handleLookup(payload: unknown): Promise<Response> {
   if (parsed.data.email) {
     const email = normalizeEmail(parsed.data.email);
     if (!email) return json({ error: "Invalid email" }, 422);
+    const pattern = emailLookupPattern(email);
     const { count, error: countError } = await supabaseAdmin
       .from("leads")
       .select("id", { count: "exact", head: true })
-      .ilike("email", email);
+      .ilike("email", pattern);
     if (countError) throw countError;
     const { data, error } = await supabaseAdmin
       .from("leads")
       .select(LEAD_COLUMNS)
-      .ilike("email", email)
+      .ilike("email", pattern)
       .order("last_message_at", { ascending: false, nullsFirst: false })
       .order("created_at", { ascending: false })
       .limit(1)
@@ -463,30 +467,62 @@ function evidenceOf(
   return evidence;
 }
 
+function withWarnings(
+  body: Record<string, unknown>,
+  warnings: readonly string[],
+): Record<string, unknown> {
+  if (warnings.length === 0) return body;
+  return { ...body, warnings };
+}
+
 async function handleSend(payload: unknown): Promise<Response> {
-  const parsed = sendSchema.safeParse(payload);
-  if (!parsed.success) return invalid(parsed.error);
+  const prepared = prepareSendPayload(payload);
+  const warnings = prepared.warnings;
+  const parsed = sendSchema.safeParse(prepared.value);
+  if (!parsed.success) {
+    return json(
+      withWarnings(
+        {
+          error: "Invalid request",
+          issues: parsed.error.issues.map((issue) => ({
+            path: issue.path.join("."),
+            message: issue.message,
+          })),
+        },
+        warnings,
+      ),
+      400,
+    );
+  }
   const data = parsed.data;
 
-  const email = data.email === undefined ? undefined : normalizeEmail(data.email);
-  if (data.email !== undefined && !email) return json({ error: "Invalid email" }, 422);
+  let email: string | undefined;
+  if (data.email !== undefined) {
+    const normalized = normalizeEmail(data.email);
+    if (!normalized) warnings.push("Dropped email because it is not a valid address");
+    else email = normalized;
+  }
 
   const source = resolveStartLeadSource(data.leadSource);
-  if (!source.ok) return json({ error: source.reason }, 422);
+  if (!source.ok) return json(withWarnings({ error: source.reason }, warnings), 422);
 
   const screened = screenOutboundText(data.text);
-  if (!screened.ok)
+  if (!screened.ok) {
     return json(
-      {
-        ok: false,
-        duplicate: false,
-        reason: screened.reason,
-        leadId: null,
-        threadId: null,
-        messageId: null,
-      },
+      withWarnings(
+        {
+          ok: false,
+          duplicate: false,
+          reason: screened.reason,
+          leadId: null,
+          threadId: null,
+          messageId: null,
+        },
+        warnings,
+      ),
       422,
     );
+  }
 
   const evidence = evidenceOf(data.consentEvidence);
   const consent = validateConsentOptIn({
@@ -495,14 +531,17 @@ async function handleSend(payload: unknown): Promise<Response> {
   });
   if (!consent.ok) {
     return json(
-      {
-        ok: false,
-        duplicate: false,
-        reason: consent.reason,
-        leadId: null,
-        threadId: null,
-        messageId: null,
-      },
+      withWarnings(
+        {
+          ok: false,
+          duplicate: false,
+          reason: consent.reason,
+          leadId: null,
+          threadId: null,
+          messageId: null,
+        },
+        warnings,
+      ),
       422,
     );
   }
@@ -565,26 +604,20 @@ async function handleSend(payload: unknown): Promise<Response> {
     dailyCap: BOT_DAILY_SMS_CAP_PER_NUMBER,
   });
 
-  if (decision.kind === "duplicate") {
-    return json({
-      ok: true,
-      duplicate: true,
-      reason: null,
-      leadId: lead.id,
-      threadId: thread.id,
-      messageId: existingByKey?.id ?? identical,
-    });
-  }
+  const isDuplicate = decision.kind === "duplicate";
   if (decision.kind === "block") {
     return json(
-      {
-        ok: false,
-        duplicate: false,
-        reason: decision.reason,
-        leadId: lead.id,
-        threadId: thread.id,
-        messageId: null,
-      },
+      withWarnings(
+        {
+          ok: false,
+          duplicate: false,
+          reason: decision.reason,
+          leadId: lead.id,
+          threadId: thread.id,
+          messageId: null,
+        },
+        warnings,
+      ),
       decision.status,
     );
   }
@@ -625,6 +658,30 @@ async function handleSend(payload: unknown): Promise<Response> {
     });
   }
 
+  if (isDuplicate) {
+    const messageId = existingByKey?.id ?? identical;
+    const stage = await markContactedAfterOutboundSms({
+      leadId: lead.id,
+      fromLifecycle: lead.lifecycle,
+      messageId,
+    });
+    if (stage.warning) warnings.push(stage.warning);
+    return json(
+      withWarnings(
+        {
+          ok: true,
+          duplicate: true,
+          reason: null,
+          leadId: lead.id,
+          threadId: thread.id,
+          messageId,
+          lifecycle: stage.lifecycle,
+        },
+        warnings,
+      ),
+    );
+  }
+
   if (startedNewThread) {
     const { error } = await supabaseAdmin
       .from("message_threads")
@@ -658,26 +715,41 @@ async function handleSend(payload: unknown): Promise<Response> {
   if (!outcome.ok) {
     const policy = outcome.reason.startsWith("Blocked by outbound");
     return json(
-      {
-        ok: false,
-        duplicate: false,
-        reason: outcome.reason,
-        leadId: lead.id,
-        threadId: thread.id,
-        messageId: null,
-      },
+      withWarnings(
+        {
+          ok: false,
+          duplicate: false,
+          reason: outcome.reason,
+          leadId: lead.id,
+          threadId: thread.id,
+          messageId: null,
+        },
+        warnings,
+      ),
       policy ? 422 : 502,
     );
   }
 
-  return json({
-    ok: true,
-    duplicate: outcome.duplicate,
-    reason: null,
+  const stage = await markContactedAfterOutboundSms({
     leadId: lead.id,
-    threadId: thread.id,
+    fromLifecycle: lead.lifecycle,
     messageId: outcome.message?.id ?? null,
   });
+  if (stage.warning) warnings.push(stage.warning);
+  return json(
+    withWarnings(
+      {
+        ok: true,
+        duplicate: outcome.duplicate,
+        reason: null,
+        leadId: lead.id,
+        threadId: thread.id,
+        messageId: outcome.message?.id ?? null,
+        lifecycle: stage.lifecycle,
+      },
+      warnings,
+    ),
+  );
 }
 
 async function resolveSendTarget(

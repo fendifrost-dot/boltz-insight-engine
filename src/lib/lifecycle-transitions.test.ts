@@ -8,7 +8,10 @@ import {
   GROK_RECOMMENDED_TERMINAL,
   LIFECYCLE_FUNNEL,
   buildLifecycleEvidenceMetadata,
+  canonicalLifecycle,
   isAllowedLifecycleTransition,
+  lifecycleValuesMessage,
+  outboundMessageSupportsContact,
   requiresFinancialConfirm,
   resolveTransitionActorKind,
   validateLifecycleEvidence,
@@ -346,8 +349,165 @@ test("lifecycle.server uses atomic RPC instead of separate update and event inse
     dirname(fileURLToPath(import.meta.url)),
     "../server/lead-inbox/lifecycle.server.ts",
   );
+  const helperPath = join(
+    dirname(fileURLToPath(import.meta.url)),
+    "../server/lead-inbox/lifecycle-rpc.ts",
+  );
   const source = readFileSync(lifecycleServerPath, "utf8");
-  assert.match(source, /rpc\("apply_lead_lifecycle_transition"/);
+  const helper = readFileSync(helperPath, "utf8");
+  assert.match(helper, /client\.rpc\("apply_lead_lifecycle_transition"/);
+  assert.match(source, /callApplyLeadLifecycleTransition\(\s*supabaseAdmin/);
+  assert.doesNotMatch(source, /const rpc = supabaseAdmin\.rpc/);
   assert.doesNotMatch(source, /addEvent\(/);
   assert.match(source, /code: "stale"/);
+});
+
+test("lifecycle rpc keeps the supabase client as this", async () => {
+  const { callApplyLeadLifecycleTransition } =
+    await import("../server/lead-inbox/lifecycle-rpc.ts");
+  let seenMarker = "";
+  const client = {
+    marker: "client",
+    rpc(this: { marker: string }, fn: string) {
+      seenMarker = this.marker;
+      assert.equal(fn, "apply_lead_lifecycle_transition");
+      return Promise.resolve({
+        data: { status: "applied", from: "New", to: "Contacted" },
+        error: null,
+      });
+    },
+  };
+  await callApplyLeadLifecycleTransition(client, { _lead_id: "lead-1" });
+  assert.equal(seenMarker, "client");
+});
+
+test("stage names match without case, and unknown names list the real stages", () => {
+  assert.equal(canonicalLifecycle("contacted"), "Contacted");
+  assert.equal(canonicalLifecycle("  appointment scheduled "), "Appointment Scheduled");
+  assert.equal(canonicalLifecycle("NO-SHOW"), "No-show");
+  assert.equal(canonicalLifecycle("nope"), null);
+  assert.match(lifecycleValuesMessage(), /Contacted/);
+  assert.match(lifecycleValuesMessage(), /case-insensitive/);
+});
+
+test("outbound SMS evidence moves New to Contacted and cannot skip or mark Paid", () => {
+  const contacted = validateLifecycleTransition({
+    from: "New",
+    to: "Contacted",
+    actor: "system",
+    evidence: { basis: "outbound_sms", evidenceRef: "60e782ac-953f-407a-a414-a41addbee307" },
+  });
+  assert.equal(contacted.ok, true);
+
+  const staff = validateLifecycleTransition({
+    from: "New",
+    to: "Contacted",
+    actor: "staff",
+    evidence: {
+      basis: "outbound_sms",
+      evidenceRef: "60e782ac-953f-407a-a414-a41addbee307",
+      assertedBy: "staff-1",
+    },
+  });
+  assert.equal(staff.ok, true);
+
+  const missingRef = validateLifecycleTransition({
+    from: "New",
+    to: "Contacted",
+    actor: "staff",
+    evidence: { basis: "outbound_sms", assertedBy: "staff-1" },
+  });
+  assert.equal(missingRef.ok, false);
+  if (!missingRef.ok) assert.match(missingRef.reason, /evidence_ref/);
+
+  const systemRule = validateLifecycleTransition({
+    from: "New",
+    to: "Contacted",
+    actor: "system",
+    evidence: { basis: "system_rule", evidenceRef: "rule-1" },
+  });
+  assert.equal(systemRule.ok, false);
+
+  const skipped = validateLifecycleTransition({
+    from: "Qualified",
+    to: "Appointment Scheduled",
+    actor: "staff",
+    evidence: {
+      basis: "outbound_sms",
+      evidenceRef: "60e782ac-953f-407a-a414-a41addbee307",
+      assertedBy: "staff-1",
+    },
+  });
+  assert.equal(skipped.ok, false);
+  if (!skipped.ok) assert.match(skipped.reason, /only supports a move to Contacted/);
+
+  const paid = validateLifecycleTransition({
+    from: "Completed",
+    to: "Paid",
+    actor: "staff",
+    evidence: {
+      basis: "outbound_sms",
+      evidenceRef: "60e782ac-953f-407a-a414-a41addbee307",
+      assertedBy: "staff-1",
+    },
+  });
+  assert.equal(paid.ok, false);
+
+  const systemPaid = validateLifecycleTransition({
+    from: "New",
+    to: "Paid",
+    actor: "system",
+    evidence: { basis: "outbound_sms", evidenceRef: "60e782ac-953f-407a-a414-a41addbee307" },
+  });
+  assert.equal(systemPaid.ok, false);
+});
+
+test("a failed or foreign message does not count as contact evidence", () => {
+  const messageId = "60e782ac-953f-407a-a414-a41addbee307";
+  assert.equal(
+    outboundMessageSupportsContact({
+      leadId: "lead-1",
+      messageLeadId: "lead-1",
+      direction: "outbound",
+      deliveryState: "queued",
+    }),
+    true,
+  );
+  assert.equal(
+    outboundMessageSupportsContact({
+      leadId: "lead-1",
+      messageLeadId: "lead-1",
+      direction: "outbound",
+      deliveryState: "failed",
+    }),
+    false,
+  );
+  assert.equal(
+    outboundMessageSupportsContact({
+      leadId: "lead-1",
+      messageLeadId: "lead-2",
+      direction: "outbound",
+      deliveryState: "sent",
+    }),
+    false,
+  );
+  assert.equal(messageId.length > 0, true);
+});
+
+test("bot SMS backfill moves only New leads that a bot already texted", () => {
+  const sql = readFileSync(
+    join(
+      dirname(fileURLToPath(import.meta.url)),
+      "../../supabase/migrations/20261014160000_contacted_after_bot_sms.sql",
+    ),
+    "utf8",
+  );
+  assert.match(sql, /lifecycle = 'New'::public\.lead_lifecycle/);
+  assert.match(sql, /'Contacted'::public\.lead_lifecycle/);
+  assert.match(sql, /e\.actor LIKE 'bot:%'/);
+  assert.match(sql, /delivery_state IS DISTINCT FROM 'failed'/);
+  assert.match(sql, /apply_lead_lifecycle_transition/);
+  assert.match(sql, /'outbound_sms'/);
+  assert.doesNotMatch(sql, /'Paid'/);
+  assert.doesNotMatch(sql, /DELETE FROM/i);
 });

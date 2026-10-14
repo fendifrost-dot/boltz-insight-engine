@@ -239,6 +239,53 @@ test("quiet hours, a mismatched bot name, and a missing idempotency key never di
   assert.equal(calls, 1);
 });
 
+test("an invalid optional email does not block the send", async () => {
+  let sentEmail: unknown = "missing";
+  const result = await executeMcpSend({
+    agentName: "lead-follow-up",
+    input: {
+      botName: "lead-follow-up",
+      idempotencyKey: "follow-up-example-1",
+      text: "Hi, this is Boltz Automotive. Reply STOP to opt out.",
+      phone: "+13125550100",
+      email: "not-an-email",
+      vehicleYear: 1800,
+    },
+    now: insideHours,
+    dispatch: async (request) => {
+      const body = (await request.json()) as { email?: unknown; vehicleYear?: unknown };
+      sentEmail = body.email;
+      assert.equal("vehicleYear" in body, false);
+      return Response.json({ ok: true, duplicate: false, messageId: "msg-1" });
+    },
+  });
+  assert.equal(sentEmail, undefined);
+  assert.equal(result.resultCode, "ok");
+  assert.equal(result.isError, false);
+  const warnings = (result.value as { warnings?: string[] }).warnings ?? [];
+  assert.match(warnings.join("\n"), /Dropped email because it is not a valid address/);
+  assert.match(warnings.join("\n"), /vehicleYear/);
+
+  let kept = "";
+  await executeMcpSend({
+    agentName: "lead-follow-up",
+    input: {
+      botName: "lead-follow-up",
+      idempotencyKey: "follow-up-example-2",
+      text: "Hi, this is Boltz Automotive. Reply STOP to opt out.",
+      phone: "+13125550100",
+      email: "anderson_darnell@ymail.com",
+    },
+    now: insideHours,
+    dispatch: async (request) => {
+      const body = (await request.json()) as { email?: string };
+      kept = body.email ?? "";
+      return Response.json({ ok: true, duplicate: false });
+    },
+  });
+  assert.equal(kept, "anderson_darnell@ymail.com");
+});
+
 test("send is wired to the bot handler and not a second SMS path", () => {
   const tools = readFileSync(join(here, "tools.server.ts"), "utf8");
   const send = tools.slice(

@@ -97,6 +97,10 @@ Browser roles cannot read these tables. RLS is enabled and forced, `anon` and `a
 
 `botName`, `idempotencyKey`, and `text` are required, plus `phone`, `leadId`, or `threadId`. The idempotency key is 8–128 characters: letters, digits, `:`, `_`, `.`, `/`, `-`. The actor stored on the lead event is `bot:<botName>`.
 
+A successful send, including a duplicate retry of a text that already went out, moves a lead from **New** to **Contacted**. The evidence is `outbound_sms` and the outbound message id. Later stages, including Paid, are not changed. If that lifecycle write fails, the SMS result still succeeds and the response includes a warning.
+
+Optional profile fields (`email`, `name`, `leadSource`, vehicle fields, `service`, consent) are checked on their own. An invalid value is dropped, named in `warnings`, and does not reject the text. `anderson_darnell@ymail.com` is a valid address. Phone is dropped only when a lead id or thread id can still address the text.
+
 The handler calls `handleBotRequest` (the bot API send action). That path still applies:
 
 - opted out, or a latest inbound of STOP / UNSUBSCRIBE / CANCEL / END / QUIT: refused, no text
@@ -126,4 +130,12 @@ The shop previously had no server-side texting-hours rule (owner send and the bo
 
 ### Lead update
 
-`leadId` plus `notes` and/or `lifecycle`. Lifecycle needs `evidence.basis` of `customer_message`, `staff_observation`, `appointment_record`, `inspection_record`, `estimate_record`, or `manual_correction`. The transition uses the staff rules (`staff:mcp:<agent name>`), so Paid is refused. Notes replace the field, 1–2000 characters, and the event stores the length, not the text.
+`leadId` plus `notes` and/or `lifecycle`. Stage names are case-insensitive: `contacted` and `Contacted` are the same stage. The canonical values are `New`, `Contacted`, `Qualified`, `Appointment Scheduled`, `Inspected`, `Estimate Sent`, `Approved`, `In Progress`, `Completed`, `Paid`, `Lost`, `No response`, `No-show`, `Duplicate`, `Spam`, and `Outside service capability`.
+
+Lifecycle needs `evidence.basis`. After an outbound SMS, use `outbound_sms` and set `evidence.evidenceRef` to that message id. The message must be an outbound text on this lead and must not be `failed`. A successful `boltz_send_sms` already performs the New → Contacted move, so a second call is only needed when that automatic move did not apply.
+
+Other bases remain `customer_message`, `staff_observation`, `appointment_record`, `inspection_record`, `estimate_record`, and `manual_correction`. Appointment Scheduled, Inspected, Estimate Sent, Approved, and Paid keep their existing evidence rules. The transition uses the staff rules (`staff:mcp:<agent name>`), so Paid is refused. A database failure returns `Lifecycle update failed:` plus the redacted reason, not a bare `request failed`.
+
+Notes replace the field, 1–2000 characters, and the event stores the length, not the text.
+
+Migration `supabase/migrations/20261014160000_contacted_after_bot_sms.sql` moves existing **New** leads to **Contacted** when a `bot:%` actor already recorded `outbound_sent` and a non-failed outbound message exists. Owner and staff texts are not changed. Apply it with the normal migration path. It is safe to run more than once.
