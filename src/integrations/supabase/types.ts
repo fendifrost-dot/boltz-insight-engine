@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.5"
+    PostgrestVersion: "14.15"
   }
   public: {
     Tables: {
@@ -82,44 +82,6 @@ export type Database = {
           week_start?: string
         }
         Relationships: []
-      }
-      google_ads_call_numbers: {
-        Row: {
-          ads_call_weekly_id: string | null
-          created_at: string
-          customer_id: string
-          id: string
-          phone_e164: string
-          started_at: string
-          week_start: string
-        }
-        Insert: {
-          ads_call_weekly_id?: string | null
-          created_at?: string
-          customer_id: string
-          id?: string
-          phone_e164: string
-          started_at: string
-          week_start: string
-        }
-        Update: {
-          ads_call_weekly_id?: string | null
-          created_at?: string
-          customer_id?: string
-          id?: string
-          phone_e164?: string
-          started_at?: string
-          week_start?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "google_ads_call_numbers_ads_call_weekly_id_fkey"
-            columns: ["ads_call_weekly_id"]
-            isOneToOne: false
-            referencedRelation: "ads_call_weekly"
-            referencedColumns: ["id"]
-          },
-        ]
       }
       agent_runs: {
         Row: {
@@ -212,6 +174,73 @@ export type Database = {
             columns: ["thread_id"]
             isOneToOne: false
             referencedRelation: "message_threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      desk_chat_messages: {
+        Row: {
+          agent_id: string | null
+          body: string
+          created_at: string
+          id: string
+          idempotency_key: string
+          lead_id: string | null
+          metadata: Json
+          reply_to: string | null
+          role: string
+          sender: string
+          sequence: number
+          staff_user_id: string | null
+        }
+        Insert: {
+          agent_id?: string | null
+          body: string
+          created_at?: string
+          id?: string
+          idempotency_key: string
+          lead_id?: string | null
+          metadata?: Json
+          reply_to?: string | null
+          role: string
+          sender: string
+          sequence?: never
+          staff_user_id?: string | null
+        }
+        Update: {
+          agent_id?: string | null
+          body?: string
+          created_at?: string
+          id?: string
+          idempotency_key?: string
+          lead_id?: string | null
+          metadata?: Json
+          reply_to?: string | null
+          role?: string
+          sender?: string
+          sequence?: never
+          staff_user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "desk_chat_messages_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "mcp_agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "desk_chat_messages_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "desk_chat_messages_reply_to_fkey"
+            columns: ["reply_to"]
+            isOneToOne: false
+            referencedRelation: "desk_chat_messages"
             referencedColumns: ["id"]
           },
         ]
@@ -324,6 +353,44 @@ export type Database = {
           },
         ]
       }
+      google_ads_call_numbers: {
+        Row: {
+          ads_call_weekly_id: string | null
+          created_at: string
+          customer_id: string
+          id: string
+          phone_e164: string
+          started_at: string
+          week_start: string
+        }
+        Insert: {
+          ads_call_weekly_id?: string | null
+          created_at?: string
+          customer_id: string
+          id?: string
+          phone_e164: string
+          started_at: string
+          week_start: string
+        }
+        Update: {
+          ads_call_weekly_id?: string | null
+          created_at?: string
+          customer_id?: string
+          id?: string
+          phone_e164?: string
+          started_at?: string
+          week_start?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "google_ads_call_numbers_ads_call_weekly_id_fkey"
+            columns: ["ads_call_weekly_id"]
+            isOneToOne: false
+            referencedRelation: "ads_call_weekly"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       integration_health_snapshots: {
         Row: {
           check_name: string
@@ -352,12 +419,6 @@ export type Database = {
           ok?: boolean
           provider?: string
         }
-        Relationships: []
-      }
-      desk_chat_messages: {
-        Row: { id: string; sequence: number; created_at: string; role: string; sender: string; body: string; staff_user_id: string | null; agent_id: string | null; lead_id: string | null; reply_to: string | null; idempotency_key: string; metadata: Json }
-        Insert: { id?: string; created_at?: string; role: string; sender: string; body: string; staff_user_id?: string | null; agent_id?: string | null; lead_id?: string | null; reply_to?: string | null; idempotency_key: string; metadata?: Json }
-        Update: { body?: string; metadata?: Json }
         Relationships: []
       }
       lead_events: {
@@ -432,11 +493,11 @@ export type Database = {
           notes: string | null
           phone_e164: string | null
           photo_urls: Json | null
-          symptoms: string | null
-          unread_count: number
           square_gross_cents: number
           square_net_cents: number
           square_paid_at: string | null
+          symptoms: string | null
+          unread_count: number
           updated_at: string
           vehicle_make: string | null
           vehicle_mileage: number | null
@@ -471,10 +532,10 @@ export type Database = {
           notes?: string | null
           phone_e164?: string | null
           photo_urls?: Json | null
-          symptoms?: string | null
           square_gross_cents?: number
           square_net_cents?: number
           square_paid_at?: string | null
+          symptoms?: string | null
           unread_count?: number
           updated_at?: string
           vehicle_make?: string | null
@@ -510,10 +571,10 @@ export type Database = {
           notes?: string | null
           phone_e164?: string | null
           photo_urls?: Json | null
-          symptoms?: string | null
           square_gross_cents?: number
           square_net_cents?: number
           square_paid_at?: string | null
+          symptoms?: string | null
           unread_count?: number
           updated_at?: string
           vehicle_make?: string | null
@@ -522,7 +583,15 @@ export type Database = {
           vehicle_year?: number | null
           vin?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "leads_google_ads_call_id_fkey"
+            columns: ["google_ads_call_id"]
+            isOneToOne: false
+            referencedRelation: "google_ads_call_numbers"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       mcp_agents: {
         Row: {
@@ -1011,6 +1080,530 @@ export type Database = {
         }
         Relationships: []
       }
+      square_catalog_items: {
+        Row: {
+          is_deleted: boolean
+          item_type: string
+          name: string | null
+          square_id: string
+          synced_at: string
+          updated_at_square: string | null
+        }
+        Insert: {
+          is_deleted?: boolean
+          item_type: string
+          name?: string | null
+          square_id: string
+          synced_at?: string
+          updated_at_square?: string | null
+        }
+        Update: {
+          is_deleted?: boolean
+          item_type?: string
+          name?: string | null
+          square_id?: string
+          synced_at?: string
+          updated_at_square?: string | null
+        }
+        Relationships: []
+      }
+      square_customers: {
+        Row: {
+          created_at_square: string | null
+          deleted_at: string | null
+          email: string | null
+          lead_id: string | null
+          match_status: string
+          matched_at: string | null
+          phone_e164: string | null
+          square_id: string
+          synced_at: string
+          updated_at_square: string | null
+        }
+        Insert: {
+          created_at_square?: string | null
+          deleted_at?: string | null
+          email?: string | null
+          lead_id?: string | null
+          match_status?: string
+          matched_at?: string | null
+          phone_e164?: string | null
+          square_id: string
+          synced_at?: string
+          updated_at_square?: string | null
+        }
+        Update: {
+          created_at_square?: string | null
+          deleted_at?: string | null
+          email?: string | null
+          lead_id?: string | null
+          match_status?: string
+          matched_at?: string | null
+          phone_e164?: string | null
+          square_id?: string
+          synced_at?: string
+          updated_at_square?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "square_customers_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      square_dispute_evidence: {
+        Row: {
+          dispute_id: string
+          file_name: string | null
+          kind: string
+          link_url: string | null
+          note: string | null
+          status: string
+          storage_path: string | null
+          updated_at: string
+        }
+        Insert: {
+          dispute_id: string
+          file_name?: string | null
+          kind: string
+          link_url?: string | null
+          note?: string | null
+          status?: string
+          storage_path?: string | null
+          updated_at?: string
+        }
+        Update: {
+          dispute_id?: string
+          file_name?: string | null
+          kind?: string
+          link_url?: string | null
+          note?: string | null
+          status?: string
+          storage_path?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "square_dispute_evidence_dispute_id_fkey"
+            columns: ["dispute_id"]
+            isOneToOne: false
+            referencedRelation: "square_disputes"
+            referencedColumns: ["square_id"]
+          },
+        ]
+      }
+      square_disputes: {
+        Row: {
+          amount_cents: number
+          brand_dispute_id: string | null
+          card_brand: string | null
+          card_last4: string | null
+          created_at_square: string | null
+          currency: string
+          customer_id: string | null
+          due_by: string | null
+          lead_id: string | null
+          location_id: string | null
+          match_status: string
+          matched_at: string | null
+          payment_id: string | null
+          reason: string
+          reported_at: string | null
+          square_id: string
+          square_version: number | null
+          state: string
+          synced_at: string
+          updated_at_square: string | null
+        }
+        Insert: {
+          amount_cents: number
+          brand_dispute_id?: string | null
+          card_brand?: string | null
+          card_last4?: string | null
+          created_at_square?: string | null
+          currency?: string
+          customer_id?: string | null
+          due_by?: string | null
+          lead_id?: string | null
+          location_id?: string | null
+          match_status?: string
+          matched_at?: string | null
+          payment_id?: string | null
+          reason: string
+          reported_at?: string | null
+          square_id: string
+          square_version?: number | null
+          state: string
+          synced_at?: string
+          updated_at_square?: string | null
+        }
+        Update: {
+          amount_cents?: number
+          brand_dispute_id?: string | null
+          card_brand?: string | null
+          card_last4?: string | null
+          created_at_square?: string | null
+          currency?: string
+          customer_id?: string | null
+          due_by?: string | null
+          lead_id?: string | null
+          location_id?: string | null
+          match_status?: string
+          matched_at?: string | null
+          payment_id?: string | null
+          reason?: string
+          reported_at?: string | null
+          square_id?: string
+          square_version?: number | null
+          state?: string
+          synced_at?: string
+          updated_at_square?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "square_disputes_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      square_invoices: {
+        Row: {
+          amount_cents: number
+          created_at_square: string | null
+          currency: string
+          customer_id: string | null
+          invoice_number: string | null
+          lead_id: string | null
+          location_id: string | null
+          match_status: string
+          matched_at: string | null
+          order_id: string | null
+          recipient_email: string | null
+          recipient_phone_e164: string | null
+          square_id: string
+          status: string
+          synced_at: string
+          updated_at_square: string | null
+        }
+        Insert: {
+          amount_cents?: number
+          created_at_square?: string | null
+          currency?: string
+          customer_id?: string | null
+          invoice_number?: string | null
+          lead_id?: string | null
+          location_id?: string | null
+          match_status?: string
+          matched_at?: string | null
+          order_id?: string | null
+          recipient_email?: string | null
+          recipient_phone_e164?: string | null
+          square_id: string
+          status: string
+          synced_at?: string
+          updated_at_square?: string | null
+        }
+        Update: {
+          amount_cents?: number
+          created_at_square?: string | null
+          currency?: string
+          customer_id?: string | null
+          invoice_number?: string | null
+          lead_id?: string | null
+          location_id?: string | null
+          match_status?: string
+          matched_at?: string | null
+          order_id?: string | null
+          recipient_email?: string | null
+          recipient_phone_e164?: string | null
+          square_id?: string
+          status?: string
+          synced_at?: string
+          updated_at_square?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "square_invoices_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      square_order_line_items: {
+        Row: {
+          catalog_object_id: string | null
+          gross_cents: number | null
+          line_uid: string
+          name: string | null
+          order_square_id: string
+          quantity: string | null
+        }
+        Insert: {
+          catalog_object_id?: string | null
+          gross_cents?: number | null
+          line_uid: string
+          name?: string | null
+          order_square_id: string
+          quantity?: string | null
+        }
+        Update: {
+          catalog_object_id?: string | null
+          gross_cents?: number | null
+          line_uid?: string
+          name?: string | null
+          order_square_id?: string
+          quantity?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "square_order_line_items_order_square_id_fkey"
+            columns: ["order_square_id"]
+            isOneToOne: false
+            referencedRelation: "square_orders"
+            referencedColumns: ["square_id"]
+          },
+        ]
+      }
+      square_orders: {
+        Row: {
+          created_at_square: string | null
+          currency: string
+          customer_id: string | null
+          lead_id: string | null
+          location_id: string | null
+          match_status: string
+          matched_at: string | null
+          square_id: string
+          state: string
+          synced_at: string
+          total_cents: number
+          updated_at_square: string | null
+        }
+        Insert: {
+          created_at_square?: string | null
+          currency?: string
+          customer_id?: string | null
+          lead_id?: string | null
+          location_id?: string | null
+          match_status?: string
+          matched_at?: string | null
+          square_id: string
+          state: string
+          synced_at?: string
+          total_cents?: number
+          updated_at_square?: string | null
+        }
+        Update: {
+          created_at_square?: string | null
+          currency?: string
+          customer_id?: string | null
+          lead_id?: string | null
+          location_id?: string | null
+          match_status?: string
+          matched_at?: string | null
+          square_id?: string
+          state?: string
+          synced_at?: string
+          total_cents?: number
+          updated_at_square?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "square_orders_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      square_payments: {
+        Row: {
+          amount_cents: number
+          buyer_email: string | null
+          buyer_phone_e164: string | null
+          card_brand: string | null
+          card_last4: string | null
+          created_at_square: string | null
+          currency: string
+          customer_id: string | null
+          fee_cents: number
+          lead_id: string | null
+          location_id: string | null
+          match_status: string
+          matched_at: string | null
+          order_id: string | null
+          refunded_cents: number
+          source_type: string | null
+          square_id: string
+          status: string
+          synced_at: string
+          tip_cents: number
+          updated_at_square: string | null
+        }
+        Insert: {
+          amount_cents: number
+          buyer_email?: string | null
+          buyer_phone_e164?: string | null
+          card_brand?: string | null
+          card_last4?: string | null
+          created_at_square?: string | null
+          currency?: string
+          customer_id?: string | null
+          fee_cents?: number
+          lead_id?: string | null
+          location_id?: string | null
+          match_status?: string
+          matched_at?: string | null
+          order_id?: string | null
+          refunded_cents?: number
+          source_type?: string | null
+          square_id: string
+          status: string
+          synced_at?: string
+          tip_cents?: number
+          updated_at_square?: string | null
+        }
+        Update: {
+          amount_cents?: number
+          buyer_email?: string | null
+          buyer_phone_e164?: string | null
+          card_brand?: string | null
+          card_last4?: string | null
+          created_at_square?: string | null
+          currency?: string
+          customer_id?: string | null
+          fee_cents?: number
+          lead_id?: string | null
+          location_id?: string | null
+          match_status?: string
+          matched_at?: string | null
+          order_id?: string | null
+          refunded_cents?: number
+          source_type?: string | null
+          square_id?: string
+          status?: string
+          synced_at?: string
+          tip_cents?: number
+          updated_at_square?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "square_payments_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      square_refunds: {
+        Row: {
+          amount_cents: number
+          created_at_square: string | null
+          currency: string
+          location_id: string | null
+          order_id: string | null
+          payment_id: string | null
+          square_id: string
+          status: string
+          synced_at: string
+          updated_at_square: string | null
+        }
+        Insert: {
+          amount_cents: number
+          created_at_square?: string | null
+          currency?: string
+          location_id?: string | null
+          order_id?: string | null
+          payment_id?: string | null
+          square_id: string
+          status: string
+          synced_at?: string
+          updated_at_square?: string | null
+        }
+        Update: {
+          amount_cents?: number
+          created_at_square?: string | null
+          currency?: string
+          location_id?: string | null
+          order_id?: string | null
+          payment_id?: string | null
+          square_id?: string
+          status?: string
+          synced_at?: string
+          updated_at_square?: string | null
+        }
+        Relationships: []
+      }
+      square_sync_state: {
+        Row: {
+          cursor: string | null
+          last_count: number
+          last_error: string | null
+          last_started_at: string | null
+          last_success_at: string | null
+          resource: string
+          synced_through: string | null
+          updated_at: string
+        }
+        Insert: {
+          cursor?: string | null
+          last_count?: number
+          last_error?: string | null
+          last_started_at?: string | null
+          last_success_at?: string | null
+          resource: string
+          synced_through?: string | null
+          updated_at?: string
+        }
+        Update: {
+          cursor?: string | null
+          last_count?: number
+          last_error?: string | null
+          last_started_at?: string | null
+          last_success_at?: string | null
+          resource?: string
+          synced_through?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      square_webhook_events: {
+        Row: {
+          event_id: string
+          event_type: string
+          object_id: string | null
+          processed_at: string | null
+          received_at: string
+          status: string
+        }
+        Insert: {
+          event_id: string
+          event_type: string
+          object_id?: string | null
+          processed_at?: string | null
+          received_at?: string
+          status?: string
+        }
+        Update: {
+          event_id?: string
+          event_type?: string
+          object_id?: string | null
+          processed_at?: string | null
+          received_at?: string
+          status?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string
@@ -1034,9 +1627,32 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      square_revenue_weekly: {
+        Row: {
+          attributed_by_source: Json | null
+          avg_ticket_cents: number | null
+          gross_cents: number | null
+          net_cents: number | null
+          refund_cents: number | null
+          ticket_count: number | null
+          week_start: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
+      apply_lead_lifecycle_transition: {
+        Args: {
+          _actor: string
+          _event_type: string
+          _expected_from: Database["public"]["Enums"]["lead_lifecycle"]
+          _lead_id: string
+          _metadata?: Json
+          _summary: string
+          _to: Database["public"]["Enums"]["lead_lifecycle"]
+        }
+        Returns: Json
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -1046,6 +1662,15 @@ export type Database = {
       }
       is_staff: { Args: { _user_id: string }; Returns: boolean }
       read_agent_auth_secret: { Args: { secret_name: string }; Returns: string }
+      set_desk_appointment: {
+        Args: {
+          _actor: string
+          _appointment_at: string
+          _expected_appointment_at: string
+          _lead_id: string
+        }
+        Returns: Json
+      }
       write_agent_auth_secret: {
         Args: { secret_name: string; secret_value: string }
         Returns: undefined
