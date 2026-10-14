@@ -268,7 +268,7 @@ async function findByPhone(
 
 function requirePhone(raw: string): string | Response {
   const phone = toE164(raw);
-  if (!isSendableE164(phone)) {
+  if (!phone || !isSendableE164(phone)) {
     return json({ error: "Invalid phone number digit count" }, 422);
   }
   return phone;

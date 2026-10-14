@@ -72,6 +72,9 @@ export async function sendOutbound(args: {
   }
 
   const to = toE164(args.to);
+  if (!to) {
+    return { ok: false, reason: "Destination phone cannot be normalized to E.164" };
+  }
   try {
     const result = await sendSms({ to, text: args.text, capability: capability.capability });
     const message = await recordOutboundMessage({
