@@ -169,6 +169,11 @@ test("failures retry with last_error until max attempts, then go dead", () => {
   assert.equal(failureUpdate({ attempts: 5, max_attempts: 5 }).status, "dead");
   assert.equal(failureUpdate({ attempts: 5, max_attempts: 5 }).terminal, true);
   assert.equal(failureUpdate({ attempts: 8, max_attempts: 5 }).backoffMs, 30 * 60_000);
+  assert.deepEqual(failureUpdate({ attempts: 1, max_attempts: 5 }, { permanent: true }), {
+    status: "dead",
+    backoffMs: 60_000,
+    terminal: true,
+  });
 });
 
 test("error text never collapses an object to [object Object]", () => {

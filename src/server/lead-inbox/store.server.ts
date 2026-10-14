@@ -1,7 +1,14 @@
 // Supabase persistence for the lead inbox (service role, server-only).
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import type { Database } from "@/integrations/supabase/types";
-import { JOB_LEASE_MS, LEASE_EXPIRED_LAST_ERROR, decideClaim, failureUpdate } from "./job-lease";
+import type { Database, Json } from "@/integrations/supabase/types";
+import {
+  JOB_LEASE_MS,
+  LEASE_EXPIRED_LAST_ERROR,
+  PermanentJobError,
+  decideClaim,
+  failureUpdate,
+} from "./job-lease";
+import { decideInboundPhone, normalizeLeadPhone, stampInboundNeedsReview } from "./phone";
 
 type Tables = Database["public"]["Tables"];
 export type LeadRow = Tables["leads"]["Row"];
@@ -10,19 +17,21 @@ export type MessageRow = Tables["messages"]["Row"];
 export type JobRow = Tables["message_jobs"]["Row"];
 export type JobType = Database["public"]["Enums"]["message_job_type"];
 
-export function toE164(raw: string): string {
-  const digits = raw.replace(/[^\d+]/g, "");
-  if (digits.startsWith("+")) return digits;
-  if (digits.length === 10) return `+1${digits}`;
-  if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`;
-  return `+${digits}`;
+/** E.164 that satisfies leads_phone_e164_format, or null when it cannot. */
+export function toE164(raw: string | null | undefined): string | null {
+  return normalizeLeadPhone(raw);
 }
 
 export async function getOrCreateLeadThread(
   phoneRaw: string,
   leadSource: string,
 ): Promise<{ lead: LeadRow; thread: ThreadRow }> {
-  const phone = toE164(phoneRaw);
+  // Refuse before any insert so a bad phone cannot leave a lead row behind.
+  const decision = decideInboundPhone(phoneRaw);
+  if (decision.action === "skip") {
+    throw new PermanentJobError(decision.lastError);
+  }
+  const phone = decision.phone;
 
   const { data: existingThread, error: threadError } = await supabaseAdmin
     .from("message_threads")
@@ -409,18 +418,33 @@ export async function completeJob(id: string, lockedAt: string): Promise<boolean
   return Boolean(data);
 }
 
-export async function failJob(job: JobRow, message: string): Promise<void> {
-  const outcome = failureUpdate(job);
+export async function failJob(
+  job: JobRow,
+  message: string,
+  options?: { permanent?: boolean; disposition?: "needs_review" },
+): Promise<void> {
+  const outcome = failureUpdate(job, options?.permanent === true ? { permanent: true } : undefined);
   const lastError = (message.trim() || "Job failed").slice(0, 600);
+  const patch: {
+    status: "pending" | "dead";
+    last_error: string;
+    locked_at: null;
+    run_after: string;
+    completed_at: string | null;
+    payload?: Json;
+  } = {
+    status: outcome.status,
+    last_error: lastError,
+    locked_at: null,
+    run_after: new Date(Date.now() + outcome.backoffMs).toISOString(),
+    completed_at: outcome.terminal ? new Date().toISOString() : null,
+  };
+  if (options?.disposition === "needs_review") {
+    patch.payload = stampInboundNeedsReview(job.payload) as Json;
+  }
   let update = supabaseAdmin
     .from("message_jobs")
-    .update({
-      status: outcome.status,
-      last_error: lastError,
-      locked_at: null,
-      run_after: new Date(Date.now() + outcome.backoffMs).toISOString(),
-      completed_at: outcome.terminal ? new Date().toISOString() : null,
-    })
+    .update(patch)
     .eq("id", job.id)
     .eq("status", "processing");
   update = job.locked_at ? update.eq("locked_at", job.locked_at) : update.is("locked_at", null);

@@ -91,12 +91,29 @@ export function processingLeaseExpired(
   return now.getTime() - locked >= leaseMs;
 }
 
-export function failureUpdate(job: { attempts: number; max_attempts: number }): {
+/**
+ * A permanent failure is dead on the attempt that hit it. Retrying will not
+ * make an unstorable phone, or any other permanent input error, succeed.
+ */
+export class PermanentJobError extends Error {
+  readonly permanent = true as const;
+  readonly disposition = "needs_review" as const;
+
+  constructor(message: string) {
+    super(message);
+    this.name = "PermanentJobError";
+  }
+}
+
+export function failureUpdate(
+  job: { attempts: number; max_attempts: number },
+  options?: { permanent: boolean },
+): {
   status: "pending" | "dead";
   backoffMs: number;
   terminal: boolean;
 } {
-  const terminal = job.attempts >= job.max_attempts;
+  const terminal = options?.permanent === true || job.attempts >= job.max_attempts;
   const backoffMs = Math.min(30 * 60_000, 60_000 * 2 ** Math.max(0, job.attempts - 1));
   return { status: terminal ? "dead" : "pending", backoffMs, terminal };
 }

@@ -7,6 +7,7 @@ import { applyLifecycleTransition } from "./lifecycle.server";
 import {
   OPT_OUT_NOT_APPLIED_REASON,
   PROCESS_BUDGET_MS,
+  PermanentJobError,
   STALE_INBOUND_REASON,
   STALE_OPT_OUT_REASON,
   XAI_DECISION_TIMEOUT_MS,
@@ -17,6 +18,7 @@ import {
   reserveForJob,
   shouldWriteOptOut,
 } from "./job-lease";
+import { decideInboundPhone, normalizeLeadPhone } from "./phone";
 import {
   addEvent,
   claimJobs,
@@ -29,7 +31,6 @@ import {
   recordInboundMessage,
   releaseClaimedJob,
   threadHistory,
-  toE164,
 } from "./store.server";
 import type { JobRow } from "./store.server";
 
@@ -105,6 +106,13 @@ export async function processJobs(
       }
     } catch (error) {
       const message = errorText(error);
+      // Unstorable input (a phone that cannot be E.164) is dead on this
+      // attempt. Mark the inbound needs_review and keep the batch moving.
+      if (error instanceof PermanentJobError) {
+        await failJob(job, message, { permanent: true, disposition: error.disposition });
+        summary.failed += 1;
+        continue;
+      }
       if (
         error instanceof GrokDeniedError &&
         !error.retryable &&
@@ -158,20 +166,28 @@ export async function processInbound(
   deadlineMs = Date.now() + PROCESS_BUDGET_MS,
 ): Promise<void> {
   const payload = (job.payload ?? {}) as unknown as InboundPayload;
-  if (!payload.provider_message_id || !payload.from) {
-    throw new Error("Inbound job payload missing provider_message_id/from");
+  const phoneDecision = decideInboundPhone(payload.from);
+  if (phoneDecision.action === "skip") {
+    throw new PermanentJobError(phoneDecision.lastError);
   }
+  if (!payload.provider_message_id) {
+    throw new Error("Inbound job payload missing provider_message_id");
+  }
+  const phone = phoneDecision.phone;
 
   const body = payload.body ?? "";
   const providerCreatedAt = payload.provider_created_at ?? null;
-  const { lead, thread } = await getOrCreateLeadThread(payload.from, "RingCentral SMS");
+  const { lead, thread } = await getOrCreateLeadThread(phone, "RingCentral SMS");
   const inserted = await recordInboundMessage({
     leadId: lead.id,
     threadId: thread.id,
     providerMessageId: payload.provider_message_id,
     body,
-    senderE164: toE164(payload.from),
-    recipients: (payload.to ?? []).map(toE164),
+    senderE164: phone,
+    recipients: (payload.to ?? []).flatMap((value) => {
+      const normalized = normalizeLeadPhone(value);
+      return normalized ? [normalized] : [];
+    }),
     providerCreatedAt,
     channel: payload.channel === "MMS" ? "MMS" : "SMS",
     ...(payload.attachment_urls ? { attachmentUrls: payload.attachment_urls } : {}),
@@ -216,7 +232,7 @@ export async function processInbound(
       await sendOutbound({
         leadId: lead.id,
         threadId: thread.id,
-        to: payload.from,
+        to: phone,
         text: OPT_OUT_CONFIRMATION,
         idempotencyKey: `optout:${message.id}`,
         actor: "system",
@@ -283,7 +299,7 @@ export async function processInbound(
         await sendAgentReply({
           leadId: lead.id,
           threadId: thread.id,
-          to: payload.from,
+          to: phone,
           text,
           messageId: message.id,
           agentRunId: prior.id,
@@ -330,7 +346,7 @@ export async function processInbound(
         await sendAgentReply({
           leadId: lead.id,
           threadId: thread.id,
-          to: payload.from,
+          to: phone,
           text,
           messageId: message.id,
           agentRunId: raced.id,
@@ -398,7 +414,7 @@ export async function processInbound(
     await sendAgentReply({
       leadId: lead.id,
       threadId: thread.id,
-      to: payload.from,
+      to: phone,
       text: decision.reply_text,
       messageId: message.id,
       agentRunId: run?.id ?? null,

@@ -197,6 +197,9 @@ export const sendOwnerMessage = createServerFn({ method: "POST" })
 
     const { toE164 } = await import("@/server/lead-inbox/store.server");
     const leadPhone = toE164(lead.phone_e164);
+    if (!leadPhone) {
+      return { ok: false as const, reason: "Lead phone cannot be normalized to E.164" };
+    }
     if (thread.phone_e164 && toE164(thread.phone_e164) !== leadPhone) {
       return { ok: false as const, reason: "Lead phone and thread phone disagree — send blocked" };
     }
@@ -363,8 +366,8 @@ export const startOwnerSms = createServerFn({ method: "POST" })
     const { sendOutbound } = await import("@/server/lead-inbox/outbound.server");
 
     const normalized = toE164(data.phone);
-    const digitCount = normalized.replace(/\D/g, "").length;
-    if (digitCount < 10 || digitCount > 15) {
+    const digitCount = normalized ? normalized.replace(/\D/g, "").length : 0;
+    if (!normalized || digitCount < 10 || digitCount > 15) {
       return { ok: false as const, reason: "Invalid phone number digit count", leadId: null };
     }
 
