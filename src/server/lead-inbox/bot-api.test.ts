@@ -14,8 +14,10 @@ import {
   classifyIdempotencyHit,
   evaluateSendGates,
   isSendableE164,
+  emailLookupPattern,
   normalizeEmail,
   parseInboundSince,
+  prepareSendPayload,
   resolveStartLeadSource,
   screenOutboundText,
   type SendGateInput,
@@ -259,8 +261,12 @@ test("phone, email, source, and since parsers reject unsafe input", () => {
   assert.equal(isSendableE164("3125550100"), false);
   assert.equal(isSendableE164("+1312"), false);
   assert.equal(normalizeEmail("  Ada@Example.com "), "ada@example.com");
-  assert.equal(normalizeEmail("a%@example.com"), null);
+  assert.equal(normalizeEmail("anderson_darnell@ymail.com"), "anderson_darnell@ymail.com");
+  assert.equal(normalizeEmail("A%@Example.com"), "a%@example.com");
+  assert.equal(emailLookupPattern("anderson_darnell@ymail.com"), "anderson\\_darnell@ymail.com");
+  assert.equal(emailLookupPattern("a%@example.com"), "a\\%@example.com");
   assert.equal(normalizeEmail("not-an-email"), null);
+  assert.equal(normalizeEmail("bad\\escape@example.com"), null);
   assert.deepEqual(resolveStartLeadSource(undefined), { ok: true, source: "bot_outbound" });
   assert.deepEqual(resolveStartLeadSource("facebook_lead_ads_manual"), {
     ok: true,
@@ -272,6 +278,55 @@ test("phone, email, source, and since parsers reject unsafe input", () => {
   assert.equal(parseInboundSince("2026-10-06T14:00:00Z", now).ok, true);
   assert.equal(parseInboundSince("yesterday", now).ok, false);
   assert.equal(parseInboundSince("2026-01-01T00:00:00Z", now).ok, false);
+});
+
+test("a bad optional field is dropped and a valid underscore email is kept", () => {
+  const prepared = prepareSendPayload({
+    action: "send",
+    botName: "boltz-bots",
+    idempotencyKey: "follow-up-example-1",
+    text: "Hi, this is Boltz Automotive. Reply STOP to opt out.",
+    phone: "+17739572297",
+    email: "anderson_darnell@ymail.com",
+    vehicleYear: 1800,
+    leadSource: "yelp;drop",
+    extra: "nope",
+  });
+  const value = prepared.value as Record<string, unknown>;
+  assert.equal(value["email"], "anderson_darnell@ymail.com");
+  assert.equal("vehicleYear" in value, false);
+  assert.equal("leadSource" in value, false);
+  assert.equal("extra" in value, false);
+  assert.equal(value["phone"], "+17739572297");
+  assert.match(prepared.warnings.join(" "), /vehicleYear/);
+  assert.match(prepared.warnings.join(" "), /leadSource/);
+  assert.equal(
+    prepared.warnings.some((warning) => warning.startsWith("Dropped email")),
+    false,
+  );
+
+  const blocked = prepareSendPayload({
+    action: "send",
+    botName: "boltz-bots",
+    text: "Hi",
+    phone: "+17739572297",
+    leadId: "8ab0076d-bd7e-4788-b13e-1a641fbaeda1",
+    email: "not-an-email",
+    markConsentOptIn: true,
+  });
+  const blockedValue = blocked.value as Record<string, unknown>;
+  assert.equal("email" in blockedValue, false);
+  assert.equal("phone" in blockedValue, true);
+  assert.equal("markConsentOptIn" in blockedValue, false);
+  assert.match(blocked.warnings.join("\n"), /Dropped email because it is not a valid address/);
+
+  const phoneOnly = prepareSendPayload({
+    action: "send",
+    botName: "boltz-bots",
+    text: "Hi",
+    phone: "nope",
+  });
+  assert.equal((phoneOnly.value as Record<string, unknown>)["phone"], "nope");
 });
 
 test("actor is explicitly a bot", () => {
@@ -309,6 +364,9 @@ test("send checks idempotency, opt-out, and wording before writing or texting", 
   );
   assert.ok(handle.includes("eventMetadata: { bot_name: data.botName }"));
   assert.ok(handle.includes("botActor(data.botName)"));
+  assert.ok(handle.includes("prepareSendPayload("));
+  assert.ok(handle.includes("markContactedAfterOutboundSms("));
+  assert.equal(handle.includes("Invalid email"), false);
   assert.equal(serverSource.includes("CRON_SECRET"), false);
   assert.equal(serverSource.includes("SUPABASE_SERVICE_ROLE_KEY"), false);
 

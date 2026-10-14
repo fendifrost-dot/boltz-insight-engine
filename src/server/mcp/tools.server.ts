@@ -1,8 +1,14 @@
 // MCP tool I/O. Sends go through the bot API handler, which owns the shop gates.
 import { z } from "zod";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import { Constants, type Database } from "@/integrations/supabase/types";
-import { validateLifecycleEvidence, type LifecycleEvidence } from "@/lib/lifecycle-transitions";
+import { type Database } from "@/integrations/supabase/types";
+import {
+  canonicalLifecycle,
+  lifecycleValuesMessage,
+  outboundMessageSupportsContact,
+  validateLifecycleEvidence,
+  type LifecycleEvidence,
+} from "@/lib/lifecycle-transitions";
 import { secretStatus } from "@/server/lead-inbox/env.server";
 import { handleBotRequest } from "@/server/lead-inbox/bot-api.server";
 import { LEAD_SOURCE_PATTERN } from "@/server/lead-inbox/bot-api.policy";
@@ -35,11 +41,15 @@ type Lifecycle = Database["public"]["Enums"]["lead_lifecycle"];
 const STAFF_EVIDENCE = [
   "customer_message",
   "staff_observation",
+  "outbound_sms",
   "appointment_record",
   "inspection_record",
   "estimate_record",
   "manual_correction",
 ] as const;
+
+const OUTBOUND_SMS_EVIDENCE_ERROR =
+  "outbound_sms evidence_ref must be an outbound message id for this lead";
 
 const LEAD_COLUMNS =
   "id, name, phone_e164, email, consent_status, lifecycle, lead_source, vehicle_year, vehicle_make, vehicle_model, symptoms, notes, last_inbound_at, last_outbound_at, last_message_at, created_at";
@@ -239,7 +249,7 @@ const listSchema = z
   .strict();
 
 function isLifecycle(value: string): value is Lifecycle {
-  return (Constants.public.Enums.lead_lifecycle as readonly string[]).includes(value);
+  return canonicalLifecycle(value) !== null;
 }
 
 async function listLeads(args: unknown, now: Date): Promise<ToolOutcome> {
@@ -249,7 +259,7 @@ async function listLeads(args: unknown, now: Date): Promise<ToolOutcome> {
     return {
       resultCode: "invalid",
       isError: true,
-      value: { error: "status must be a lead lifecycle value" },
+      value: { error: lifecycleValuesMessage() },
     };
   }
   let sinceMs = now.getTime() - DEFAULT_SINCE_MS;
@@ -279,8 +289,10 @@ async function listLeads(args: unknown, now: Date): Promise<ToolOutcome> {
     .select(LEAD_COLUMNS)
     .gte("created_at", new Date(sinceMs).toISOString());
   if (parsed.data.source) query = query.eq("lead_source", parsed.data.source);
-  if (parsed.data.status && isLifecycle(parsed.data.status))
-    query = query.eq("lifecycle", parsed.data.status);
+  if (parsed.data.status) {
+    const status = canonicalLifecycle(parsed.data.status);
+    if (status) query = query.eq("lifecycle", status);
+  }
   const { data, error } = await query.order("created_at", { ascending: false }).limit(limit + 1);
   if (error) return dbFailed(error);
   const rows = (data ?? []) as LeadRecord[];
@@ -641,6 +653,23 @@ async function squarePaymentsTool(args: unknown): Promise<ToolOutcome> {
   return { resultCode: "ok", isError: false, value: result };
 }
 
+async function outboundMessageForLead(leadId: string, messageId: string): Promise<boolean> {
+  if (!z.string().uuid().safeParse(messageId).success) return false;
+  const { data, error } = await supabaseAdmin
+    .from("messages")
+    .select("id, lead_id, direction, delivery_state")
+    .eq("id", messageId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return false;
+  return outboundMessageSupportsContact({
+    leadId,
+    messageLeadId: data.lead_id,
+    direction: data.direction,
+    deliveryState: data.delivery_state,
+  });
+}
+
 const updateSchema = z
   .object({
     leadId: z.string().uuid(),
@@ -648,7 +677,11 @@ const updateSchema = z
     lifecycle: z.string().optional(),
     evidence: z
       .object({
-        basis: z.enum(STAFF_EVIDENCE),
+        basis: z.enum(STAFF_EVIDENCE, {
+          errorMap: () => ({
+            message: `basis must be one of: ${STAFF_EVIDENCE.join(", ")}`,
+          }),
+        }),
         evidenceRef: z.string().max(200).optional(),
         note: z.string().max(500).optional(),
       })
@@ -671,18 +704,22 @@ async function updateLead(
 
   let lifecycleResult: { applied: boolean; from: string; to: string } | null = null;
   if (parsed.data.lifecycle !== undefined) {
-    if (!isLifecycle(parsed.data.lifecycle)) {
+    const lifecycle = canonicalLifecycle(parsed.data.lifecycle);
+    if (!lifecycle) {
       return {
         resultCode: "invalid",
         isError: true,
-        value: { error: "lifecycle must be a lead lifecycle value" },
+        value: { error: lifecycleValuesMessage() },
       };
     }
     if (!parsed.data.evidence) {
       return {
         resultCode: "invalid",
         isError: true,
-        value: { error: "lifecycle changes require evidence" },
+        value: {
+          error:
+            "lifecycle changes require evidence.basis. After an outbound SMS, use outbound_sms and set evidenceRef to the outbound message id. A successful boltz_send_sms also moves New to Contacted.",
+        },
       };
     }
     const evidence: LifecycleEvidence = {
@@ -696,13 +733,33 @@ async function updateLead(
     if (!evidenceCheck.ok) {
       return { resultCode: "unprocessable", isError: true, value: { error: evidenceCheck.reason } };
     }
+    if (evidence.basis === "outbound_sms") {
+      const ref = evidence.evidenceRef?.trim() ?? "";
+      let verified = false;
+      try {
+        verified = await outboundMessageForLead(lead.id, ref);
+      } catch {
+        return {
+          resultCode: "error",
+          isError: true,
+          value: { error: "Could not verify the outbound message" },
+        };
+      }
+      if (!verified) {
+        return {
+          resultCode: "unprocessable",
+          isError: true,
+          value: { error: OUTBOUND_SMS_EVIDENCE_ERROR },
+        };
+      }
+    }
     const transition = await applyLifecycleTransition({
       leadId: lead.id,
       fromLifecycle: lead.lifecycle as Lifecycle,
-      toLifecycle: parsed.data.lifecycle,
+      toLifecycle: lifecycle,
       actor: `staff:mcp:${agent.name}`,
       evidence,
-      summary: `MCP agent ${agent.name} moved lifecycle to ${parsed.data.lifecycle}`,
+      summary: `MCP agent ${agent.name} moved lifecycle to ${lifecycle}`,
     });
     if (!transition.ok) {
       const resultCode =
@@ -711,10 +768,14 @@ async function updateLead(
           : transition.code === "validation"
             ? "unprocessable"
             : "error";
+      const reason =
+        transition.code === "rpc_error"
+          ? `Lifecycle update failed: ${redactDigits(transition.reason)}`
+          : transition.reason;
       return {
         resultCode,
         isError: true,
-        value: { error: transition.code === "rpc_error" ? "request failed" : transition.reason },
+        value: { error: reason },
       };
     }
     lifecycleResult = transition.applied

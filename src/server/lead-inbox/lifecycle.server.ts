@@ -1,11 +1,13 @@
 import {
   buildLifecycleEvidenceMetadata,
+  canonicalLifecycle,
   resolveTransitionActorKind,
   validateLifecycleTransition,
   type Lifecycle,
   type LifecycleEvidence,
 } from "@/lib/lifecycle-transitions";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { callApplyLeadLifecycleTransition, type LifecycleRpcClient } from "./lifecycle-rpc";
 
 type RpcTransitionPayload =
   | { status: "unchanged" }
@@ -54,24 +56,33 @@ export async function applyLifecycleTransition(args: {
   }
 
   const evidenceMetadata = buildLifecycleEvidenceMetadata(args.evidence, args.nowIso);
-  // Custom DB function; generated types don't include it, so call through a
-  // loosely typed rpc wrapper.
-  const rpc = supabaseAdmin.rpc as unknown as (
-    fn: string,
-    args: Record<string, unknown>,
-  ) => Promise<{ data: unknown; error: { message: string } | null }>;
-  const { data, error } = await rpc("apply_lead_lifecycle_transition", {
-    _lead_id: args.leadId,
-    _expected_from: args.fromLifecycle,
-    _to: args.toLifecycle,
-    _event_type: "lifecycle_changed",
-    _summary: args.summary ?? `Lifecycle moved to ${args.toLifecycle}`,
-    _actor: args.actor,
-    _metadata: {
-      ...evidenceMetadata,
-      proposed_to: args.toLifecycle,
-    },
-  });
+  // The generated Database types omit this function. Call it as a method on the
+  // client. Copying supabaseAdmin.rpc into a local and calling that copy drops
+  // `this` and throws before Postgres runs.
+  let data: unknown;
+  let error: { message: string } | null;
+  try {
+    const response = await callApplyLeadLifecycleTransition(
+      supabaseAdmin as unknown as LifecycleRpcClient,
+      {
+        _lead_id: args.leadId,
+        _expected_from: args.fromLifecycle,
+        _to: args.toLifecycle,
+        _event_type: "lifecycle_changed",
+        _summary: args.summary ?? `Lifecycle moved to ${args.toLifecycle}`,
+        _actor: args.actor,
+        _metadata: {
+          ...evidenceMetadata,
+          proposed_to: args.toLifecycle,
+        },
+      },
+    );
+    data = response.data;
+    error = response.error;
+  } catch (caught) {
+    const message = caught instanceof Error ? caught.message : "Lifecycle update failed";
+    return { ok: false, reason: message, code: "rpc_error" };
+  }
 
   if (error) {
     return { ok: false, reason: error.message, code: "rpc_error" };
@@ -79,7 +90,11 @@ export async function applyLifecycleTransition(args: {
 
   const payload = data as RpcTransitionPayload | null;
   if (!payload || typeof payload !== "object" || !("status" in payload)) {
-    return { ok: false, reason: "Lifecycle transition RPC returned an invalid payload", code: "rpc_error" };
+    return {
+      ok: false,
+      reason: "Lifecycle transition RPC returned an invalid payload",
+      code: "rpc_error",
+    };
   }
 
   if (payload.status === "unchanged") {
@@ -98,5 +113,42 @@ export async function applyLifecycleTransition(args: {
     return { ok: true, applied: true, from: args.fromLifecycle, to: args.toLifecycle };
   }
 
-  return { ok: false, reason: "Lifecycle transition RPC returned an unknown status", code: "rpc_error" };
+  return {
+    ok: false,
+    reason: "Lifecycle transition RPC returned an unknown status",
+    code: "rpc_error",
+  };
+}
+
+/**
+ * A successful bot text moves New to Contacted. Later stages, including Paid,
+ * are left untouched. A missing message id does not invent the move.
+ */
+export async function markContactedAfterOutboundSms(args: {
+  leadId: string;
+  fromLifecycle: string;
+  messageId: string | null;
+}): Promise<{ lifecycle: string; warning?: string }> {
+  const from = canonicalLifecycle(args.fromLifecycle);
+  if (!from || from !== "New" || !args.messageId) {
+    return { lifecycle: args.fromLifecycle };
+  }
+  try {
+    const result = await applyLifecycleTransition({
+      leadId: args.leadId,
+      fromLifecycle: "New",
+      toLifecycle: "Contacted",
+      actor: "system",
+      evidence: { basis: "outbound_sms", evidenceRef: args.messageId },
+      summary: "Outbound SMS sent; lifecycle moved from New to Contacted",
+    });
+    if (!result.ok) {
+      return { lifecycle: "New", warning: `Lead stayed New: ${result.reason}` };
+    }
+    if (result.applied) return { lifecycle: "Contacted" };
+    return { lifecycle: "New" };
+  } catch (caught) {
+    const message = caught instanceof Error ? caught.message : "lifecycle update failed";
+    return { lifecycle: "New", warning: `Lead stayed New: ${message}` };
+  }
 }

@@ -1,6 +1,7 @@
 // Pure gates for the bot SMS API. No database, no secret values logged.
 import { secretEqual } from "./env.server.ts";
 import { describeOutboundBlock, detectOptOut, validateOutbound } from "./safety.server.ts";
+import { CONSENT_BASIS } from "../../lib/start-owner-sms-policy.ts";
 import { createHash } from "node:crypto";
 
 /** Header bots send. Not Authorization, so CRON_SECRET cannot authenticate here. */
@@ -38,9 +39,175 @@ export function isSendableE164(phone: string): boolean {
 export function normalizeEmail(raw: string): string | null {
   const email = raw.trim().toLowerCase();
   if (email.length === 0 || email.length > 320) return null;
-  if (email.includes("%") || email.includes("_") || email.includes("\\")) return null;
+  // Backslash is rejected so a lookup pattern cannot change the LIKE escape.
+  if (email.includes("\\") || /[\s<>]/.test(email)) return null;
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return null;
   return email;
+}
+
+/**
+ * Escape LIKE metacharacters. `_` and `%` are valid in an email and must not
+ * widen an ilike lookup. The backslash is the default PostgreSQL LIKE escape.
+ */
+export function emailLookupPattern(email: string): string {
+  return email.replace(/[\\%_]/g, (character) => `\\${character}`);
+}
+
+const SEND_FIELDS = new Set([
+  "action",
+  "botName",
+  "text",
+  "phone",
+  "leadId",
+  "threadId",
+  "name",
+  "email",
+  "leadSource",
+  "vehicleYear",
+  "vehicleMake",
+  "vehicleModel",
+  "vehicleMileage",
+  "service",
+  "idempotencyKey",
+  "markConsentOptIn",
+  "consentEvidence",
+]);
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function isUuid(value: unknown): value is string {
+  return typeof value === "string" && UUID_RE.test(value);
+}
+
+function looseE164(raw: string): string | null {
+  const digits = raw.replace(/[^\d+]/g, "");
+  const e164 = digits.startsWith("+")
+    ? digits
+    : digits.length === 10
+      ? `+1${digits}`
+      : digits.length === 11 && digits.startsWith("1")
+        ? `+${digits}`
+        : `+${digits}`;
+  return isSendableE164(e164) ? e164 : null;
+}
+
+function boundedString(value: unknown, max: number): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (trimmed.length === 0 || trimmed.length > max) return null;
+  return trimmed;
+}
+
+function boundedInt(value: unknown, min: number, max: number): number | null {
+  if (typeof value !== "number" || !Number.isInteger(value)) return null;
+  if (value < min || value > max) return null;
+  return value;
+}
+
+/**
+ * Optional profile fields must not reject the SMS. Invalid ones are removed
+ * and named in warnings. Phone is removed only when a lead or thread id can
+ * still address the text.
+ */
+export function prepareSendPayload(input: unknown): { value: unknown; warnings: string[] } {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    return { value: input, warnings: [] };
+  }
+  const value: Record<string, unknown> = { ...(input as Record<string, unknown>) };
+  const warnings: string[] = [];
+  const drop = (field: string, reason: string) => {
+    delete value[field];
+    warnings.push(`Dropped ${field} because ${reason}`);
+  };
+
+  for (const key of Object.keys(value)) {
+    if (!SEND_FIELDS.has(key)) drop(key, "it is not a send field");
+  }
+
+  if ("email" in value) {
+    const email = typeof value["email"] === "string" ? normalizeEmail(value["email"]) : null;
+    if (!email) drop("email", "it is not a valid address");
+    else value["email"] = email;
+  }
+
+  if ("name" in value) {
+    const name = boundedString(value["name"], 200);
+    if (!name) drop("name", "it is not valid");
+    else value["name"] = name;
+  }
+
+  if ("leadSource" in value) {
+    const source = boundedString(value["leadSource"], 100);
+    if (!source || !LEAD_SOURCE_PATTERN.test(source)) {
+      drop("leadSource", "it is not a valid source label");
+    } else value["leadSource"] = source;
+  }
+
+  if ("vehicleYear" in value) {
+    const year = boundedInt(value["vehicleYear"], 1900, 2100);
+    if (year === null) drop("vehicleYear", "it is not valid");
+    else value["vehicleYear"] = year;
+  }
+
+  if ("vehicleMake" in value) {
+    const make = boundedString(value["vehicleMake"], 100);
+    if (!make) drop("vehicleMake", "it is not valid");
+    else value["vehicleMake"] = make;
+  }
+
+  if ("vehicleModel" in value) {
+    const model = boundedString(value["vehicleModel"], 100);
+    if (!model) drop("vehicleModel", "it is not valid");
+    else value["vehicleModel"] = model;
+  }
+
+  if ("vehicleMileage" in value) {
+    const mileage = boundedInt(value["vehicleMileage"], 0, 2_000_000);
+    if (mileage === null) drop("vehicleMileage", "it is not valid");
+    else value["vehicleMileage"] = mileage;
+  }
+
+  if ("service" in value) {
+    const service = boundedString(value["service"], 500);
+    if (!service) drop("service", "it is not valid");
+    else value["service"] = service;
+  }
+
+  if ("phone" in value) {
+    const hasOtherTarget = isUuid(value["leadId"]) || isUuid(value["threadId"]);
+    const phone = typeof value["phone"] === "string" ? looseE164(value["phone"]) : null;
+    if (!phone && hasOtherTarget) drop("phone", "it is not a valid phone number");
+  }
+
+  if ("consentEvidence" in value) {
+    const evidence = value["consentEvidence"];
+    const basis =
+      evidence && typeof evidence === "object" && !Array.isArray(evidence)
+        ? (evidence as Record<string, unknown>)["basis"]
+        : undefined;
+    const basisOk =
+      typeof basis === "string" && (CONSENT_BASIS as readonly string[]).includes(basis);
+    const note =
+      evidence && typeof evidence === "object"
+        ? (evidence as Record<string, unknown>)["note"]
+        : undefined;
+    const evidenceRef =
+      evidence && typeof evidence === "object"
+        ? (evidence as Record<string, unknown>)["evidenceRef"]
+        : undefined;
+    const noteOk = note === undefined || (typeof note === "string" && note.length <= 500);
+    const refOk =
+      evidenceRef === undefined || (typeof evidenceRef === "string" && evidenceRef.length <= 200);
+    if (!basisOk || !noteOk || !refOk) drop("consentEvidence", "it is not valid");
+  }
+
+  if (value["markConsentOptIn"] === true && !("consentEvidence" in value)) {
+    drop("markConsentOptIn", "consent evidence was missing or invalid");
+  } else if ("markConsentOptIn" in value && typeof value["markConsentOptIn"] !== "boolean") {
+    drop("markConsentOptIn", "it is not valid");
+  }
+
+  return { value, warnings };
 }
 
 export function resolveStartLeadSource(

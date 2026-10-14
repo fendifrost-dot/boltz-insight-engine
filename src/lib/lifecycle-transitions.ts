@@ -43,6 +43,7 @@ export const LIFECYCLE_EVIDENCE_BASIS = [
   "agent_decision",
   "customer_message",
   "staff_observation",
+  "outbound_sms",
   "appointment_record",
   "inspection_record",
   "estimate_record",
@@ -68,6 +69,7 @@ export type TransitionActorKind = "grok" | "staff" | "owner" | "system";
 const STAFF_EVIDENCE_BASIS: readonly LifecycleEvidenceBasis[] = [
   "customer_message",
   "staff_observation",
+  "outbound_sms",
   "appointment_record",
   "inspection_record",
   "estimate_record",
@@ -79,7 +81,40 @@ const OWNER_EVIDENCE_BASIS: readonly LifecycleEvidenceBasis[] = [
   "payment_record",
 ];
 
-const SYSTEM_EVIDENCE_BASIS: readonly LifecycleEvidenceBasis[] = ["system_rule", "payment_record"];
+const SYSTEM_EVIDENCE_BASIS: readonly LifecycleEvidenceBasis[] = [
+  "system_rule",
+  "payment_record",
+  "outbound_sms",
+];
+
+/** Match a stage name without caring about case or surrounding spaces. */
+export function canonicalLifecycle(raw: string): Lifecycle | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const exact = LIFECYCLE_VALUES.find((value) => value === trimmed);
+  if (exact) return exact;
+  const folded = trimmed.toLowerCase();
+  return LIFECYCLE_VALUES.find((value) => value.toLowerCase() === folded) ?? null;
+}
+
+export function lifecycleValuesMessage(): string {
+  return `Lifecycle must be one of: ${LIFECYCLE_VALUES.join(", ")}. Matching is case-insensitive.`;
+}
+
+/** An outbound text counts only when it belongs to this lead and did not fail. */
+export function outboundMessageSupportsContact(args: {
+  leadId: string;
+  messageLeadId: string | null;
+  direction: string | null;
+  deliveryState: string | null;
+}): boolean {
+  return (
+    args.messageLeadId === args.leadId &&
+    args.direction === "outbound" &&
+    args.deliveryState !== null &&
+    args.deliveryState !== "failed"
+  );
+}
 
 function funnelIndex(state: Lifecycle): number {
   return LIFECYCLE_FUNNEL.indexOf(state);
@@ -156,6 +191,7 @@ export function isAllowedLifecycleTransition(args: {
 
   if (actor === "system") {
     if (from === "New" && to === "New") return true;
+    if (from === "New" && to === "Contacted") return true;
     if (to === "Paid" && isFunnelState(from) && from !== "Paid") return true;
     return false;
   }
@@ -174,6 +210,33 @@ function validateDestinationEvidence(args: {
   evidence: LifecycleEvidence;
 }): { ok: true } | { ok: false; reason: string } {
   const { from, to, actor, evidence } = args;
+
+  if (evidence.basis === "outbound_sms") {
+    if (to !== "Contacted") {
+      return { ok: false, reason: "outbound_sms evidence only supports a move to Contacted" };
+    }
+    if (!hasEvidenceRef(evidence)) {
+      return {
+        ok: false,
+        reason: "outbound_sms requires evidence_ref set to the outbound message id",
+      };
+    }
+  }
+
+  if (actor === "system" && from === "New" && to === "Contacted") {
+    if (evidence.basis !== "outbound_sms") {
+      return {
+        ok: false,
+        reason: "System move from New to Contacted requires outbound_sms evidence",
+      };
+    }
+    if (!hasEvidenceRef(evidence)) {
+      return {
+        ok: false,
+        reason: "outbound_sms requires evidence_ref set to the outbound message id",
+      };
+    }
+  }
 
   if (to === "Appointment Scheduled") {
     if (evidence.basis !== "appointment_record") {

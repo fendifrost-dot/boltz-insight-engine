@@ -1,6 +1,7 @@
 // Pure MCP protocol, auth helpers, and send guards. No database and no secrets.
 import { createHash, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
+import { prepareSendPayload } from "../lead-inbox/bot-api.policy.ts";
 
 export const SERVER_NAME = "boltz-insight";
 export const SERVER_VERSION = "1.0.0";
@@ -40,6 +41,8 @@ export const INSTRUCTIONS = [
   "Sends refuse opted-out numbers, keep the 20-text daily cap, and refuse texts outside 8:00 AM-9:00 PM America/Chicago.",
   "botName must match this credential's agent name. idempotencyKey is required.",
   "A read scope cannot send or change a lead. leads.write cannot send SMS and cannot mark a lead Paid.",
+  "A successful bot SMS moves a New lead to Contacted. Stage names are case-insensitive. To record that move yourself, use evidence basis outbound_sms and set evidenceRef to the outbound message id.",
+  "Invalid optional send fields, including a bad email, are dropped and reported in warnings. They do not block the text.",
   "The shared shop chat is the receptionist conversation, separate from customer SMS. Read boltz_shop_chat using its cursor and reply with boltz_post_shop_message. Use boltz_shop_schedule for dated visits; do not infer times from lifecycle. Do not claim a desktop agent is online unless observed.",
   "Square revenue and payment reads are under the read scope. They do not create payments or invoices.",
 ].join(" ");
@@ -253,7 +256,7 @@ export const TOOLS: readonly ToolDef[] = [
     name: "boltz_send_sms",
     scope: "send",
     description:
-      "Send one SMS through the shop send path. Requires botName (must match this agent) and idempotencyKey. Refuses opted-out numbers, the daily cap (20 per number), banned wording, texts over 480 characters, and texts outside 8:00 AM-9:00 PM America/Chicago.",
+      "Send one SMS through the shop send path. Requires botName (must match this agent) and idempotencyKey. Refuses opted-out numbers, the daily cap (20 per number), banned wording, texts over 480 characters, and texts outside 8:00 AM-9:00 PM America/Chicago. A successful send moves a New lead to Contacted. Invalid optional fields such as email are dropped, named in warnings, and do not block the text.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -282,7 +285,7 @@ export const TOOLS: readonly ToolDef[] = [
     name: "boltz_update_lead",
     scope: "leads.write",
     description:
-      "Update lead notes and/or lifecycle using the staff lifecycle rules. Cannot mark a lead Paid. Notes replace the existing notes and are capped at 2000 characters.",
+      "Update lead notes and/or lifecycle using the staff lifecycle rules. Stage names are case-insensitive (contacted and Contacted are the same). Cannot mark a lead Paid. Lifecycle changes require evidence.basis. Use outbound_sms with evidenceRef set to the outbound message id after a text. Other bases: customer_message, staff_observation, appointment_record, inspection_record, estimate_record, manual_correction. Later stages still require their own records. Notes replace the existing notes and are capped at 2000 characters.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -290,7 +293,11 @@ export const TOOLS: readonly ToolDef[] = [
       properties: {
         leadId: uuidSchema,
         notes: { type: "string", maxLength: 2000 },
-        lifecycle: { type: "string" },
+        lifecycle: {
+          type: "string",
+          description:
+            "Lead stage. Case-insensitive. Canonical values include New, Contacted, Qualified, Appointment Scheduled, Inspected, Estimate Sent, Approved, In Progress, Completed, Paid, Lost, No response, No-show, Duplicate, Spam, and Outside service capability.",
+        },
         evidence: {
           type: "object",
           properties: {
@@ -558,33 +565,51 @@ function issuesOf(error: z.ZodError): { path: string; message: string }[] {
  * Opt-out, the daily cap, wording, mismatch, and idempotency replay run in the
  * bot send handler passed as dispatch (handleBotRequest).
  */
+function attachWarnings(outcome: ToolOutcome, warnings: readonly string[]): ToolOutcome {
+  if (warnings.length === 0) return outcome;
+  if (!outcome.value || typeof outcome.value !== "object" || Array.isArray(outcome.value)) {
+    return outcome;
+  }
+  return { ...outcome, value: { ...outcome.value, warnings } };
+}
+
 export async function executeMcpSend(args: {
   agentName: string;
   input: unknown;
   now: Date;
   dispatch: (request: Request) => Promise<Response>;
 }): Promise<ToolOutcome> {
-  const parsed = sendArgsSchema.safeParse(args.input);
+  const prepared = prepareSendPayload(args.input);
+  const parsed = sendArgsSchema.safeParse(prepared.value);
   if (!parsed.success) {
-    return {
-      resultCode: "invalid",
-      isError: true,
-      value: { ok: false, error: "Invalid arguments", issues: issuesOf(parsed.error) },
-    };
+    return attachWarnings(
+      {
+        resultCode: "invalid",
+        isError: true,
+        value: { ok: false, error: "Invalid arguments", issues: issuesOf(parsed.error) },
+      },
+      prepared.warnings,
+    );
   }
   if (parsed.data.botName !== args.agentName) {
-    return {
-      resultCode: "forbidden",
-      isError: true,
-      value: { ok: false, error: "botName must match the agent credential" },
-    };
+    return attachWarnings(
+      {
+        resultCode: "forbidden",
+        isError: true,
+        value: { ok: false, error: "botName must match the agent credential" },
+      },
+      prepared.warnings,
+    );
   }
   if (!isWithinTextingHours(args.now)) {
-    return {
-      resultCode: "quiet_hours",
-      isError: true,
-      value: { ok: false, code: "quiet_hours", error: QUIET_HOURS_REASON },
-    };
+    return attachWarnings(
+      {
+        resultCode: "quiet_hours",
+        isError: true,
+        value: { ok: false, code: "quiet_hours", error: QUIET_HOURS_REASON },
+      },
+      prepared.warnings,
+    );
   }
 
   const data = parsed.data;
@@ -622,7 +647,10 @@ export async function executeMcpSend(args: {
     body = { ok: false, error: "Send path returned a non-JSON response" };
   }
   const resultCode = resultCodeForBotStatus(response.status, body);
-  return { resultCode, isError: response.status >= 400, value: body };
+  return attachWarnings(
+    { resultCode, isError: response.status >= 400, value: body },
+    prepared.warnings,
+  );
 }
 
 export function redactDigits(value: string): string {
