@@ -15,6 +15,7 @@ import { LEAD_SOURCE_PATTERN } from "@/server/lead-inbox/bot-api.policy";
 import { applyLifecycleTransition } from "@/server/lead-inbox/lifecycle.server";
 import { agentCircuitState, sanitizeLeadUpdates } from "@/server/lead-inbox/jobs.server";
 import { cachedCapability } from "@/server/lead-inbox/outbound.server";
+import { callLogTool } from "@/server/lead-inbox/call-log.server";
 import { detectOptOut } from "@/server/lead-inbox/safety.server";
 import { addEvent } from "@/server/lead-inbox/store.server";
 import { adsConfigError } from "@/server/google-ads/env.server";
@@ -860,6 +861,8 @@ export function createBoltzMcpTools(): McpToolRunner {
           return squarePaymentsTool(ctx.args);
         case "boltz_disputes":
           return disputesTool(ctx.args);
+        case "boltz_call_log":
+          return callLogTool(ctx.args, ctx.now);
         case "boltz_send_sms":
           return executeMcpSend({
             agentName: ctx.agent.name,

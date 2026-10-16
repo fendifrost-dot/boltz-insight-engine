@@ -26,7 +26,10 @@ themselves in-handler.
 
 - `env.server.ts` — secret reads, presence-only status, masked identifiers, constant-time compare.
 - `ringcentral.server.ts` — JWT OAuth (token cached), phone-number/SMS-capability probe,
-  `SmsSender` vs `A2PSmsSender` send paths, subscription create/renew/get, message-store list.
+  `SmsSender` vs `A2PSmsSender` send paths, subscription create/renew/get, message-store list,
+  and a GET-only call-log page (`ReadCallLog`).
+- `call-log.ts` / `call-log.server.ts` — read-only call history for `boltz_call_log` on
+  `POST /api/public/mcp`. No send path. Opted-out numbers are still returned.
 - `grok.server.ts` — xAI chat completion with a Boltz-fact-locked system prompt returning a
   strict JSON decision (`send` / `escalate` / `no_reply`), lead field updates, lifecycle proposal.
 - `safety.server.ts` — deterministic pre-model rules: STOP/START keywords, escalation triggers,
@@ -67,6 +70,12 @@ themselves in-handler.
 
 Values are never rendered, logged, or returned — `/integration-health` shows
 Configured/Missing plus masked identifiers only. `.env.example` stays blank.
+
+Call history uses those same secrets. No new secret is required. The RingCentral app
+must include the application permission `ReadCallLog` (not `ReadCallRecording`). If the
+JWT was issued before that permission was enabled, generate a new JWT and replace
+`RINGCENTRAL_JWT`. Account-wide call history also needs the user permission
+`FullCompanyCallLog`; otherwise the tool reads the JWT extension's own call log.
 
 ## Cron scheduling (after publish, once `PUBLIC_APP_URL` is set)
 

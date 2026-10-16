@@ -45,6 +45,7 @@ export const INSTRUCTIONS = [
   "Invalid optional send fields, including a bad email, are dropped and reported in warnings. They do not block the text.",
   "The shared shop chat is the receptionist conversation, separate from customer SMS. Read boltz_shop_chat using its cursor and reply with boltz_post_shop_message. Use boltz_shop_schedule for dated visits; do not infer times from lifecycle. Do not claim a desktop agent is online unless observed.",
   "Square revenue and payment reads are under the read scope. They do not create payments or invoices.",
+  "boltz_call_log reads RingCentral call history for the account or main line. It never sends SMS. Opted-out numbers are still shown. Times are America/Chicago. since can be up to 372 days back. mode summary groups outside numbers.",
 ].join(" ");
 
 export interface McpAgent {
@@ -145,6 +146,42 @@ export const TOOLS: readonly ToolDef[] = [
         leadId: uuidSchema,
         threadId: uuidSchema,
         limit: { type: "integer", minimum: 1, maximum: 100 },
+      },
+    },
+  },
+  {
+    name: "boltz_call_log",
+    scope: "read",
+    description:
+      "Read-only RingCentral call history for the shop account or main line. Does not send SMS. Opted-out numbers are included. since is required (YYYY-MM-DD in America/Chicago or an ISO timestamp) and can be up to 372 days back. until defaults to now. direction is inbound or outbound. phone filters one number. weekday is a Chicago weekday such as Friday. line is any (default) or main. mode is list (default) or summary. summary groups outside numbers with count, weekdays, times of day, hours, and first and last seen. Pass nextCursor to continue. Times are America/Chicago.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["since"],
+      properties: {
+        since: {
+          type: "string",
+          description: "YYYY-MM-DD or ISO timestamp. Inclusive. At most 372 days before today.",
+        },
+        until: {
+          type: "string",
+          description: "YYYY-MM-DD or ISO timestamp. Inclusive end. Defaults to now.",
+        },
+        direction: { type: "string", enum: ["inbound", "outbound"] },
+        phone: { type: "string" },
+        weekday: { type: "string", description: "America/Chicago weekday name, such as Friday." },
+        line: {
+          type: "string",
+          enum: ["any", "main"],
+          description:
+            "main limits results to the shop main line. any reads the account or extension log.",
+        },
+        mode: { type: "string", enum: ["list", "summary"] },
+        limit: { type: "integer", minimum: 1, maximum: 100 },
+        cursor: {
+          type: "string",
+          description: "nextCursor from the previous page. Same filters required.",
+        },
       },
     },
   },
@@ -418,6 +455,10 @@ const SUMMARY_KEYS = [
   "markConsentOptIn",
   "disputeId",
   "dueWithinDays",
+  "direction",
+  "weekday",
+  "mode",
+  "line",
 ] as const;
 
 const FORBIDDEN_SUMMARY_KEYS = [
@@ -429,6 +470,7 @@ const FORBIDDEN_SUMMARY_KEYS = [
   "notes",
   "from",
   "service",
+  "cursor",
 ];
 
 /** Args stored on the audit row. Message bodies and phone numbers are not copied. */
@@ -443,6 +485,9 @@ export function summarizeToolArgs(args: Record<string, unknown>): Record<string,
     summary["emailPresent"] = typeof args["email"] === "string" && args["email"] !== "";
   if ("name" in args)
     summary["namePresent"] = typeof args["name"] === "string" && args["name"] !== "";
+  if ("cursor" in args) {
+    summary["cursorPresent"] = typeof args["cursor"] === "string" && args["cursor"] !== "";
+  }
 
   for (const key of SUMMARY_KEYS) {
     if (!(key in args)) continue;

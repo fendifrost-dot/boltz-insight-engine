@@ -1,11 +1,38 @@
 // RingCentral REST adapter. Server-only: never call from the browser.
-import { readSecret, requireSecret } from "./env.server";
+import {
+  callLogRequestPath,
+  parseRingCentralError,
+  type CallLogPageQuery,
+  type RawCallRecord,
+} from "./call-log.ts";
+import { readSecret, requireSecret } from "./env.server.ts";
 
-type TokenCache = { token: string; expiresAt: number };
+type TokenCache = { token: string; expiresAt: number; scopes: string[] };
 let tokenCache: TokenCache | undefined;
+
+export class RingCentralHttpError extends Error {
+  readonly status: number;
+  readonly errorCode: string | null;
+  readonly permissionNames: string[];
+
+  constructor(path: string, status: number, body: string) {
+    const parsed = parseRingCentralError(body);
+    const safePath = path.split("?")[0] ?? path;
+    super(`RingCentral ${safePath} failed (${status}): ${redact(body)}`);
+    this.name = "RingCentralHttpError";
+    this.status = status;
+    this.errorCode = parsed.errorCode;
+    this.permissionNames = parsed.permissionNames;
+  }
+}
 
 function baseUrl(): string {
   return requireSecret("RINGCENTRAL_SERVER_URL").replace(/\/+$/, "");
+}
+
+function parseScopes(scope: unknown): string[] {
+  if (typeof scope !== "string") return [];
+  return scope.split(/\s+/).filter((part) => part.length > 0 && part.length < 80);
 }
 
 export async function getAccessToken(): Promise<string> {
@@ -31,14 +58,23 @@ export async function getAccessToken(): Promise<string> {
   });
 
   if (!res.ok) {
-    throw new Error(`RingCentral token request failed (${res.status}): ${redact(await res.text())}`);
+    throw new RingCentralHttpError("/restapi/oauth/token", res.status, await res.text());
   }
-  const json = (await res.json()) as { access_token: string; expires_in: number };
+  const json = (await res.json()) as { access_token?: string; expires_in?: number; scope?: string };
+  if (!json.access_token)
+    throw new Error("RingCentral token response did not include an access token");
   tokenCache = {
     token: json.access_token,
     expiresAt: now + (json.expires_in ?? 3600) * 1000,
+    scopes: parseScopes(json.scope),
   };
   return tokenCache.token;
+}
+
+/** Permission names from the current JWT, such as SMS or ReadCallLog. Never the token. */
+export async function grantedScopes(): Promise<string[]> {
+  await getAccessToken();
+  return tokenCache?.scopes ?? [];
 }
 
 async function rcFetch(path: string, init: RequestInit = {}): Promise<Response> {
@@ -52,7 +88,7 @@ async function rcFetch(path: string, init: RequestInit = {}): Promise<Response> 
 async function rcJson<T>(path: string, init: RequestInit = {}): Promise<T> {
   const res = await rcFetch(path, init);
   const text = await res.text();
-  if (!res.ok) throw new Error(`RingCentral ${path} failed (${res.status}): ${redact(text)}`);
+  if (!res.ok) throw new RingCentralHttpError(path, res.status, text);
   return (text ? JSON.parse(text) : {}) as T;
 }
 
@@ -197,6 +233,21 @@ export type RcStoreMessage = {
   to?: { phoneNumber?: string }[];
   attachments?: { id?: number | string; contentType?: string; uri?: string }[];
 };
+
+export async function readCallLogPage(query: CallLogPageQuery): Promise<{
+  records: RawCallRecord[];
+  hasNext: boolean;
+}> {
+  const path = callLogRequestPath(query);
+  const json = await rcJson<{
+    records?: RawCallRecord[];
+    navigation?: { nextPage?: { uri?: string } };
+  }>(path, { method: "GET" });
+  const records = Array.isArray(json.records) ? json.records : [];
+  const navigation = json.navigation;
+  const hasNext = navigation ? Boolean(navigation.nextPage?.uri) : records.length >= query.perPage;
+  return { records, hasNext };
+}
 
 export async function listRecentMessages(sinceIso: string): Promise<RcStoreMessage[]> {
   const params = new URLSearchParams({

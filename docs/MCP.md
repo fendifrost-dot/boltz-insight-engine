@@ -1,6 +1,6 @@
 # Boltz Insight MCP
 
-Remote MCP connector for shop bots (lead follow-up, chief of staff, and the others). Streamable HTTP, JSON responses. The bot reads leads and threads and sends SMS through the same path as `POST /api/public/bot`. It does not use `BOT_API_SECRET`, a staff session, or `CRON_SECRET`.
+Remote MCP connector for shop bots (lead follow-up, chief of staff, and the others). Streamable HTTP, JSON responses. The bot reads leads, threads, and the RingCentral call log, and sends SMS through the same path as `POST /api/public/bot`. It does not use `BOT_API_SECRET`, a staff session, or `CRON_SECRET`.
 
 After a Lovable publish:
 
@@ -78,6 +78,7 @@ Browser roles cannot read these tables. RLS is enabled and forced, `anon` and `a
 | `boltz_lookup_lead`        | `read`                  | One lead by `phone`, `email`, or `leadId`, plus its thread.                                                                                                                                          |
 | `boltz_list_leads`         | `read`                  | Recent leads. `source`, `status` (lifecycle), `since`, `limit` (1–100, default 25). Default `since` is 7 days.                                                                                       |
 | `boltz_thread_messages`    | `read`                  | Messages on a thread (`phone`, `leadId`, or `threadId`).                                                                                                                                             |
+| `boltz_call_log`           | `read`                  | Read-only RingCentral call history. `since` can be 372 days back. `mode` `summary` groups outside numbers. Does not send SMS. Opted-out numbers are included.                                      |
 | `boltz_inbound_since`      | `read`                  | Inbound SMS since an ISO timestamp, at most 30 days back.                                                                                                                                            |
 | `boltz_lead_status`        | `read`                  | Lifecycle, consent, and `optedOut` (consent or a latest inbound STOP / UNSUBSCRIBE / CANCEL / END / QUIT).                                                                                           |
 | `boltz_integration_health` | `read`                  | Which secrets are configured (never the values), recent checks, SMS capability.                                                                                                                      |
@@ -90,6 +91,20 @@ Browser roles cannot read these tables. RLS is enabled and forced, `anon` and `a
 | `boltz_update_lead`        | `leads.write`           | Replace notes and/or move lifecycle under the staff rules. Cannot mark Paid.                                                                                                                         |
 
 `boltz_ads_calls` stores the weekly aggregate the same way `POST /api/public/cron/ads-calls` does. It does not send a text.
+
+### Call log
+
+`boltz_call_log` reads the RingCentral call log with the same JWT the shop already uses for SMS (`RINGCENTRAL_CLIENT_ID`, `RINGCENTRAL_CLIENT_SECRET`, `RINGCENTRAL_JWT`, `RINGCENTRAL_SERVER_URL`). It does not send a text. Numbers that have opted out are still returned.
+
+`since` is required. `until` defaults to now. Both accept `YYYY-MM-DD` in America/Chicago or an ISO timestamp. `since` can be up to 372 days before today. `direction` is `inbound` or `outbound`. `phone` matches either party. `weekday` is a Chicago weekday name such as `Friday`. `line` is `any` (default) or `main` (only calls that involve `RINGCENTRAL_FROM_NUMBER`). `mode` is `list` (default) or `summary`.
+
+List rows include the Chicago time and offset, weekday, time of day, direction, from, to, caller ID name, result (`answered`, `missed`, `voicemail`, or `other`), the provider result, and duration in seconds. `nextCursor` continues the same filters. Summary groups each outside number with a count, weekdays, times of day, local hours, and first and last seen.
+
+The account call log is requested first. If that user cannot read the company call log, the tool reads the JWT extension's own call log and says so. Recordings are not requested.
+
+RingCentral requires the application permission **ReadCallLog**. ReadCallRecording is not required. If the tool returns `forbidden`, open the app that owns `RINGCENTRAL_CLIENT_ID` at https://developers.ringcentral.com/my-account.html#/applications, enable ReadCallLog, save, generate a new JWT for the same user, and replace `RINGCENTRAL_JWT` in Lovable Cloud. Do not paste the JWT into chat. Company-wide history also needs the user permission FullCompanyCallLog. Without it, the result stays on the extension that owns the main line.
+
+One call scans at most 8 pages of up to 1000 records so it stays inside RingCentral's heavy rate group. A truncated result includes `nextCursor`.
 
 `boltz_square_revenue`, `boltz_square_payments`, and `boltz_disputes` read stored Square data. They do not create payments or invoices, they do not submit dispute evidence, and they do not mark a lead Paid. A `read` scope still cannot mark Paid. `boltz_integration_health` includes `square.disputeAlert` for disputes due within 3 days. Setup and the webhook are in `docs/SQUARE.md`.
 
