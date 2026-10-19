@@ -196,8 +196,8 @@ Useful only if you need to interpret a `500` about a field name.
 Endpoint: `POST /api/public/cron/ads-weekly`, auth
 `Authorization: Bearer <CRON_SECRET>`. Source:
 `src/routes/api/public/cron/ads-weekly.ts` →
-`src/server/google-ads/reports.server.ts`. Google Ads REST API **v22**, via
-`googleAds:searchStream`.
+`src/server/google-ads/reports.server.ts`. Google Ads REST API version from
+`src/server/google-ads/api-version.ts` (currently **v26**), via `googleAds:searchStream`.
 
 Three queries run per call:
 
