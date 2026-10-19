@@ -92,6 +92,7 @@ Live path today:
 ```
 src/lib/google-ads.functions.ts        (owner-gated server fns, UI-facing)
   └── src/server/google-ads/client.server.ts   (OAuth refresh, GAQL searchStream, redaction, adsMutate)
+        ├── src/server/google-ads/api-version.ts (single Google Ads REST version pin)
         └── src/server/google-ads/env.server.ts  (process.env secret access, masking)
 ```
 
@@ -232,8 +233,9 @@ below has been demonstrated end to end:
 - that real Search Terms and Keywords come back,
 - that campaign/ad-group names and all metrics are populated,
 - that totals reconcile against the Google Ads UI,
-- that the API version (`v22`, set in `client.server.ts`) is still current and
-  that every selected field is valid for this account's campaign types.
+- that the API version (the single constant in `src/server/google-ads/api-version.ts`)
+  is still on Google's supported list and that every selected field is valid for
+  this account's campaign types.
 
 Field selection follows the handoff's specified lists, but **an invalid or
 sunset field fails the whole GAQL query at request time**, and only a live call

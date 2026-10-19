@@ -48,9 +48,11 @@ Campaign and ad-group names came back as real strings (e.g.
 1. **The whole point of the exercise:** Search Terms and Keywords are retrievable
    with no signed-in browser anywhere in the path. The call carried only a bearer
    token; credentials were server-side OAuth throughout.
-2. **The GAQL is valid** against this account on API `v22`. Every selected field
-   resolved — the risk that a single bad field name would fail the entire query
-   is now closed, and it could only ever have been closed by a live call.
+2. **The GAQL is valid** against this account on the API version pinned for that
+   run. Every selected field resolved — the risk that a single bad field name
+   would fail the entire query is now closed, and it could only ever have been
+   closed by a live call. That pin was later sunset (7 October 2026); the client
+   now uses the single constant in `src/server/google-ads/api-version.ts` (v26).
 3. **Account-time-zone date resolution is working, and demonstrably matters.**
    The run happened at ~00:36 UTC on 2026-09-24, which was still 2026-09-23 in
    America/Chicago. The endpoint correctly returned `end=2026-09-22` (yesterday
