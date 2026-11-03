@@ -172,14 +172,16 @@ export const FIRST_TOUCH_CREATED_CUTOFF_MS = Date.parse("2026-10-01T00:00:00.000
 /** Reconciliation must not first-touch a lead older than the incremental window. */
 export const RECONCILE_FIRST_TOUCH_MAX_AGE_MS = 2 * 60 * 60 * 1000;
 
-export type FirstTouchIngestMethod = "WEBHOOK" | "RECONCILIATION" | "MANUAL_IMPORT";
+export type FirstTouchIngestMethod =
+  "WEBHOOK" | "RECONCILIATION" | "MANUAL_IMPORT" | "MAKE" | "EMAIL";
 
 /**
  * Whether ingest may enqueue `process_meta_lead`.
  * Missing or unparseable `created_time` fails closed.
  * Every method refuses a lead created before `FIRST_TOUCH_CREATED_CUTOFF_MS`.
  * Reconciliation also refuses a lead older than 2 hours, so the nightly 7-day
- * pull cannot text a backlog. A live webhook after the cutoff still can.
+ * pull cannot text a backlog. A live webhook, Make delivery, or email payload
+ * after the cutoff still can. SMS still requires META_AUTO_FIRST_TOUCH.
  */
 export function enqueuesFirstTouch(args: {
   method: FirstTouchIngestMethod;

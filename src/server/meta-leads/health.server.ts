@@ -340,6 +340,9 @@ export async function getMetaHealth() {
         WEBHOOK: viaWebhook,
         RECONCILIATION: viaReconciliation,
         MANUAL_IMPORT: viaManual,
+        // MAKE and EMAIL, counted without filtering on those enum labels so a
+        // health read still works before the additive migration is applied.
+        OTHER: Math.max(0, total - viaWebhook - viaReconciliation - viaManual),
       },
     },
     recent,

@@ -1,6 +1,12 @@
-// Writes parsed notification emails into public.leads. Never enqueues a job
-// and never sends SMS or email. Receipts make a replay a no-op.
+// Writes parsed notification emails into public.leads. Yelp, Durable, and Google
+// never enqueue a job and never send. Meta lead mail uses the Meta ingest path
+// (no Graph; no SMS while META_AUTO_FIRST_TOUCH is off). Receipts make a replay a no-op.
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import {
+  applyMetaLeadEmail,
+  receiptMetaLeadNotice,
+  reconcileMetaLeadsFromEmailNotice,
+} from "@/server/meta-leads/email-fallback.server";
 import { addEvent } from "@/server/lead-inbox/store.server";
 import { gmailLeadQuery } from "./gmail-query";
 import { gmailConfigError, listGmailLeadMessages } from "./gmail.server";
@@ -23,6 +29,12 @@ export type EmailIntakeSummary = {
   truncated: boolean;
   bySource: Record<EmailLeadSource, number>;
   error: string | null;
+  metaNotices: number;
+  metaLeads: number;
+  metaIngested: number;
+  metaDuplicates: number;
+  metaFailed: number;
+  metaReconciled: boolean;
 };
 
 const EMPTY_BY_SOURCE: Record<EmailLeadSource, number> = {
@@ -50,6 +62,12 @@ export async function ingestEmailLeads(args: {
     truncated: false,
     bySource: { ...EMPTY_BY_SOURCE },
     error: null,
+    metaNotices: 0,
+    metaLeads: 0,
+    metaIngested: 0,
+    metaDuplicates: 0,
+    metaFailed: 0,
+    metaReconciled: false,
   };
   const configError = gmailConfigError();
   if (configError) {
@@ -68,7 +86,36 @@ export async function ingestEmailLeads(args: {
   );
   summary.scanned = inWindow.length;
 
+  const pendingNotices: { messageId: string; receivedAt: string | null }[] = [];
+
   for (const message of inWindow) {
+    let meta: Awaited<ReturnType<typeof applyMetaLeadEmail>> | null = null;
+    try {
+      meta = await applyMetaLeadEmail({
+        messageId: message.messageId,
+        from: message.from,
+        subject: message.subject,
+        body: message.body,
+        csvText: message.csvText,
+        receivedAt: message.receivedAt,
+        dryRun: args.mode === "dry-run",
+      });
+    } catch {
+      summary.failed += 1;
+      summary.metaFailed += 1;
+    }
+    if (meta && meta.kind !== "ignore") {
+      summary.metaNotices += meta.notices;
+      summary.metaLeads += meta.leads;
+      summary.metaIngested += meta.ingested;
+      summary.metaDuplicates += meta.duplicates;
+      summary.metaFailed += meta.failed;
+      if (meta.failed > 0) summary.failed += meta.failed;
+      if (meta.reconcile) {
+        pendingNotices.push({ messageId: message.messageId, receivedAt: message.receivedAt });
+      }
+      continue;
+    }
     const parsed = parseInboundEmail({
       from: message.from,
       subject: message.subject,
@@ -87,6 +134,14 @@ export async function ingestEmailLeads(args: {
       else summary.skipped += 1;
     } catch {
       summary.failed += 1;
+    }
+  }
+
+  if (pendingNotices.length > 0 && args.mode !== "dry-run") {
+    await reconcileMetaLeadsFromEmailNotice();
+    summary.metaReconciled = true;
+    for (const notice of pendingNotices) {
+      await receiptMetaLeadNotice(notice);
     }
   }
   return summary;
@@ -120,7 +175,9 @@ async function writeParsedLead(
   if (phone) {
     const byPhone = await supabaseAdmin
       .from("leads")
-      .select("id, consent_status, lead_source, name, email, vehicle_year, vehicle_make, vehicle_model, vehicle_mileage, symptoms")
+      .select(
+        "id, consent_status, lead_source, name, email, vehicle_year, vehicle_make, vehicle_model, vehicle_mileage, symptoms",
+      )
       .eq("phone_e164", phone)
       .maybeSingle();
     if (byPhone.error) throw byPhone.error;
@@ -176,9 +233,15 @@ async function writeParsedLead(
       .eq("id", leadId)
       .neq("consent_status", "opted_out");
     await insertReceipt({ message, parsed, leadId, status: "skipped" });
-    await addEvent(leadId, "intake_opt_out_respected", "Customer message was an opt-out; no reply sent", "system", {
-      external_id: parsed.externalId,
-    });
+    await addEvent(
+      leadId,
+      "intake_opt_out_respected",
+      "Customer message was an opt-out; no reply sent",
+      "system",
+      {
+        external_id: parsed.externalId,
+      },
+    );
     return "skipped";
   }
 
@@ -226,11 +289,17 @@ async function writeParsedLead(
     });
   } else {
     await fillBlank(leadId, parsed, phone);
-    await addEvent(leadId, "email_intake_attached", `Attached a ${parsed.source} notice to an existing lead`, "system", {
-      external_id: parsed.externalId,
-      provider_message_id: message.messageId,
-      suppress_first_touch: true,
-    });
+    await addEvent(
+      leadId,
+      "email_intake_attached",
+      `Attached a ${parsed.source} notice to an existing lead`,
+      "system",
+      {
+        external_id: parsed.externalId,
+        provider_message_id: message.messageId,
+        suppress_first_touch: true,
+      },
+    );
   }
 
   await insertReceipt({ message, parsed, leadId, status: "ingested" });
@@ -255,7 +324,8 @@ async function fillBlank(
   if (!data.name && parsed.name) updates["name"] = parsed.name;
   if (!data.email && parsed.email) updates["email"] = parsed.email;
   if (!data.phone_e164 && phone) updates["phone_e164"] = phone;
-  if (data.vehicle_year === null && parsed.vehicleYear !== null) updates["vehicle_year"] = parsed.vehicleYear;
+  if (data.vehicle_year === null && parsed.vehicleYear !== null)
+    updates["vehicle_year"] = parsed.vehicleYear;
   if (!data.vehicle_make && parsed.vehicleMake) updates["vehicle_make"] = parsed.vehicleMake;
   if (!data.vehicle_model && parsed.vehicleModel) updates["vehicle_model"] = parsed.vehicleModel;
   if (data.vehicle_mileage === null && parsed.vehicleMileage !== null) {
@@ -273,7 +343,10 @@ async function fillBlank(
     };
   }
   if (Object.keys(updates).length === 0) return;
-  const { error: updateError } = await supabaseAdmin.from("leads").update(updates as never).eq("id", leadId);
+  const { error: updateError } = await supabaseAdmin
+    .from("leads")
+    .update(updates as never)
+    .eq("id", leadId);
   if (updateError) throw updateError;
 }
 

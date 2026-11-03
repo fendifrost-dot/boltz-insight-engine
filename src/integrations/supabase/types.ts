@@ -1692,7 +1692,7 @@ export type Database = {
         | "other_high_risk"
         | "stale_inbound"
       escalation_status: "open" | "acknowledged" | "resolved"
-      lead_ingestion_method: "WEBHOOK" | "RECONCILIATION" | "MANUAL_IMPORT"
+      lead_ingestion_method: "WEBHOOK" | "RECONCILIATION" | "MANUAL_IMPORT" | "MAKE" | "EMAIL"
       lead_lifecycle:
         | "New"
         | "Contacted"
@@ -1877,7 +1877,7 @@ export const Constants = {
         "stale_inbound",
       ],
       escalation_status: ["open", "acknowledged", "resolved"],
-      lead_ingestion_method: ["WEBHOOK", "RECONCILIATION", "MANUAL_IMPORT"],
+      lead_ingestion_method: ["WEBHOOK", "RECONCILIATION", "MANUAL_IMPORT", "MAKE", "EMAIL"],
       lead_lifecycle: [
         "New",
         "Contacted",

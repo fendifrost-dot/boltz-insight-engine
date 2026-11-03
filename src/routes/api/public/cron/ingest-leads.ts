@@ -14,15 +14,19 @@ async function run(request: Request): Promise<Response> {
   const params = new URL(request.url).searchParams;
   const mode = params.get("mode") ?? "incremental";
   if (mode !== "incremental" && mode !== "backfill" && mode !== "dry-run") {
-    return Response.json({ error: "mode must be incremental, backfill, or dry-run" }, { status: 400 });
+    return Response.json(
+      { error: "mode must be incremental, backfill, or dry-run" },
+      { status: 400 },
+    );
   }
 
-  const { EMAIL_INTAKE_DEFAULT_SINCE, EMAIL_INTAKE_LOOKBACK_MS, parseIntakeSince } = await import(
-    "@/server/intake/gmail-query"
-  );
+  const { EMAIL_INTAKE_DEFAULT_SINCE, EMAIL_INTAKE_LOOKBACK_MS, parseIntakeSince } =
+    await import("@/server/intake/gmail-query");
   const now = Date.now();
   const fallback =
-    mode === "incremental" ? now - EMAIL_INTAKE_LOOKBACK_MS : Date.parse(EMAIL_INTAKE_DEFAULT_SINCE);
+    mode === "incremental"
+      ? now - EMAIL_INTAKE_LOOKBACK_MS
+      : Date.parse(EMAIL_INTAKE_DEFAULT_SINCE);
   const since = parseIntakeSince(params.get("since") ?? undefined, now, fallback);
   if ("error" in since) return Response.json({ error: since.error }, { status: 400 });
 
@@ -33,9 +37,13 @@ async function run(request: Request): Promise<Response> {
 
   if (mode !== "dry-run") {
     const { recordHealth } = await import("@/server/lead-inbox/store.server");
+    const metaNote =
+      email.metaNotices > 0 || email.metaLeads > 0
+        ? `; meta notices ${email.metaNotices}, meta ingested ${email.metaIngested}, meta reconcile ${email.metaReconciled ? "ran" : "no"}`
+        : "";
     const emailDetail =
       email.error ??
-      `scanned ${email.scanned}, parsed ${email.parsed}, ingested ${email.ingested}, duplicates ${email.duplicates}, skipped ${email.skipped}`;
+      `scanned ${email.scanned}, parsed ${email.parsed}, ingested ${email.ingested}, duplicates ${email.duplicates}, skipped ${email.skipped}${metaNote}`;
     for (const provider of ["yelp", "durable", "google_lsa", "google_gbp"] as const) {
       await recordHealth({
         provider,
@@ -69,7 +77,9 @@ export const Route = createFileRoute("/api/public/cron/ingest-leads")({
         } catch (error) {
           console.error(
             "[cron ingest-leads]",
-            error instanceof Error ? error.message.replace(/\+?\d{7,}/g, "[redacted]").slice(0, 200) : "failed",
+            error instanceof Error
+              ? error.message.replace(/\+?\d{7,}/g, "[redacted]").slice(0, 200)
+              : "failed",
           );
           return Response.json({ error: "ingest-leads failed" }, { status: 500 });
         }
