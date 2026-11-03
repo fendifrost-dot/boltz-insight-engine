@@ -49,6 +49,7 @@ import { Route as ApiPublicCronSquareSyncRouteImport } from './routes/api/public
 import { Route as ApiPublicMetaWebhookRouteImport } from './routes/api/public/meta/webhook'
 import { Route as ApiPublicRingcentralWebhookRouteImport } from './routes/api/public/ringcentral/webhook'
 import { Route as ApiPublicSquareWebhookRouteImport } from './routes/api/public/square/webhook'
+import { Route as ApiPublicIntakeMakeLeadRouteImport } from './routes/api/public/intake/make-lead'
 
 const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
   id: '/_authenticated',
@@ -266,6 +267,11 @@ const ApiPublicSquareWebhookRoute = ApiPublicSquareWebhookRouteImport.update({
   path: '/api/public/square/webhook',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicIntakeMakeLeadRoute = ApiPublicIntakeMakeLeadRouteImport.update({
+  id: '/api/public/intake/make-lead',
+  path: '/api/public/intake/make-lead',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedIndexRoute
@@ -306,6 +312,7 @@ export interface FileRoutesByFullPath {
   '/api/public/meta/webhook': typeof ApiPublicMetaWebhookRoute
   '/api/public/ringcentral/webhook': typeof ApiPublicRingcentralWebhookRoute
   '/api/public/square/webhook': typeof ApiPublicSquareWebhookRoute
+  '/api/public/intake/make-lead': typeof ApiPublicIntakeMakeLeadRoute
   '/desk/leads/': typeof AuthenticatedDeskLeadsIndexRoute
 }
 export interface FileRoutesByTo {
@@ -347,6 +354,7 @@ export interface FileRoutesByTo {
   '/api/public/meta/webhook': typeof ApiPublicMetaWebhookRoute
   '/api/public/ringcentral/webhook': typeof ApiPublicRingcentralWebhookRoute
   '/api/public/square/webhook': typeof ApiPublicSquareWebhookRoute
+  '/api/public/intake/make-lead': typeof ApiPublicIntakeMakeLeadRoute
   '/desk/leads': typeof AuthenticatedDeskLeadsIndexRoute
 }
 export interface FileRoutesById {
@@ -390,6 +398,7 @@ export interface FileRoutesById {
   '/api/public/meta/webhook': typeof ApiPublicMetaWebhookRoute
   '/api/public/ringcentral/webhook': typeof ApiPublicRingcentralWebhookRoute
   '/api/public/square/webhook': typeof ApiPublicSquareWebhookRoute
+  '/api/public/intake/make-lead': typeof ApiPublicIntakeMakeLeadRoute
   '/_authenticated/desk/leads/': typeof AuthenticatedDeskLeadsIndexRoute
 }
 export interface FileRouteTypes {
@@ -433,6 +442,7 @@ export interface FileRouteTypes {
     | '/api/public/meta/webhook'
     | '/api/public/ringcentral/webhook'
     | '/api/public/square/webhook'
+    | '/api/public/intake/make-lead'
     | '/desk/leads/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -474,6 +484,7 @@ export interface FileRouteTypes {
     | '/api/public/meta/webhook'
     | '/api/public/ringcentral/webhook'
     | '/api/public/square/webhook'
+    | '/api/public/intake/make-lead'
     | '/desk/leads'
   id:
     | '__root__'
@@ -516,6 +527,7 @@ export interface FileRouteTypes {
     | '/api/public/meta/webhook'
     | '/api/public/ringcentral/webhook'
     | '/api/public/square/webhook'
+    | '/api/public/intake/make-lead'
     | '/_authenticated/desk/leads/'
   fileRoutesById: FileRoutesById
 }
@@ -536,6 +548,7 @@ export interface RootRouteChildren {
   ApiPublicMetaWebhookRoute: typeof ApiPublicMetaWebhookRoute
   ApiPublicRingcentralWebhookRoute: typeof ApiPublicRingcentralWebhookRoute
   ApiPublicSquareWebhookRoute: typeof ApiPublicSquareWebhookRoute
+  ApiPublicIntakeMakeLeadRoute: typeof ApiPublicIntakeMakeLeadRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -820,6 +833,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicSquareWebhookRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/intake/make-lead': {
+      id: '/api/public/intake/make-lead'
+      path: '/api/public/intake/make-lead'
+      fullPath: '/api/public/intake/make-lead'
+      preLoaderRoute: typeof ApiPublicIntakeMakeLeadRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -897,6 +917,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicMetaWebhookRoute: ApiPublicMetaWebhookRoute,
   ApiPublicRingcentralWebhookRoute: ApiPublicRingcentralWebhookRoute,
   ApiPublicSquareWebhookRoute: ApiPublicSquareWebhookRoute,
+  ApiPublicIntakeMakeLeadRoute: ApiPublicIntakeMakeLeadRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

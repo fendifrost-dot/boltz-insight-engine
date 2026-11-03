@@ -247,7 +247,8 @@ export function MetaHealthPanel() {
             <Row label="Totals">
               <span className="text-xs text-muted-foreground">
                 {data.counts.total} total · webhook {data.counts.byMethod.WEBHOOK} · reconciliation{" "}
-                {data.counts.byMethod.RECONCILIATION} · manual {data.counts.byMethod.MANUAL_IMPORT}
+                {data.counts.byMethod.RECONCILIATION} · manual {data.counts.byMethod.MANUAL_IMPORT}{" "}
+                · make/email {data.counts.byMethod.OTHER}
               </span>
             </Row>
           </div>

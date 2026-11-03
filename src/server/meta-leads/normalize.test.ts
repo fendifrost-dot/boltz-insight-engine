@@ -284,8 +284,11 @@ test("reconcile and webhook never enqueue first touch for the pre-cutoff backlog
     enqueuesFirstTouch({ method: "RECONCILIATION", createdTime: oct1, nowMs: nowLater }),
     false,
   );
-  // A delayed webhook after the cutoff can still first-touch. Reconciliation cannot.
+  // A delayed webhook, Make delivery, or email payload after the cutoff can still
+  // first-touch. Reconciliation cannot.
   assert.equal(enqueuesFirstTouch({ method: "WEBHOOK", createdTime: oct1, nowMs: nowLater }), true);
+  assert.equal(enqueuesFirstTouch({ method: "MAKE", createdTime: oct1, nowMs: nowLater }), true);
+  assert.equal(enqueuesFirstTouch({ method: "EMAIL", createdTime: oct1, nowMs: nowLater }), true);
 
   const atCutoff = "2026-10-01T00:00:00.000Z";
   assert.equal(

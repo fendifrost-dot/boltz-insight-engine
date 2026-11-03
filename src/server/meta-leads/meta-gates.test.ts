@@ -144,6 +144,17 @@ test("automated first touch requires the opt-in switch AND form SMS consent", ()
   );
 });
 
+test("make and email methods are an additive enum change", () => {
+  const added = readFileSync(
+    join(repoRoot, "supabase/migrations/20261103180000_meta_lead_make_email_methods.sql"),
+    "utf8",
+  );
+  assert.match(added, /ADD VALUE IF NOT EXISTS 'MAKE'/);
+  assert.match(added, /ADD VALUE IF NOT EXISTS 'EMAIL'/);
+  assert.doesNotMatch(added, /\bDROP\s+(TABLE|TYPE|COLUMN)\b/i);
+  assert.doesNotMatch(added, /Bearer [A-Za-z0-9]/);
+});
+
 test("migration: unique Meta lead id, RLS on, staff read-only, no anon", () => {
   assert.match(
     migration,

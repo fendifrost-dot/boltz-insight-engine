@@ -25,6 +25,8 @@ export type GmailMessage = {
   from: string;
   subject: string;
   body: string;
+  /** Text of CSV attachments, when the message has one. Null otherwise. */
+  csvText: string | null;
   receivedAt: string | null;
   receivedMs: number | null;
 };
@@ -33,7 +35,7 @@ const TOKEN_URL = "https://oauth2.googleapis.com/token";
 let cachedToken: { value: string; expiresAt: number } | null = null;
 
 function redact(text: string): string {
-  return text.replace(/(ya29|1\/\/)[A-Za-z0-9._\-]+/g, "[redacted-token]").slice(0, 300);
+  return text.replace(/(ya29|1\/\/)[A-Za-z0-9._-]+/g, "[redacted-token]").slice(0, 300);
 }
 
 async function accessToken(): Promise<string> {
@@ -64,10 +66,13 @@ async function accessToken(): Promise<string> {
 
 type GmailPart = {
   mimeType?: string;
-  body?: { data?: string };
+  filename?: string;
+  body?: { data?: string; attachmentId?: string; size?: number };
   parts?: GmailPart[];
   headers?: { name?: string; value?: string }[];
 };
+
+const CSV_CAP = 500_000;
 
 function decodeBase64Url(data: string): string {
   const pad = data.replace(/-/g, "+").replace(/_/g, "/");
@@ -135,7 +140,9 @@ export async function listGmailLeadMessages(args: {
 }
 
 async function fetchGmailMessage(token: string, id: string): Promise<GmailMessage | null> {
-  const url = new URL(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${encodeURIComponent(id)}`);
+  const url = new URL(
+    `https://gmail.googleapis.com/gmail/v1/users/me/messages/${encodeURIComponent(id)}`,
+  );
   url.searchParams.set("format", "full");
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${token}` },
@@ -155,7 +162,68 @@ async function fetchGmailMessage(token: string, id: string): Promise<GmailMessag
     from: header(payload?.headers, "From"),
     subject: header(payload?.headers, "Subject"),
     body: plainFromPart(payload).slice(0, 20_000),
+    csvText: await csvTextFromPart(token, json.id ?? id, payload),
     receivedAt: Number.isFinite(internal) ? new Date(internal).toISOString() : null,
     receivedMs: Number.isFinite(internal) ? internal : null,
   };
+}
+
+function isCsvPart(part: GmailPart): boolean {
+  const mime = (part.mimeType ?? "").toLowerCase();
+  const name = (part.filename ?? "").toLowerCase();
+  return mime === "text/csv" || mime === "application/csv" || name.endsWith(".csv");
+}
+
+async function csvTextFromPart(
+  token: string,
+  messageId: string,
+  part: GmailPart | undefined,
+): Promise<string | null> {
+  const chunks: string[] = [];
+  try {
+    await collectCsv(token, messageId, part, chunks);
+  } catch {
+    return chunks.length > 0 ? chunks.join("\n").slice(0, CSV_CAP) : null;
+  }
+  if (chunks.length === 0) return null;
+  return chunks.join("\n").slice(0, CSV_CAP);
+}
+
+async function collectCsv(
+  token: string,
+  messageId: string,
+  part: GmailPart | undefined,
+  out: string[],
+): Promise<void> {
+  if (!part || out.join("").length >= CSV_CAP) return;
+  if (isCsvPart(part)) {
+    let data = part.body?.data;
+    const attachmentId = part.body?.attachmentId;
+    const size = part.body?.size ?? 0;
+    if (!data && attachmentId && size > 0 && size <= CSV_CAP) {
+      data = await fetchAttachment(token, messageId, attachmentId);
+    }
+    if (data) out.push(decodeBase64Url(data));
+  }
+  for (const child of part.parts ?? []) {
+    await collectCsv(token, messageId, child, out);
+  }
+}
+
+async function fetchAttachment(
+  token: string,
+  messageId: string,
+  attachmentId: string,
+): Promise<string | undefined> {
+  const url = new URL(
+    `https://gmail.googleapis.com/gmail/v1/users/me/messages/${encodeURIComponent(messageId)}/attachments/${encodeURIComponent(attachmentId)}`,
+  );
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(20_000),
+  });
+  const text = await res.text();
+  if (!res.ok) throw new Error(`Gmail attachment failed (${res.status}): ${redact(text)}`);
+  const json = JSON.parse(text) as { data?: string };
+  return json.data;
 }

@@ -22,7 +22,7 @@ import {
   normalizePhone,
   resolvePlatform,
 } from "./normalize";
-import type { GraphLead, LeadgenEvent } from "./normalize";
+import type { GraphLead, GraphLeadForm, LeadgenEvent } from "./normalize";
 import { sha256Hex } from "./signature";
 
 export type IngestionMethod = Database["public"]["Enums"]["lead_ingestion_method"];
@@ -94,12 +94,22 @@ export async function ingestMetaLead(args: {
   suppressFirstTouch?: boolean | undefined;
   /** E.164 numbers, compared in memory. Never log this set. */
   contactedPhones?: ReadonlySet<string> | undefined;
+  /**
+   * Make and email already carry the lead. Skip Graph (`getLead`, `getForm`,
+   * page token). `prefetched` is required.
+   */
+  skipGraph?: boolean | undefined;
+  /** Form id/name from the payload. No legal content, so SMS consent is not inferred. */
+  form?: GraphLeadForm | null | undefined;
+  /** Stored on the receipt. Make sends the raw JSON; email does not store the body. */
+  receiptPayload?: unknown;
 }): Promise<IngestOutcome> {
   await recordReceipt({
     metaLeadId: args.metaLeadId,
     method: args.method,
     event: args.event,
     pageId: args.pageId,
+    webhookPayload: args.receiptPayload,
   });
 
   const { data: row, error: rowError } = await supabaseAdmin
@@ -122,10 +132,14 @@ export async function ingestMetaLead(args: {
 
   try {
     const pageId = args.pageId ?? args.event?.pageId ?? undefined;
-    const token = pageId ? (await pageAccessTokenFor(pageId)).token : undefined;
-    const graphLead = args.prefetched ?? (await getLead(args.metaLeadId, token));
+    // skipGraph must be checked before any token or lead fetch.
+    const token = args.skipGraph || !pageId ? undefined : (await pageAccessTokenFor(pageId)).token;
+    let graphLead: GraphLead;
+    if (args.prefetched) graphLead = args.prefetched;
+    else if (args.skipGraph) throw new Error("payload ingest requires the lead");
+    else graphLead = await getLead(args.metaLeadId, token);
     const fetchedAt = new Date().toISOString();
-    if (!args.prefetched) {
+    if (!args.prefetched && !args.skipGraph) {
       await recordHealth({
         provider: META_PROVIDER,
         checkName: "graph_fetch",
@@ -133,8 +147,15 @@ export async function ingestMetaLead(args: {
         detail: "lead fetched",
       });
     }
-    const formId = graphLead.form_id ?? row.form_id;
-    const form = formId ? await getForm(formId, token).catch(() => null) : null;
+    const formId =
+      graphLead.form_id ??
+      row.form_id ??
+      (args.form?.id && args.form.id !== "payload" ? args.form.id : null);
+    const form = args.skipGraph
+      ? (args.form ?? null)
+      : formId
+        ? await getForm(formId, token).catch(() => null)
+        : null;
     const platform = resolvePlatform(graphLead.platform);
     const normalized = normalizeFieldData(graphLead.field_data);
     const consent = buildConsentEvidence({ lead: graphLead, form, platform, nowIso: fetchedAt });
@@ -209,7 +230,7 @@ export async function ingestMetaLead(args: {
         consent_evidence: consent.evidence as never,
         consent_text: consent.consentText,
         consent_version: consentVersion,
-        graph_fetched_at: fetchedAt,
+        graph_fetched_at: args.skipGraph ? null : fetchedAt,
         ingested_at: new Date().toISOString(),
         attempts: row.attempts + 1,
         last_error: null,
