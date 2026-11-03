@@ -144,6 +144,8 @@ export async function getMetaHealth() {
     viaWebhook,
     viaReconciliation,
     viaManual,
+    viaMake,
+    viaEmail,
   ] = await Promise.all([
     snap("last webhook", "webhook_received", true),
     snap("last signature failure", "webhook_signature_invalid"),
@@ -183,6 +185,8 @@ export async function getMetaHealth() {
     count("webhook count", { column: "ingestion_method", values: ["WEBHOOK"] }),
     count("reconciliation count", { column: "ingestion_method", values: ["RECONCILIATION"] }),
     count("manual import count", { column: "ingestion_method", values: ["MANUAL_IMPORT"] }),
+    count("make count", { column: "ingestion_method", values: ["MAKE"] }),
+    count("email count", { column: "ingestion_method", values: ["EMAIL"] }),
   ]);
 
   let subscription: {
@@ -340,6 +344,8 @@ export async function getMetaHealth() {
         WEBHOOK: viaWebhook,
         RECONCILIATION: viaReconciliation,
         MANUAL_IMPORT: viaManual,
+        MAKE: viaMake,
+        EMAIL: viaEmail,
       },
     },
     recent,

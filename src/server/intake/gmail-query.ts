@@ -19,6 +19,8 @@ const LEAD_MAIL_CLAUSE = [
   'subject:"Local Services"',
   "(from:businessprofile-noreply@google.com subject:message)",
   'subject:"You have a new lead"',
+  "(from:facebookmail.com subject:lead)",
+  "(from:metamail.com subject:lead)",
 ].join(" OR ");
 
 /**

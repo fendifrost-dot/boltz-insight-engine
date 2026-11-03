@@ -5,6 +5,13 @@ import { addEvent } from "@/server/lead-inbox/store.server";
 import { gmailLeadQuery } from "./gmail-query";
 import { gmailConfigError, listGmailLeadMessages } from "./gmail.server";
 import type { GmailMessage } from "./gmail.server";
+import {
+  ingestMetaEmailDetails,
+  metaEmailAlreadySeen,
+  recordMetaLeadNotice,
+  triggerMetaLeadReconcileFromEmail,
+} from "./meta-email-ingest.server";
+import { parseMetaLeadEmail } from "./parse-meta-email";
 import { parseInboundEmail, toValidE164 } from "./parse-email";
 import type { EmailLeadSource, ParsedEmailLead } from "./parse-email";
 
@@ -22,6 +29,8 @@ export type EmailIntakeSummary = {
   failed: number;
   truncated: boolean;
   bySource: Record<EmailLeadSource, number>;
+  metaNotices: number;
+  metaDetailed: number;
   error: string | null;
 };
 
@@ -49,6 +58,8 @@ export async function ingestEmailLeads(args: {
     failed: 0,
     truncated: false,
     bySource: { ...EMPTY_BY_SOURCE },
+    metaNotices: 0,
+    metaDetailed: 0,
     error: null,
   };
   const configError = gmailConfigError();
@@ -69,6 +80,42 @@ export async function ingestEmailLeads(args: {
   summary.scanned = inWindow.length;
 
   for (const message of inWindow) {
+    const meta = parseMetaLeadEmail({
+      from: message.from,
+      subject: message.subject,
+      body: message.body,
+      messageId: message.messageId,
+      receivedAt: message.receivedAt,
+    });
+    if (meta) {
+      if (args.mode !== "dry-run" && (await metaEmailAlreadySeen(message.messageId))) {
+        summary.duplicates += 1;
+        continue;
+      }
+      if (meta.kind === "notice") {
+        summary.metaNotices += 1;
+        if (args.mode !== "dry-run") {
+          try {
+            await recordMetaLeadNotice(message);
+          } catch {
+            summary.failed += 1;
+          }
+        }
+      } else {
+        summary.metaDetailed += 1;
+        if (args.mode !== "dry-run") {
+          try {
+            const outcome = await ingestMetaEmailDetails(message, meta);
+            if (outcome === "ingested") summary.ingested += 1;
+            else if (outcome === "duplicate") summary.duplicates += 1;
+            else summary.failed += 1;
+          } catch {
+            summary.failed += 1;
+          }
+        }
+      }
+      continue;
+    }
     const parsed = parseInboundEmail({
       from: message.from,
       subject: message.subject,
@@ -88,6 +135,11 @@ export async function ingestEmailLeads(args: {
     } catch {
       summary.failed += 1;
     }
+  }
+  // A Meta "you have a new lead" notice runs the existing incremental
+  // reconcile. This module still does not queue work or send a message itself.
+  if (args.mode !== "dry-run" && summary.metaNotices > 0) {
+    await triggerMetaLeadReconcileFromEmail();
   }
   return summary;
 }

@@ -13,6 +13,8 @@ test("the Gmail query includes Yelp and Durable senders and starts the day befor
   assert.match(query, /from:notifications@email\.durable\.com/);
   assert.match(query, /from:support@durable\.team/);
   assert.match(query, /New website lead/);
+  assert.match(query, /from:facebookmail\.com subject:lead/);
+  assert.match(query, /from:metamail\.com subject:lead/);
 });
 
 test("since accepts a day and rejects the future and a window past 120 days", () => {
