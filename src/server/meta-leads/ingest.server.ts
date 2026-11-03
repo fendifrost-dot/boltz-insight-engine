@@ -22,7 +22,7 @@ import {
   normalizePhone,
   resolvePlatform,
 } from "./normalize";
-import type { GraphLead, LeadgenEvent } from "./normalize";
+import type { GraphLead, GraphLeadForm, LeadgenEvent } from "./normalize";
 import { sha256Hex } from "./signature";
 
 export type IngestionMethod = Database["public"]["Enums"]["lead_ingestion_method"];
@@ -94,6 +94,15 @@ export async function ingestMetaLead(args: {
   suppressFirstTouch?: boolean | undefined;
   /** E.164 numbers, compared in memory. Never log this set. */
   contactedPhones?: ReadonlySet<string> | undefined;
+  /**
+   * The caller already has the lead. Skip the page token, lead fetch, and
+   * form fetch. Make and the mailbox fallback set this.
+   */
+  skipGraph?: boolean | undefined;
+  /** Form name when Graph is not called. */
+  formName?: string | null | undefined;
+  /** Event text when the caller sets suppressFirstTouch. */
+  suppressNote?: string | undefined;
 }): Promise<IngestOutcome> {
   await recordReceipt({
     metaLeadId: args.metaLeadId,
@@ -115,15 +124,24 @@ export async function ingestMetaLead(args: {
       metaLeadId: args.metaLeadId,
       alreadySuppressed: row.suppress_first_touch === true,
       suppressFirstTouch: args.suppressFirstTouch === true,
+      suppressNote: args.suppressNote,
       contactedPhones: args.contactedPhones,
     });
     return { status: "duplicate", leadId: row.lead_id, submissionId: row.id, alreadyContacted };
   }
 
   try {
+    if (args.skipGraph && !args.prefetched) {
+      throw new Error("skipGraph requires a prefetched lead");
+    }
     const pageId = args.pageId ?? args.event?.pageId ?? undefined;
-    const token = pageId ? (await pageAccessTokenFor(pageId)).token : undefined;
-    const graphLead = args.prefetched ?? (await getLead(args.metaLeadId, token));
+    let token: string | undefined;
+    if (!args.skipGraph && pageId) {
+      token = (await pageAccessTokenFor(pageId)).token;
+    }
+    const graphLead = args.prefetched
+      ? { ...args.prefetched, id: args.metaLeadId }
+      : await getLead(args.metaLeadId, token);
     const fetchedAt = new Date().toISOString();
     if (!args.prefetched) {
       await recordHealth({
@@ -134,7 +152,11 @@ export async function ingestMetaLead(args: {
       });
     }
     const formId = graphLead.form_id ?? row.form_id;
-    const form = formId ? await getForm(formId, token).catch(() => null) : null;
+    const form = args.skipGraph
+      ? providedForm(formId, args.formName ?? null)
+      : formId
+        ? await getForm(formId, token).catch(() => null)
+        : null;
     const platform = resolvePlatform(graphLead.platform);
     const normalized = normalizeFieldData(graphLead.field_data);
     const consent = buildConsentEvidence({ lead: graphLead, form, platform, nowIso: fetchedAt });
@@ -194,7 +216,7 @@ export async function ingestMetaLead(args: {
         page_id: row.page_id ?? pageId ?? readMetaSecret("META_PAGE_ID") ?? null,
         ...(suppressFirstTouch ? { suppress_first_touch: true } : {}),
         form_id: formId ?? null,
-        form_name: form?.name ?? null,
+        form_name: form?.name ?? args.formName ?? null,
         ad_id: graphLead.ad_id ?? row.ad_id,
         ad_name: graphLead.ad_name ?? null,
         adset_id: graphLead.adset_id ?? null,
@@ -209,7 +231,7 @@ export async function ingestMetaLead(args: {
         consent_evidence: consent.evidence as never,
         consent_text: consent.consentText,
         consent_version: consentVersion,
-        graph_fetched_at: fetchedAt,
+        graph_fetched_at: args.skipGraph ? row.graph_fetched_at : fetchedAt,
         ingested_at: new Date().toISOString(),
         attempts: row.attempts + 1,
         last_error: null,
@@ -226,6 +248,7 @@ export async function ingestMetaLead(args: {
         metaLeadId: args.metaLeadId,
         alreadySuppressed: row.suppress_first_touch === true,
         suppressFirstTouch,
+        suppressNote: args.suppressNote,
         contactedPhones: args.contactedPhones,
         phone: lead.phone_e164,
       });
@@ -252,7 +275,7 @@ export async function ingestMetaLead(args: {
         lead.id,
         "meta_first_touch_suppressed",
         args.suppressFirstTouch
-          ? "First touch suppressed for backfilled Meta lead"
+          ? (args.suppressNote ?? "First touch suppressed for backfilled Meta lead")
           : "First touch suppressed because the Meta lead is outside the first-touch window",
         "system",
         { meta_lead_id: args.metaLeadId },
@@ -403,6 +426,14 @@ export async function handleLeadgenEvents(
   return summary;
 }
 
+/** Form name from Make or email, without a Graph fetch. Empty id is not stored. */
+function providedForm(formId: string | null, formName: string | null): GraphLeadForm | null {
+  if (formId && formName) return { id: formId, name: formName };
+  if (formId) return { id: formId };
+  if (formName) return { id: "", name: formName };
+  return null;
+}
+
 function matchesContacted(
   phone: string | null | undefined,
   contacted: ReadonlySet<string> | undefined,
@@ -461,6 +492,7 @@ async function maybeApplyBackfillMarkers(args: {
   metaLeadId: string;
   alreadySuppressed: boolean;
   suppressFirstTouch: boolean;
+  suppressNote?: string | undefined;
   contactedPhones: ReadonlySet<string> | undefined;
   phone?: string | null;
 }): Promise<boolean> {
@@ -475,6 +507,7 @@ async function applyBackfillMarkers(args: {
   metaLeadId: string;
   alreadySuppressed: boolean;
   suppressFirstTouch: boolean;
+  suppressNote?: string | undefined;
   contactedPhones: ReadonlySet<string> | undefined;
   phone?: string | null;
 }): Promise<boolean> {
@@ -488,7 +521,7 @@ async function applyBackfillMarkers(args: {
       await addEvent(
         args.leadId,
         "meta_first_touch_suppressed",
-        "First touch suppressed for backfilled Meta lead",
+        args.suppressNote ?? "First touch suppressed for backfilled Meta lead",
         "system",
         { meta_lead_id: args.metaLeadId },
       );

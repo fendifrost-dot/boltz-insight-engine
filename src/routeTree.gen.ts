@@ -47,6 +47,7 @@ import { Route as ApiPublicCronReconcileMetaLeadsRouteImport } from './routes/ap
 import { Route as ApiPublicCronRenewSubscriptionsRouteImport } from './routes/api/public/cron/renew-subscriptions'
 import { Route as ApiPublicCronSquareSyncRouteImport } from './routes/api/public/cron/square-sync'
 import { Route as ApiPublicMetaWebhookRouteImport } from './routes/api/public/meta/webhook'
+import { Route as ApiPublicIntakeMakeLeadRouteImport } from './routes/api/public/intake/make-lead'
 import { Route as ApiPublicRingcentralWebhookRouteImport } from './routes/api/public/ringcentral/webhook'
 import { Route as ApiPublicSquareWebhookRouteImport } from './routes/api/public/square/webhook'
 
@@ -255,6 +256,11 @@ const ApiPublicMetaWebhookRoute = ApiPublicMetaWebhookRouteImport.update({
   path: '/api/public/meta/webhook',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicIntakeMakeLeadRoute = ApiPublicIntakeMakeLeadRouteImport.update({
+  id: '/api/public/intake/make-lead',
+  path: '/api/public/intake/make-lead',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicRingcentralWebhookRoute =
   ApiPublicRingcentralWebhookRouteImport.update({
     id: '/api/public/ringcentral/webhook',
@@ -304,6 +310,7 @@ export interface FileRoutesByFullPath {
   '/api/public/cron/renew-subscriptions': typeof ApiPublicCronRenewSubscriptionsRoute
   '/api/public/cron/square-sync': typeof ApiPublicCronSquareSyncRoute
   '/api/public/meta/webhook': typeof ApiPublicMetaWebhookRoute
+  '/api/public/intake/make-lead': typeof ApiPublicIntakeMakeLeadRoute
   '/api/public/ringcentral/webhook': typeof ApiPublicRingcentralWebhookRoute
   '/api/public/square/webhook': typeof ApiPublicSquareWebhookRoute
   '/desk/leads/': typeof AuthenticatedDeskLeadsIndexRoute
@@ -345,6 +352,7 @@ export interface FileRoutesByTo {
   '/api/public/cron/renew-subscriptions': typeof ApiPublicCronRenewSubscriptionsRoute
   '/api/public/cron/square-sync': typeof ApiPublicCronSquareSyncRoute
   '/api/public/meta/webhook': typeof ApiPublicMetaWebhookRoute
+  '/api/public/intake/make-lead': typeof ApiPublicIntakeMakeLeadRoute
   '/api/public/ringcentral/webhook': typeof ApiPublicRingcentralWebhookRoute
   '/api/public/square/webhook': typeof ApiPublicSquareWebhookRoute
   '/desk/leads': typeof AuthenticatedDeskLeadsIndexRoute
@@ -388,6 +396,7 @@ export interface FileRoutesById {
   '/api/public/cron/renew-subscriptions': typeof ApiPublicCronRenewSubscriptionsRoute
   '/api/public/cron/square-sync': typeof ApiPublicCronSquareSyncRoute
   '/api/public/meta/webhook': typeof ApiPublicMetaWebhookRoute
+  '/api/public/intake/make-lead': typeof ApiPublicIntakeMakeLeadRoute
   '/api/public/ringcentral/webhook': typeof ApiPublicRingcentralWebhookRoute
   '/api/public/square/webhook': typeof ApiPublicSquareWebhookRoute
   '/_authenticated/desk/leads/': typeof AuthenticatedDeskLeadsIndexRoute
@@ -431,6 +440,7 @@ export interface FileRouteTypes {
     | '/api/public/cron/renew-subscriptions'
     | '/api/public/cron/square-sync'
     | '/api/public/meta/webhook'
+    | '/api/public/intake/make-lead'
     | '/api/public/ringcentral/webhook'
     | '/api/public/square/webhook'
     | '/desk/leads/'
@@ -472,6 +482,7 @@ export interface FileRouteTypes {
     | '/api/public/cron/renew-subscriptions'
     | '/api/public/cron/square-sync'
     | '/api/public/meta/webhook'
+    | '/api/public/intake/make-lead'
     | '/api/public/ringcentral/webhook'
     | '/api/public/square/webhook'
     | '/desk/leads'
@@ -514,6 +525,7 @@ export interface FileRouteTypes {
     | '/api/public/cron/renew-subscriptions'
     | '/api/public/cron/square-sync'
     | '/api/public/meta/webhook'
+    | '/api/public/intake/make-lead'
     | '/api/public/ringcentral/webhook'
     | '/api/public/square/webhook'
     | '/_authenticated/desk/leads/'
@@ -534,6 +546,7 @@ export interface RootRouteChildren {
   ApiPublicCronRenewSubscriptionsRoute: typeof ApiPublicCronRenewSubscriptionsRoute
   ApiPublicCronSquareSyncRoute: typeof ApiPublicCronSquareSyncRoute
   ApiPublicMetaWebhookRoute: typeof ApiPublicMetaWebhookRoute
+  ApiPublicIntakeMakeLeadRoute: typeof ApiPublicIntakeMakeLeadRoute
   ApiPublicRingcentralWebhookRoute: typeof ApiPublicRingcentralWebhookRoute
   ApiPublicSquareWebhookRoute: typeof ApiPublicSquareWebhookRoute
 }
@@ -806,6 +819,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicMetaWebhookRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/intake/make-lead': {
+      id: '/api/public/intake/make-lead'
+      path: '/api/public/intake/make-lead'
+      fullPath: '/api/public/intake/make-lead'
+      preLoaderRoute: typeof ApiPublicIntakeMakeLeadRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/ringcentral/webhook': {
       id: '/api/public/ringcentral/webhook'
       path: '/api/public/ringcentral/webhook'
@@ -895,6 +915,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicCronRenewSubscriptionsRoute: ApiPublicCronRenewSubscriptionsRoute,
   ApiPublicCronSquareSyncRoute: ApiPublicCronSquareSyncRoute,
   ApiPublicMetaWebhookRoute: ApiPublicMetaWebhookRoute,
+  ApiPublicIntakeMakeLeadRoute: ApiPublicIntakeMakeLeadRoute,
   ApiPublicRingcentralWebhookRoute: ApiPublicRingcentralWebhookRoute,
   ApiPublicSquareWebhookRoute: ApiPublicSquareWebhookRoute,
 }

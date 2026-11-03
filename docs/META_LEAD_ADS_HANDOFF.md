@@ -2,7 +2,9 @@
 
 Boltz Insight Engine is the source of truth for Instant Form leads. Everything runs
 as app server routes deployed with the Lovable app. There is no Supabase Edge
-Function, Zapier, Make or other middleware.
+Function. Make.com and Meta's own lead-notification email are optional
+fallbacks beside the Page webhook and the reconcile cron. They use the same
+normalize, consent, and `meta_lead_id` dedupe path. Neither fallback sends SMS.
 
 **Status (2026-09-25):**
 - PR #23 is merged, the migration is applied, and Meta is configured: a
@@ -46,6 +48,16 @@ pg_cron nightly      ──▶ /api/public/cron/reconcile-meta-leads?window=nigh
 
 pg_cron every minute ──▶ /api/public/cron/process-jobs   (existing)
                               process_meta_lead → Grok first-touch decision
+
+Make.com Watch New Leads ──POST──▶ /api/public/intake/make-lead
+                              bearer MAKE_LEAD_INTAKE_SECRET
+                              normalize the posted field_data (no Graph call)
+                              ingestion_method MAKE
+                              same meta_lead_id dedupe
+
+Gmail ingest ──▶ Meta notification mail
+                              answers present → ingestion_method EMAIL (no Graph, no first touch)
+                              "you have a new lead" only → reconcile-meta-leads incremental
 ```
 
 - **Ingestion never depends on xAI.** It runs inline (webhook), from
@@ -60,10 +72,12 @@ pg_cron every minute ──▶ /api/public/cron/process-jobs   (existing)
   no-ops. Boltz lead matching is by phone (the existing `leads_phone_e164_unique`),
   then by email. A Meta submission from someone who already texted attaches to
   their existing lead and thread.
-- **Ingestion method** (`WEBHOOK` / `RECONCILIATION` / `MANUAL_IMPORT`) records
+- **Ingestion method** (`WEBHOOK` / `RECONCILIATION` / `MANUAL_IMPORT` / `MAKE` / `EMAIL`) records
   the path that *first discovered* the lead. A `WEBHOOK` row whose Graph fetch
   failed and was later completed by reconciliation stays `WEBHOOK`, with the
-  retry in `attempts` / the `meta_lead_ingested` event.
+  retry in `attempts` / the `meta_lead_ingested` event. Make and email use the
+  same unique `meta_lead_id`, so a lead that also arrives by webhook or
+  reconcile is one row.
 
 ## Consent and outbound (communications.send is not bypassed)
 
@@ -93,7 +107,7 @@ pg_cron every minute ──▶ /api/public/cron/process-jobs   (existing)
 
 Apply in the **Lovable SQL editor**. The migration is idempotent and safe to re-run.
 
-- enum `lead_ingestion_method` (`WEBHOOK`, `RECONCILIATION`, `MANUAL_IMPORT`)
+- enum `lead_ingestion_method` (`WEBHOOK`, `RECONCILIATION`, `MANUAL_IMPORT`, plus `MAKE` and `EMAIL` from `20261103183000_meta_ingestion_method_make_email.sql`)
 - enum `meta_ingest_status` (`received`, `ingested`, `failed`)
 - `message_job_type` + `process_meta_lead`
 - table `meta_lead_submissions`: `meta_lead_id` (unique), `lead_id` → `leads`
@@ -119,6 +133,7 @@ is appended to `notes` under a `[meta:<id>]` marker. Mapped fields
 | `GET /api/public/meta/webhook` | Meta verification handshake | `hub.verify_token` = `META_WEBHOOK_VERIFY_TOKEN` (403 on mismatch) |
 | `POST /api/public/meta/webhook` | `leadgen` events | `X-Hub-Signature-256` HMAC of raw body with `META_APP_SECRET` (401 on mismatch, 503 unconfigured) |
 | `POST /api/public/cron/reconcile-meta-leads?window=incremental\|nightly[&minutes=N]` | reconciliation | `Authorization: Bearer CRON_SECRET` |
+| `POST /api/public/intake/make-lead` | Make.com Watch New Leads | `Authorization: Bearer MAKE_LEAD_INTAKE_SECRET` (401 on mismatch, 503 if unset) |
 
 Server functions (owner, `integrations.manage`), in `src/lib/meta-leads.functions.ts`:
 `getMetaHealthFn`, `reconcileMetaNow`, `importMetaLead` (MANUAL_IMPORT by lead id), `subscribeMetaPage`.
@@ -147,6 +162,7 @@ UI:
 | `META_WEBHOOK_VERIFY_TOKEN` | yes | any long random string you choose; entered in both Lovable and the Meta webhook config |
 | `META_GRAPH_API_VERSION` | no | code default `v24.0`; set `v26.0` (current) |
 | `META_AUTO_FIRST_TOUCH` | no | `enabled` to allow consented auto first-touch SMS; anything else = draft only |
+| `MAKE_LEAD_INTAKE_SECRET` | for Make only | long random string; the same value goes in the Make HTTP header. Add it in Lovable Cloud later. Never commit it. |
 
 Existing `CRON_SECRET` and `PUBLIC_APP_URL` are reused.
 
@@ -217,6 +233,69 @@ token and verification, is in
    (e.g. "Yes, text me about my estimate…"). Only leads who check it can be
    auto-texted, and only with `META_AUTO_FIRST_TOUCH=enabled`.
 
+## Make.com fallback
+
+Use this while the Boltz Insight Engine app lacks Leads Access on the Boltz Automotive Page, so the Page webhook can see a lead id but cannot read `field_data`. Make's Facebook Lead Ads connection reads the lead, then posts it here. Boltz does not call Graph on this route.
+
+1. In Lovable Cloud secrets, set `MAKE_LEAD_INTAKE_SECRET` to a long random string. Do not put that value in git, chat, or this doc.
+2. In Make, add **Facebook Lead Ads → Watch New Leads** (the instant **New Lead** module can post the same JSON).
+3. Add **HTTP → Make a request**:
+   - URL: `https://boltz-insight-engine.lovable.app/api/public/intake/make-lead`
+   - Method: `POST`
+   - Header name: `Authorization`
+   - Header value: `Bearer <MAKE_LEAD_INTAKE_SECRET>` (the same string as the Lovable secret)
+   - Header `Content-Type`: `application/json`
+   - Body type: raw JSON
+
+Map the Watch New Leads bundle. Send ids as strings so a long lead id is not rounded.
+
+```json
+{
+  "id": "2283654155812202",
+  "created_time": "2026-11-03T18:04:00+0000",
+  "page_id": "111222333444555",
+  "form_id": "444555666777888",
+  "form_name": "Boltz estimate",
+  "ad_id": "999888777666555",
+  "ad_name": "Winter brakes",
+  "campaign_id": "555444333222111",
+  "campaign_name": "Lead ads",
+  "platform": "ig",
+  "field_data": [
+    { "name": "full_name", "values": ["Jane Doe"] },
+    { "name": "email", "values": ["jane@example.com"] },
+    { "name": "phone_number", "values": ["+13125550100"] }
+  ]
+}
+```
+
+A flattened body is also accepted. `field_data` may be a `{ name: value }` object, or those answers may sit next to the ids:
+
+```json
+{
+  "leadgen_id": "2283654155812202",
+  "created_time": "2026-11-03T18:04:00+0000",
+  "page_id": "111222333444555",
+  "form_id": "444555666777888",
+  "form_name": "Boltz estimate",
+  "full_name": "Jane Doe",
+  "email": "jane@example.com",
+  "phone_number": "+13125550100"
+}
+```
+
+Success is `200` with `{ "ok": true, "lead_id": "<Boltz lead uuid>", "duplicate": false }`. The same Meta lead id posted again, or later seen by the webhook or reconcile, returns `"duplicate": true` and does not create a second lead. A missing secret is `503`. A wrong bearer is `401`. Consent and first touch are the existing Meta rules: SMS opt-in only from a checked SMS disclaimer, and auto-text only when `META_AUTO_FIRST_TOUCH=enabled` (it stays off).
+
+Apply `supabase/migrations/20261103183000_meta_ingestion_method_make_email.sql` in the Lovable SQL editor before the first Make post. It only adds enum values `MAKE` and `EMAIL`.
+
+## Email fallback
+
+Meta can notify `info@boltzautoinc.com` when a lead arrives. Those messages are already in the Gmail poll (`POST /api/public/cron/ingest-leads`).
+
+Native Meta lead mail (from `notification@facebookmail.com` or another `facebookmail.com` / `metamail.com` address, subject like "You have a new lead") does **not** include the person's answers. The body is a short alert plus a View Lead link. The link may carry `leadgen_id`, which is not enough to build the lead without Graph. When that mail arrives, ingest logs it and runs the existing incremental `reconcile-meta-leads` fetch immediately. If Meta denies Leads Access, reconcile records the error and the Yelp, Durable, and Google parsers still run. The same Gmail message does not trigger reconcile again.
+
+If a message from a Meta domain does include answers (name, email, phone, or custom questions) and a lead id, those answers go through the same normalize and ingest path, deduped on that lead id, with ingestion method `EMAIL`. Mailbox leads keep `suppress_first_touch`, so this path does not text anyone. Yelp, Durable, and Google parsing is unchanged.
+
 ## End-to-end test with Meta's Lead Ads Testing Tool
 
 Before you start, `/integration-health` → Meta panel should show all required
@@ -266,7 +345,7 @@ Real paid leads fill them.
 
 ## Tests
 
-- `npm test` adds `src/server/meta-leads/signature.test.ts` (HMAC, tamper,
+- `npm test` adds `src/server/meta-leads/make-intake.test.ts` (bearer 503/401, both `field_data` shapes, shared Meta lead id) and `src/server/intake/parse-meta-email.test.ts` (notice vs answers, dedupe id, Yelp/Durable/Google left alone), plus `src/server/meta-leads/signature.test.ts` (HMAC, tamper,
   wrong secret, re-serialization, handshake), `normalize.test.ts` (batched
   webhook parsing, field mapping, phone/email validation, SMS consent rules,
   fill-blanks-only) and `meta-gates.test.ts` (signature before parse/persist,

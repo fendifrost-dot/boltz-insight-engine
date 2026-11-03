@@ -35,7 +35,7 @@ async function run(request: Request): Promise<Response> {
     const { recordHealth } = await import("@/server/lead-inbox/store.server");
     const emailDetail =
       email.error ??
-      `scanned ${email.scanned}, parsed ${email.parsed}, ingested ${email.ingested}, duplicates ${email.duplicates}, skipped ${email.skipped}`;
+      `scanned ${email.scanned}, parsed ${email.parsed}, ingested ${email.ingested}, duplicates ${email.duplicates}, skipped ${email.skipped}, meta notices ${email.metaNotices}, meta detailed ${email.metaDetailed}`;
     for (const provider of ["yelp", "durable", "google_lsa", "google_gbp"] as const) {
       await recordHealth({
         provider,

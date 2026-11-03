@@ -19,6 +19,7 @@ const forbidden = /sendOutbound|enqueueJob|processJobs|sendSms|createWebhookSubs
 test("email and Google Ads intake never enqueue or send a message", () => {
   for (const name of [
     "email-ingest.server.ts",
+    "meta-email-ingest.server.ts",
     "google-ads-ingest.server.ts",
     "health.server.ts",
     "gmail.server.ts",
@@ -31,6 +32,12 @@ test("email and Google Ads intake never enqueue or send a message", () => {
   assert.doesNotMatch(route, forbidden);
   assert.match(route, /mode=dry-run writes nothing|mode !== "dry-run"/);
   assert.match(route, /suppress_first_touch|dryRun: mode === "dry-run"/);
+  const metaEmail = read("meta-email-ingest.server.ts");
+  assert.match(metaEmail, /skipGraph: true/);
+  assert.match(metaEmail, /suppressFirstTouch: true/);
+  assert.match(metaEmail, /method: "EMAIL"/);
+  assert.match(metaEmail, /reconcileMetaLeads\(\{ window: "incremental" \}\)/);
+  assert.match(metaEmail, /catch \(error\)/);
 });
 
 test("reconciliation records a duplicate-page failure without failing the subscribed page", () => {
