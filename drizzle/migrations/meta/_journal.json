@@ -1,0 +1,13 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1793832362121,
+      "tag": "0000_ringcentral_voicemail_insights",
+      "breakpoints": true
+    }
+  ]
+}

@@ -1040,6 +1040,60 @@ export type Database = {
           },
         ]
       }
+      ringcentral_subscriptions: {
+        Row: {
+          created_at: string
+          delivery_address: string
+          event_filters: string[]
+          expires_at: string | null
+          extension_id: string | null
+          from_number_e164: string | null
+          id: string
+          last_notification_at: string | null
+          last_renewal_error: string | null
+          last_renewed_at: string | null
+          metadata_redacted: Json | null
+          provider_subscription_id: string
+          sms_capability: Database["public"]["Enums"]["sms_capability"]
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          delivery_address: string
+          event_filters: string[]
+          expires_at?: string | null
+          extension_id?: string | null
+          from_number_e164?: string | null
+          id?: string
+          last_notification_at?: string | null
+          last_renewal_error?: string | null
+          last_renewed_at?: string | null
+          metadata_redacted?: Json | null
+          provider_subscription_id: string
+          sms_capability?: Database["public"]["Enums"]["sms_capability"]
+          status: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          delivery_address?: string
+          event_filters?: string[]
+          expires_at?: string | null
+          extension_id?: string | null
+          from_number_e164?: string | null
+          id?: string
+          last_notification_at?: string | null
+          last_renewal_error?: string | null
+          last_renewed_at?: string | null
+          metadata_redacted?: Json | null
+          provider_subscription_id?: string
+          sms_capability?: Database["public"]["Enums"]["sms_capability"]
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       ringcentral_sync_cursors: {
         Row: {
           last_status: string | null
@@ -1125,60 +1179,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
-      }
-      ringcentral_subscriptions: {
-        Row: {
-          created_at: string
-          delivery_address: string
-          event_filters: string[]
-          expires_at: string | null
-          extension_id: string | null
-          from_number_e164: string | null
-          id: string
-          last_notification_at: string | null
-          last_renewal_error: string | null
-          last_renewed_at: string | null
-          metadata_redacted: Json | null
-          provider_subscription_id: string
-          sms_capability: Database["public"]["Enums"]["sms_capability"]
-          status: string
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          delivery_address: string
-          event_filters: string[]
-          expires_at?: string | null
-          extension_id?: string | null
-          from_number_e164?: string | null
-          id?: string
-          last_notification_at?: string | null
-          last_renewal_error?: string | null
-          last_renewed_at?: string | null
-          metadata_redacted?: Json | null
-          provider_subscription_id: string
-          sms_capability?: Database["public"]["Enums"]["sms_capability"]
-          status: string
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          delivery_address?: string
-          event_filters?: string[]
-          expires_at?: string | null
-          extension_id?: string | null
-          from_number_e164?: string | null
-          id?: string
-          last_notification_at?: string | null
-          last_renewal_error?: string | null
-          last_renewed_at?: string | null
-          metadata_redacted?: Json | null
-          provider_subscription_id?: string
-          sms_capability?: Database["public"]["Enums"]["sms_capability"]
-          status?: string
-          updated_at?: string
-        }
-        Relationships: []
       }
       sales_weekly: {
         Row: {
@@ -1840,7 +1840,12 @@ export type Database = {
         | "other_high_risk"
         | "stale_inbound"
       escalation_status: "open" | "acknowledged" | "resolved"
-      lead_ingestion_method: "WEBHOOK" | "RECONCILIATION" | "MANUAL_IMPORT" | "MAKE" | "EMAIL"
+      lead_ingestion_method:
+        | "WEBHOOK"
+        | "RECONCILIATION"
+        | "MANUAL_IMPORT"
+        | "MAKE"
+        | "EMAIL"
       lead_lifecycle:
         | "New"
         | "Contacted"
@@ -2025,7 +2030,13 @@ export const Constants = {
         "stale_inbound",
       ],
       escalation_status: ["open", "acknowledged", "resolved"],
-      lead_ingestion_method: ["WEBHOOK", "RECONCILIATION", "MANUAL_IMPORT", "MAKE", "EMAIL"],
+      lead_ingestion_method: [
+        "WEBHOOK",
+        "RECONCILIATION",
+        "MANUAL_IMPORT",
+        "MAKE",
+        "EMAIL",
+      ],
       lead_lifecycle: [
         "New",
         "Contacted",
