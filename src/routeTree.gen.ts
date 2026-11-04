@@ -44,6 +44,7 @@ import { Route as ApiPublicCronIngestLeadsRouteImport } from './routes/api/publi
 import { Route as ApiPublicCronProcessJobsRouteImport } from './routes/api/public/cron/process-jobs'
 import { Route as ApiPublicCronReconcileMessagesRouteImport } from './routes/api/public/cron/reconcile-messages'
 import { Route as ApiPublicCronReconcileMetaLeadsRouteImport } from './routes/api/public/cron/reconcile-meta-leads'
+import { Route as ApiPublicCronReconcileRingcentralVoiceRouteImport } from './routes/api/public/cron/reconcile-ringcentral-voice'
 import { Route as ApiPublicCronRenewSubscriptionsRouteImport } from './routes/api/public/cron/renew-subscriptions'
 import { Route as ApiPublicCronSquareSyncRouteImport } from './routes/api/public/cron/square-sync'
 import { Route as ApiPublicMetaWebhookRouteImport } from './routes/api/public/meta/webhook'
@@ -240,6 +241,12 @@ const ApiPublicCronReconcileMetaLeadsRoute =
     path: '/api/public/cron/reconcile-meta-leads',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicCronReconcileRingcentralVoiceRoute =
+  ApiPublicCronReconcileRingcentralVoiceRouteImport.update({
+    id: '/api/public/cron/reconcile-ringcentral-voice',
+    path: '/api/public/cron/reconcile-ringcentral-voice',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicCronRenewSubscriptionsRoute =
   ApiPublicCronRenewSubscriptionsRouteImport.update({
     id: '/api/public/cron/renew-subscriptions',
@@ -307,6 +314,7 @@ export interface FileRoutesByFullPath {
   '/api/public/cron/process-jobs': typeof ApiPublicCronProcessJobsRoute
   '/api/public/cron/reconcile-messages': typeof ApiPublicCronReconcileMessagesRoute
   '/api/public/cron/reconcile-meta-leads': typeof ApiPublicCronReconcileMetaLeadsRoute
+  '/api/public/cron/reconcile-ringcentral-voice': typeof ApiPublicCronReconcileRingcentralVoiceRoute
   '/api/public/cron/renew-subscriptions': typeof ApiPublicCronRenewSubscriptionsRoute
   '/api/public/cron/square-sync': typeof ApiPublicCronSquareSyncRoute
   '/api/public/meta/webhook': typeof ApiPublicMetaWebhookRoute
@@ -349,6 +357,7 @@ export interface FileRoutesByTo {
   '/api/public/cron/process-jobs': typeof ApiPublicCronProcessJobsRoute
   '/api/public/cron/reconcile-messages': typeof ApiPublicCronReconcileMessagesRoute
   '/api/public/cron/reconcile-meta-leads': typeof ApiPublicCronReconcileMetaLeadsRoute
+  '/api/public/cron/reconcile-ringcentral-voice': typeof ApiPublicCronReconcileRingcentralVoiceRoute
   '/api/public/cron/renew-subscriptions': typeof ApiPublicCronRenewSubscriptionsRoute
   '/api/public/cron/square-sync': typeof ApiPublicCronSquareSyncRoute
   '/api/public/meta/webhook': typeof ApiPublicMetaWebhookRoute
@@ -393,6 +402,7 @@ export interface FileRoutesById {
   '/api/public/cron/process-jobs': typeof ApiPublicCronProcessJobsRoute
   '/api/public/cron/reconcile-messages': typeof ApiPublicCronReconcileMessagesRoute
   '/api/public/cron/reconcile-meta-leads': typeof ApiPublicCronReconcileMetaLeadsRoute
+  '/api/public/cron/reconcile-ringcentral-voice': typeof ApiPublicCronReconcileRingcentralVoiceRoute
   '/api/public/cron/renew-subscriptions': typeof ApiPublicCronRenewSubscriptionsRoute
   '/api/public/cron/square-sync': typeof ApiPublicCronSquareSyncRoute
   '/api/public/meta/webhook': typeof ApiPublicMetaWebhookRoute
@@ -437,6 +447,7 @@ export interface FileRouteTypes {
     | '/api/public/cron/process-jobs'
     | '/api/public/cron/reconcile-messages'
     | '/api/public/cron/reconcile-meta-leads'
+    | '/api/public/cron/reconcile-ringcentral-voice'
     | '/api/public/cron/renew-subscriptions'
     | '/api/public/cron/square-sync'
     | '/api/public/meta/webhook'
@@ -479,6 +490,7 @@ export interface FileRouteTypes {
     | '/api/public/cron/process-jobs'
     | '/api/public/cron/reconcile-messages'
     | '/api/public/cron/reconcile-meta-leads'
+    | '/api/public/cron/reconcile-ringcentral-voice'
     | '/api/public/cron/renew-subscriptions'
     | '/api/public/cron/square-sync'
     | '/api/public/meta/webhook'
@@ -522,6 +534,7 @@ export interface FileRouteTypes {
     | '/api/public/cron/process-jobs'
     | '/api/public/cron/reconcile-messages'
     | '/api/public/cron/reconcile-meta-leads'
+    | '/api/public/cron/reconcile-ringcentral-voice'
     | '/api/public/cron/renew-subscriptions'
     | '/api/public/cron/square-sync'
     | '/api/public/meta/webhook'
@@ -543,6 +556,7 @@ export interface RootRouteChildren {
   ApiPublicCronProcessJobsRoute: typeof ApiPublicCronProcessJobsRoute
   ApiPublicCronReconcileMessagesRoute: typeof ApiPublicCronReconcileMessagesRoute
   ApiPublicCronReconcileMetaLeadsRoute: typeof ApiPublicCronReconcileMetaLeadsRoute
+  ApiPublicCronReconcileRingcentralVoiceRoute: typeof ApiPublicCronReconcileRingcentralVoiceRoute
   ApiPublicCronRenewSubscriptionsRoute: typeof ApiPublicCronRenewSubscriptionsRoute
   ApiPublicCronSquareSyncRoute: typeof ApiPublicCronSquareSyncRoute
   ApiPublicMetaWebhookRoute: typeof ApiPublicMetaWebhookRoute
@@ -798,6 +812,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicCronReconcileMetaLeadsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/cron/reconcile-ringcentral-voice': {
+      id: '/api/public/cron/reconcile-ringcentral-voice'
+      path: '/api/public/cron/reconcile-ringcentral-voice'
+      fullPath: '/api/public/cron/reconcile-ringcentral-voice'
+      preLoaderRoute: typeof ApiPublicCronReconcileRingcentralVoiceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/cron/renew-subscriptions': {
       id: '/api/public/cron/renew-subscriptions'
       path: '/api/public/cron/renew-subscriptions'
@@ -912,6 +933,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicCronProcessJobsRoute: ApiPublicCronProcessJobsRoute,
   ApiPublicCronReconcileMessagesRoute: ApiPublicCronReconcileMessagesRoute,
   ApiPublicCronReconcileMetaLeadsRoute: ApiPublicCronReconcileMetaLeadsRoute,
+  ApiPublicCronReconcileRingcentralVoiceRoute: ApiPublicCronReconcileRingcentralVoiceRoute,
   ApiPublicCronRenewSubscriptionsRoute: ApiPublicCronRenewSubscriptionsRoute,
   ApiPublicCronSquareSyncRoute: ApiPublicCronSquareSyncRoute,
   ApiPublicMetaWebhookRoute: ApiPublicMetaWebhookRoute,

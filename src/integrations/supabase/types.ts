@@ -978,6 +978,154 @@ export type Database = {
           },
         ]
       }
+      ringcentral_call_insights: {
+        Row: {
+          call_id: string | null
+          created_at: string
+          direction: string | null
+          duration_seconds: number | null
+          id: string
+          lead_id: string | null
+          notes: string | null
+          phone_e164: string | null
+          recording_id: string | null
+          result_detail: string | null
+          started_at: string | null
+          summary: string | null
+          telephony_session_id: string | null
+          transcript: string | null
+          updated_at: string
+        }
+        Insert: {
+          call_id?: string | null
+          created_at?: string
+          direction?: string | null
+          duration_seconds?: number | null
+          id?: string
+          lead_id?: string | null
+          notes?: string | null
+          phone_e164?: string | null
+          recording_id?: string | null
+          result_detail?: string | null
+          started_at?: string | null
+          summary?: string | null
+          telephony_session_id?: string | null
+          transcript?: string | null
+          updated_at?: string
+        }
+        Update: {
+          call_id?: string | null
+          created_at?: string
+          direction?: string | null
+          duration_seconds?: number | null
+          id?: string
+          lead_id?: string | null
+          notes?: string | null
+          phone_e164?: string | null
+          recording_id?: string | null
+          result_detail?: string | null
+          started_at?: string | null
+          summary?: string | null
+          telephony_session_id?: string | null
+          transcript?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ringcentral_call_insights_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ringcentral_sync_cursors: {
+        Row: {
+          last_status: string | null
+          stream: string
+          updated_at: string
+          watermark: string | null
+        }
+        Insert: {
+          last_status?: string | null
+          stream: string
+          updated_at?: string
+          watermark?: string | null
+        }
+        Update: {
+          last_status?: string | null
+          stream?: string
+          updated_at?: string
+          watermark?: string | null
+        }
+        Relationships: []
+      }
+      ringcentral_voicemails: {
+        Row: {
+          availability: string | null
+          caller_name: string | null
+          created_at: string
+          creation_time: string | null
+          direction: string | null
+          duration_seconds: number | null
+          id: string
+          last_modified_time: string | null
+          lead_id: string | null
+          needs_review: boolean
+          phone_e164: string | null
+          provider_message_id: string
+          read_status: string | null
+          transcription_status: string | null
+          transcription_text: string | null
+          updated_at: string
+        }
+        Insert: {
+          availability?: string | null
+          caller_name?: string | null
+          created_at?: string
+          creation_time?: string | null
+          direction?: string | null
+          duration_seconds?: number | null
+          id?: string
+          last_modified_time?: string | null
+          lead_id?: string | null
+          needs_review?: boolean
+          phone_e164?: string | null
+          provider_message_id: string
+          read_status?: string | null
+          transcription_status?: string | null
+          transcription_text?: string | null
+          updated_at?: string
+        }
+        Update: {
+          availability?: string | null
+          caller_name?: string | null
+          created_at?: string
+          creation_time?: string | null
+          direction?: string | null
+          duration_seconds?: number | null
+          id?: string
+          last_modified_time?: string | null
+          lead_id?: string | null
+          needs_review?: boolean
+          phone_e164?: string | null
+          provider_message_id?: string
+          read_status?: string | null
+          transcription_status?: string | null
+          transcription_text?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ringcentral_voicemails_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ringcentral_subscriptions: {
         Row: {
           created_at: string

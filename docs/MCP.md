@@ -75,10 +75,12 @@ Browser roles cannot read these tables. RLS is enabled and forced, `anon` and `a
 | Tool                       | Scope                   | What it does                                                                                                                                                                                         |
 | -------------------------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `boltz_whoami`             | any authenticated agent | Agent name and scopes. No token.                                                                                                                                                                     |
-| `boltz_lookup_lead`        | `read`                  | One lead by `phone`, `email`, or `leadId`, plus its thread.                                                                                                                                          |
+| `boltz_lookup_lead`        | `read`                  | One lead by `phone`, `email`, or `leadId`, plus its thread and the latest voicemail and call-note summaries.                                                                                        |
 | `boltz_list_leads`         | `read`                  | Recent leads. `source`, `status` (lifecycle), `since`, `limit` (1–100, default 25). Default `since` is 7 days.                                                                                       |
 | `boltz_thread_messages`    | `read`                  | Messages on a thread (`phone`, `leadId`, or `threadId`).                                                                                                                                             |
 | `boltz_call_log`           | `read`                  | Read-only RingCentral call history. `since` can be 372 days back. `mode` `summary` groups outside numbers. Does not send SMS. Opted-out numbers are included.                                      |
+| `boltz_voicemails`         | `read`                  | Stored RingCentral voicemails and transcriptions. `since`, `phone`, `leadId`. Does not send SMS or download audio.                                                                                 |
+| `boltz_call_insights`      | `read`                  | Stored RingCentral AI notes and transcripts. `since`, `phone`, `leadId`, `callId`. Does not send SMS, place calls, or download recordings.                                                         |
 | `boltz_inbound_since`      | `read`                  | Inbound SMS since an ISO timestamp, at most 30 days back.                                                                                                                                            |
 | `boltz_lead_status`        | `read`                  | Lifecycle, consent, and `optedOut` (consent or a latest inbound STOP / UNSUBSCRIBE / CANCEL / END / QUIT).                                                                                           |
 | `boltz_integration_health` | `read`                  | Which secrets are configured (never the values), recent checks, SMS capability.                                                                                                                      |
@@ -105,6 +107,12 @@ The account call log is requested first. If that user cannot read the company ca
 RingCentral requires the application permission **ReadCallLog**. ReadCallRecording is not required. If the tool returns `forbidden`, open the app that owns `RINGCENTRAL_CLIENT_ID` at https://developers.ringcentral.com/my-account.html#/applications, enable ReadCallLog, save, generate a new JWT for the same user, and replace `RINGCENTRAL_JWT` in Lovable Cloud. Do not paste the JWT into chat. Company-wide history also needs the user permission FullCompanyCallLog. Without it, the result stays on the extension that owns the main line.
 
 One call scans at most 8 pages of up to 1000 records so it stays inside RingCentral's heavy rate group. A truncated result includes `nextCursor`.
+
+### Voicemail and call notes
+
+`boltz_voicemails` and `boltz_call_insights` read rows the sync job stored. They do not call RingCentral at request time, and they do not send a text. Parameters, the cron route, and the RingSense scope are in `docs/RINGCENTRAL_VOICEMAIL_TRANSCRIPTS.md`.
+
+`boltz_lookup_lead` includes `latestVoicemail.summary` and `latestCallInsight.summary`, each capped at 500 characters. The full transcription and transcript stay on the two read tools, capped at 8000 characters. Audit rows still omit phone numbers and message text. `callId` is stored on the audit summary.
 
 `boltz_square_revenue`, `boltz_square_payments`, and `boltz_disputes` read stored Square data. They do not create payments or invoices, they do not submit dispute evidence, and they do not mark a lead Paid. A `read` scope still cannot mark Paid. `boltz_integration_health` includes `square.disputeAlert` for disputes due within 3 days. Setup and the webhook are in `docs/SQUARE.md`.
 

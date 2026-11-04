@@ -5,6 +5,13 @@ import {
   type CallLogPageQuery,
   type RawCallRecord,
 } from "./call-log.ts";
+import {
+  insightRequestPath,
+  transcriptionContentPath,
+  voicemailListPath,
+  type RawVoicemail,
+  type VoicemailPageQuery,
+} from "./voice-intake.ts";
 import { readSecret, requireSecret } from "./env.server.ts";
 
 type TokenCache = { token: string; expiresAt: number; scopes: string[] };
@@ -247,6 +254,42 @@ export async function readCallLogPage(query: CallLogPageQuery): Promise<{
   const navigation = json.navigation;
   const hasNext = navigation ? Boolean(navigation.nextPage?.uri) : records.length >= query.perPage;
   return { records, hasNext };
+}
+
+export async function listVoicemailPage(query: VoicemailPageQuery): Promise<{
+  records: RawVoicemail[];
+  hasNext: boolean;
+}> {
+  const path = voicemailListPath(query);
+  const json = await rcJson<{
+    records?: RawVoicemail[];
+    navigation?: { nextPage?: { uri?: string } };
+  }>(path, { method: "GET" });
+  const records = Array.isArray(json.records) ? json.records : [];
+  const hasNext = json.navigation
+    ? Boolean(json.navigation.nextPage?.uri)
+    : records.length >= query.perPage;
+  return { records, hasNext };
+}
+
+export async function readVoicemailTranscription(
+  messageId: string,
+  attachmentId: string,
+): Promise<string> {
+  const path = transcriptionContentPath(messageId, attachmentId);
+  const res = await rcFetch(path, { method: "GET" });
+  const text = await res.text();
+  if (!res.ok) throw new RingCentralHttpError(path, res.status, text);
+  return text;
+}
+
+export async function readCallInsights(target: {
+  telephonySessionId: string | null;
+  recordingId: string | null;
+}): Promise<unknown> {
+  const path = insightRequestPath(target);
+  if (!path) throw new Error("Call insight target is missing a session id and a recording id");
+  return rcJson<unknown>(path, { method: "GET" });
 }
 
 export async function listRecentMessages(sinceIso: string): Promise<RcStoreMessage[]> {

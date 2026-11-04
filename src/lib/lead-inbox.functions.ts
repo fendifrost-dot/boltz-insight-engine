@@ -19,7 +19,8 @@ import {
  * - listLeads, getThread, listEscalations, updateEscalation, setThreadControl: authenticated client + RLS only.
  * - sendOwnerMessage, startOwnerSms: service-role outbound path → requireCapability("communications.send").
  * - transitionLeadLifecycle: cases.transition; financial_status.confirm when touching Paid; owner vs staff actor.
- * - getIntegrationHealth, resumeAgentFn, ensureSubscription: secrets/provider/integration → integrations.manage (owner).
+ * - getIntegrationHealth, resumeAgentFn, ensureSubscription, syncRingCentralVoiceNow: secrets/provider/integration → integrations.manage (owner).
+ * - syncRingCentralVoiceNow reads voicemail and call notes only. It does not send SMS.
  */
 
 export const LEAD_SOURCE_FILTERS = ["all", "meta", "facebook", "instagram"] as const;
@@ -516,6 +517,37 @@ export const resumeAgentFn = createServerFn({ method: "POST" })
     const { resumeAgent } = await import("@/server/lead-inbox/jobs.server");
     await resumeAgent(`Resumed by owner ${context.userId}`);
     return { ok: true };
+  });
+
+export const syncRingCentralVoiceNow = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) =>
+    z
+      .object({
+        window: z.enum(["incremental", "nightly"]).default("incremental"),
+      })
+      .parse(input ?? {}),
+  )
+  .handler(async ({ data, context }) => {
+    await requireCapability(context, "integrations.manage");
+    const { resolveLookbackMinutes } = await import("@/server/lead-inbox/voice-intake");
+    const lookback = resolveLookbackMinutes({ window: data.window });
+    if (!lookback.ok) return { ok: false as const, error: lookback.error, summary: null };
+    const { missingSecretName, runVoiceSync, safeVoiceDetail } =
+      await import("@/server/lead-inbox/voice-intake.server");
+    try {
+      const summary = await runVoiceSync(new Date(), lookback.minutes);
+      return { ok: true as const, error: null, summary };
+    } catch (error) {
+      const missing = missingSecretName(error);
+      return {
+        ok: false as const,
+        summary: null,
+        error: missing
+          ? `Missing server secret: ${missing}`
+          : safeVoiceDetail(error instanceof Error ? error.message : "sync failed"),
+      };
+    }
   });
 
 export const ensureSubscription = createServerFn({ method: "POST" })

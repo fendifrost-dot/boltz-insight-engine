@@ -144,6 +144,8 @@ test("initialize and tools/list are audited and scoped", async () => {
   const listedBody = (await listed.json()) as { result: { tools: { name: string }[] } };
   const names = listedBody.result.tools.map((tool) => tool.name);
   assert.ok(names.includes("boltz_lookup_lead"));
+  assert.ok(names.includes("boltz_voicemails"));
+  assert.ok(names.includes("boltz_call_insights"));
   assert.ok(names.includes("boltz_whoami"));
   assert.equal(names.includes("boltz_send_sms"), false);
   assert.equal(names.includes("boltz_update_lead"), false);

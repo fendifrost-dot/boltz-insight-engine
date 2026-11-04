@@ -9,6 +9,7 @@ import {
   ensureSubscription,
   getIntegrationHealth,
   resumeAgentFn,
+  syncRingCentralVoiceNow,
 } from "@/lib/lead-inbox.functions";
 
 export const Route = createFileRoute("/_authenticated/integration-health")({
@@ -35,6 +36,7 @@ function HealthPage() {
   const healthFn = useServerFn(getIntegrationHealth);
   const resume = useServerFn(resumeAgentFn);
   const ensure = useServerFn(ensureSubscription);
+  const syncVoice = useServerFn(syncRingCentralVoiceNow);
 
   const health = useQuery({ queryKey: ["integration-health"], queryFn: () => healthFn({}) });
 
@@ -44,6 +46,10 @@ function HealthPage() {
   });
   const ensureMutation = useMutation({
     mutationFn: () => ensure({}),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["integration-health"] }),
+  });
+  const voiceMutation = useMutation({
+    mutationFn: (window: "incremental" | "nightly") => syncVoice({ data: { window } }),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["integration-health"] }),
   });
 
@@ -172,6 +178,46 @@ function HealthPage() {
           )}
           {ensureMutation.data && !ensureMutation.data.ok && (
             <p className="mt-2 text-xs text-destructive">{ensureMutation.data.error}</p>
+          )}
+        </Panel>
+
+        <Panel
+          title="Voicemail and call notes"
+          meta={
+            <span className="flex gap-2">
+              <button
+                onClick={() => voiceMutation.mutate("incremental")}
+                disabled={voiceMutation.isPending}
+                className="rounded border border-border px-2 py-1 text-[10px]"
+              >
+                {voiceMutation.isPending ? "Syncing…" : "Sync now (3h)"}
+              </button>
+              <button
+                onClick={() => voiceMutation.mutate("nightly")}
+                disabled={voiceMutation.isPending}
+                className="rounded border border-border px-2 py-1 text-[10px]"
+              >
+                Sync 7 days
+              </button>
+            </span>
+          }
+        >
+          <p className="text-sm text-muted-foreground">
+            Pulls RingCentral voicemails and AI notes onto matching leads. A voicemail with no lead
+            creates a New lead. This does not send a text or place a call.
+          </p>
+          {voiceMutation.data && (
+            <p
+              className={
+                voiceMutation.data.ok
+                  ? "mt-2 text-xs text-muted-foreground"
+                  : "mt-2 text-xs text-destructive"
+              }
+            >
+              {voiceMutation.data.ok && voiceMutation.data.summary
+                ? `Voicemail scanned ${voiceMutation.data.summary.voicemail.scanned}, new leads ${voiceMutation.data.summary.voicemail.leadsCreated}. Call notes stored ${voiceMutation.data.summary.insights.inserted + voiceMutation.data.summary.insights.updated}.`
+                : voiceMutation.data.error}
+            </p>
           )}
         </Panel>
 
