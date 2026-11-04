@@ -166,6 +166,8 @@ export type RawCallParty = {
 
 export type RawCallRecord = {
   id?: string;
+  sessionId?: string;
+  telephonySessionId?: string;
   startTime?: string;
   duration?: number;
   type?: string;
@@ -173,6 +175,7 @@ export type RawCallRecord = {
   result?: string;
   from?: RawCallParty;
   to?: RawCallParty;
+  recording?: { id?: string | number; type?: string };
 };
 
 export type MappedCall = {

@@ -16,6 +16,11 @@ import { applyLifecycleTransition } from "@/server/lead-inbox/lifecycle.server";
 import { agentCircuitState, sanitizeLeadUpdates } from "@/server/lead-inbox/jobs.server";
 import { cachedCapability } from "@/server/lead-inbox/outbound.server";
 import { callLogTool } from "@/server/lead-inbox/call-log.server";
+import {
+  callInsightsTool,
+  latestVoiceForLead,
+  voicemailsTool,
+} from "@/server/lead-inbox/voice-read.server";
 import { detectOptOut } from "@/server/lead-inbox/safety.server";
 import { addEvent } from "@/server/lead-inbox/store.server";
 import { adsConfigError } from "@/server/google-ads/env.server";
@@ -221,6 +226,7 @@ async function lookupLead(args: unknown): Promise<ToolOutcome> {
         isError: false,
         value: { found: false, matchCount: 0, lead: null, thread: null },
       };
+    const voice = await latestVoiceForLead(lead.id);
     return {
       resultCode: "ok",
       isError: false,
@@ -229,6 +235,7 @@ async function lookupLead(args: unknown): Promise<ToolOutcome> {
         matchCount: 1,
         lead: publicLead(lead),
         thread: await threadForLead(lead.id),
+        ...voice,
       },
     };
   }
@@ -237,7 +244,15 @@ async function lookupLead(args: unknown): Promise<ToolOutcome> {
     : { action: "lookup", email: parsed.data.email };
   const result = await botAction(payload);
   if (result.status >= 400) return failed(result.status, result.body);
-  return { resultCode: "ok", isError: false, value: await attachNotes(result.body) };
+  const withNotes = await attachNotes(result.body);
+  if (!withNotes || typeof withNotes !== "object") {
+    return { resultCode: "ok", isError: false, value: withNotes };
+  }
+  const record = withNotes as { found?: unknown; lead?: { id?: unknown } | null };
+  const id = record.lead && typeof record.lead.id === "string" ? record.lead.id : null;
+  if (!record.found || !id) return { resultCode: "ok", isError: false, value: withNotes };
+  const voice = await latestVoiceForLead(id);
+  return { resultCode: "ok", isError: false, value: { ...record, ...voice } };
 }
 
 const listSchema = z
@@ -863,6 +878,10 @@ export function createBoltzMcpTools(): McpToolRunner {
           return disputesTool(ctx.args);
         case "boltz_call_log":
           return callLogTool(ctx.args, ctx.now);
+        case "boltz_voicemails":
+          return voicemailsTool(ctx.args, ctx.now);
+        case "boltz_call_insights":
+          return callInsightsTool(ctx.args, ctx.now);
         case "boltz_send_sms":
           return executeMcpSend({
             agentName: ctx.agent.name,

@@ -71,6 +71,8 @@ themselves in-handler.
 Values are never rendered, logged, or returned — `/integration-health` shows
 Configured/Missing plus masked identifiers only. `.env.example` stays blank.
 
+Voicemail transcriptions and AI call notes use those same secrets. No new secret name is added. The app permission `RingSense` and the user permission `ReadRingSenseInsights` are required before call notes sync. See `docs/RINGCENTRAL_VOICEMAIL_TRANSCRIPTS.md`.
+
 Call history uses those same secrets. No new secret is required. The RingCentral app
 must include the application permission `ReadCallLog` (not `ReadCallRecording`). If the
 JWT was issued before that permission was enabled, generate a new JWT and replace
